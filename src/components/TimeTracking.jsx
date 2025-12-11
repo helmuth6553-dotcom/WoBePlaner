@@ -567,17 +567,15 @@ export default function TimeTracking() {
             }
 
             // Case B: Virtual Absence (approved but not in time_entries) - FIX for missing sick leave/vacation
+            // Use pre-calculated planned_hours from item (already computed during fetch with SSOT)
             if (item.itemType === 'absence') {
-                const d = new Date(item.date)
-                const calculatedHoursForEntry = calculateDailyAbsenceHours(d, { type: item.type, reason: item.reason }, plannedShifts, userProfile)
-
                 return {
                     id: item.id,
                     user_id: user.id,
                     entry_date: item.date,
                     actual_start: item.sortDate.toISOString(),
                     actual_end: null,
-                    calculated_hours: calculatedHoursForEntry,
+                    calculated_hours: item.planned_hours || 0, // Use pre-calculated hours from SSOT
                     absence_id: item.absence_id,
                     shifts: { start_time: item.sortDate.toISOString(), type: item.type || 'Abwesend' },
                     absences: { type: item.type || 'Abwesend' }
