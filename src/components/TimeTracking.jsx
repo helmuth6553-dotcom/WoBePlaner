@@ -556,8 +556,35 @@ export default function TimeTracking() {
     const handleDownloadPDF = () => {
         const entriesList = items.map(item => {
             const entry = entries[item.id]
-            if (!entry) return null
-            return { ...entry, shifts: item.itemType === 'shift' ? item : { start_time: item.sortDate.toISOString(), type: item.type || 'Urlaub' } }
+
+            // Case A: Real DB Entry exists
+            if (entry) {
+                return {
+                    ...entry,
+                    shifts: item.itemType === 'shift' ? item : { start_time: item.sortDate.toISOString(), type: item.type || 'Urlaub' },
+                    absences: item.itemType === 'absence' ? { type: item.type || 'Abwesend' } : null
+                }
+            }
+
+            // Case B: Virtual Absence (approved but not in time_entries) - FIX for missing sick leave/vacation
+            if (item.itemType === 'absence') {
+                const d = new Date(item.date)
+                const calculatedHoursForEntry = calculateDailyAbsenceHours(d, { type: item.type, reason: item.reason }, plannedShifts, userProfile)
+
+                return {
+                    id: item.id,
+                    user_id: user.id,
+                    entry_date: item.date,
+                    actual_start: item.sortDate.toISOString(),
+                    actual_end: null,
+                    calculated_hours: calculatedHoursForEntry,
+                    absence_id: item.absence_id,
+                    shifts: { start_time: item.sortDate.toISOString(), type: item.type || 'Abwesend' },
+                    absences: { type: item.type || 'Abwesend' }
+                }
+            }
+
+            return null
         }).filter(Boolean)
         generateTimeReportPDF(selectedMonth, user, entriesList, monthStatus)
     }
