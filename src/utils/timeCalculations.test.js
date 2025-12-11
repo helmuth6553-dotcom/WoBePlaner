@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { calculateWorkHours } from './timeCalculations'
-import { addDays, addMinutes } from 'date-fns'
 
 describe('calculateWorkHours', () => {
     it('calculates simple day shift duration', () => {

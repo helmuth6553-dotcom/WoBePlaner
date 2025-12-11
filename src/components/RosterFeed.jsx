@@ -9,7 +9,7 @@ import RosterLogModal from './RosterLogModal'
 import ConfirmModal from './ConfirmModal'
 import AlertModal from './AlertModal'
 import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Eye, EyeOff, Settings } from 'lucide-react'
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, getYear, getMonth, subDays, isSameMonth, eachDayOfInterval, isWeekend, differenceInMinutes, isValid } from 'date-fns'
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, getYear, getMonth, subDays, isSameMonth, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { useHolidays } from '../hooks/useHolidays'
 import { validateShiftRules as importedValidateShiftRules } from '../utils/rosterRules'
@@ -17,9 +17,10 @@ import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { calculateWorkHours } from '../utils/timeCalculations'
 
 const SickReportModal = ({ isOpen, onClose, onSubmit }) => {
-    if (!isOpen) return null
     const [start, setStart] = useState('')
     const [end, setEnd] = useState('')
+
+    if (!isOpen) return null
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4">
@@ -56,7 +57,6 @@ const SickReportModal = ({ isOpen, onClose, onSubmit }) => {
 }
 
 const MonthSettingsModal = ({ isOpen, onClose, year, month, isOpenStatus, isVisibleStatus, onUpdate }) => {
-    if (!isOpen) return null
     const [localOpen, setLocalOpen] = useState(isOpenStatus)
     const [localVisible, setLocalVisible] = useState(isVisibleStatus)
 
@@ -64,6 +64,8 @@ const MonthSettingsModal = ({ isOpen, onClose, year, month, isOpenStatus, isVisi
         setLocalOpen(isOpenStatus)
         setLocalVisible(isVisibleStatus)
     }, [isOpenStatus, isVisibleStatus])
+
+    if (!isOpen) return null
 
     const handleSave = () => {
         onUpdate(localOpen, localVisible)
@@ -271,21 +273,17 @@ export default function RosterFeed() {
 
         const channel = supabase
             .channel(channelName)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, (payload) => {
-                console.log('Realtime: shift_interests changed', payload)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, () => {
                 fetchData()
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => {
-                console.log('Realtime: shifts changed', payload)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => {
                 fetchData()
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_months' }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, () => fetchData())
-            .subscribe((status) => {
-                console.log('Realtime subscription status:', status)
-            })
+            .subscribe()
 
         // Backup polling every 3 seconds (in case realtime fails on mobile)
         const pollInterval = setInterval(() => {
@@ -801,7 +799,7 @@ export default function RosterFeed() {
                                                 if (!isAdmin) return
                                                 if (!window.confirm("Möchtest du diesen Dienst wirklich löschen?")) return
                                                 await supabase.from('shift_interests').delete().eq('shift_id', shiftId)
-                                                const { data, error } = await supabase.from('shifts').delete().eq('id', shiftId).select()
+                                                const { error } = await supabase.from('shifts').delete().eq('id', shiftId).select()
                                                 if (error) {
                                                     setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
                                                 } else {

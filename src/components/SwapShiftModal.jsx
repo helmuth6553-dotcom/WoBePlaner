@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { User, Check, AlertTriangle, ArrowRight, Users } from 'lucide-react'
+import { Check, AlertTriangle, ArrowRight, Users } from 'lucide-react'
 
 export default function SwapShiftModal({ isOpen, onClose, shift, onSwap, currentUser }) {
-    if (!isOpen || !shift) return null
-
     const [colleagues, setColleagues] = useState([])
     const [selectedUserId, setSelectedUserId] = useState('')
     const [step, setStep] = useState(1) // 1: Select, 2: Confirm
 
     useEffect(() => {
+        if (!isOpen || !shift || !currentUser) return
+
         const fetchColleagues = async () => {
             const { data } = await supabase
                 .from('profiles')
@@ -20,7 +20,10 @@ export default function SwapShiftModal({ isOpen, onClose, shift, onSwap, current
             setColleagues(data || [])
         }
         fetchColleagues()
-    }, [currentUser])
+    }, [isOpen, shift, currentUser])
+
+    // Early return AFTER hooks
+    if (!isOpen || !shift) return null
 
     const handleNext = () => {
         if (selectedUserId) setStep(2)

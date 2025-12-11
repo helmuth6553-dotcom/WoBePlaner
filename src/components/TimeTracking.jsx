@@ -7,30 +7,11 @@ import { CheckCircle, Save, Calendar, Download, Sun, Thermometer, ChevronRight, 
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
 import { generateTimeReportPDF } from '../utils/pdfGenerator'
 import { generateReportHash } from '../utils/security'
-import { getHolidays, isHoliday } from '../utils/holidays'
-import { getYear, isWeekend } from 'date-fns'
 
 export default function TimeTracking() {
     const { user, isAdmin } = useAuth()
 
-    // Admins don't have personal time tracking - they only control employee time tracking
-    if (isAdmin) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-                <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-md">
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Users className="text-blue-600" size={32} />
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-2">Administrator</h2>
-                    <p className="text-gray-500">
-                        Als Administrator hast du keine persönliche Zeiterfassung.
-                        Nutze die <strong>Admin Zeiterfassung</strong> im Menü, um die Stunden deiner Mitarbeiter zu kontrollieren.
-                    </p>
-                </div>
-            </div>
-        )
-    }
-
+    // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [items, setItems] = useState([]) // Combined Shifts + Absence Days
     const [entries, setEntries] = useState({}) // Stores time_entries by key
     const [plannedShifts, setPlannedShifts] = useState([]) // Store all planned shifts for absence calculation
@@ -55,6 +36,25 @@ export default function TimeTracking() {
         newIntEnd: ''
     })
     const [calculatedHours, setCalculatedHours] = useState(0)
+
+    // Admins don't have personal time tracking - they only control employee time tracking
+    // IMPORTANT: This return must come AFTER all hooks to avoid React rules violations
+    if (isAdmin) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+                <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-md">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Users className="text-blue-600" size={32} />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Administrator</h2>
+                    <p className="text-gray-500">
+                        Als Administrator hast du keine persönliche Zeiterfassung.
+                        Nutze die <strong>Admin Zeiterfassung</strong> im Menü, um die Stunden deiner Mitarbeiter zu kontrollieren.
+                    </p>
+                </div>
+            </div>
+        )
+    }
 
     useEffect(() => {
         if (user && selectedMonth) fetchData()

@@ -5,11 +5,12 @@ import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
 
 export default function RosterLogModal({ isOpen, onClose }) {
-    if (!isOpen) return null
     const [logs, setLogs] = useState([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        if (!isOpen) return // Guard inside useEffect instead of early return
+
         const fetchLogs = async () => {
             setLoading(true)
             const { data, error } = await supabase
@@ -29,7 +30,10 @@ export default function RosterLogModal({ isOpen, onClose }) {
             setLoading(false)
         }
         fetchLogs()
-    }, [])
+    }, [isOpen])
+
+    // Early return AFTER hooks
+    if (!isOpen) return null
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4 backdrop-blur-sm">

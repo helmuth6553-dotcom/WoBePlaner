@@ -30,9 +30,8 @@ const getUserColor = (name) => {
     return colors[Math.abs(hash) % colors.length]
 }
 
-export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onAssign, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, absenceReason, holiday, absences = [], allProfiles = [] }) {
-    const date = new Date(dateStr)
-    if (!isValid(date)) return null
+export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, absenceReason, holiday, absences = [], allProfiles = [] }) {
+    // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [selectedShift, setSelectedShift] = useState(null)
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
     const [editStart, setEditStart] = useState('')
@@ -64,7 +63,12 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onA
                 })
             }
         }
-    }, [shifts])
+    }, [shifts, selectedShift])
+
+    // EARLY RETURN AFTER ALL HOOKS
+    const date = new Date(dateStr)
+    if (!isValid(date)) return null
+
     const isSick = absenceReason?.type?.toLowerCase() === 'krank'
 
     const getShiftForSlot = (slotType) => {

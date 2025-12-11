@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { calculateGenericBalance } from './balanceHelpers'
-import { addDays } from 'date-fns'
 
 describe('calculateGenericBalance', () => {
     it('calculates perfect week (0 balance)', () => {

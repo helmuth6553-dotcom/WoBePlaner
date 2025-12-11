@@ -1,4 +1,4 @@
-import { startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, subDays, isSameMonth, getYear, endOfDay, format } from 'date-fns'
+import { startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, subDays, isSameMonth, getYear, endOfDay } from 'date-fns'
 import { calculateWorkHours, calculateDailyAbsenceHours } from './timeCalculations'
 import { getHolidays, isHoliday } from './holidays'
 

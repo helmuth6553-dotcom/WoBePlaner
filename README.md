@@ -1,78 +1,57 @@
-# Dienstplan App
+# Dienstplan-App
 
-**Collaborative Shift Planning & Time Tracking System**
+Eine moderne Webanwendung zur Verwaltung von Dienstplänen, Urlaubsanträgen und Zeiterfassung für soziale Einrichtungen.
 
-A modern, mobile-first web application designed to streamline shift planning, time tracking, and absence management for social organizations. Built with performance and usability in mind.
+## Funktionen
 
-## 🚀 Key Features
+*   **Dienstplan-Management**: Interaktive Erstellung und Verwaltung von Schichtplänen.
+*   **Zeiterfassung**: Detaillierte Erfassung von Arbeitszeiten inkl. Überstundenberechnung.
+*   **Urlaubsverwaltung**: Digitales Antragswesen für Urlaub und Abwesenheiten.
+*   **Mitarbeiter-Portal**: Übersicht über eigene Schichten, Stundenkonten und Anträge.
+*   **Admin-Dashboard**: Zentrale Verwaltung von Mitarbeitern, Rollen und System-Einstellungen.
+*   **PDF-Export**: Generierung von Monatsberichten und Stundennachweisen.
 
-*   **📅 Smart Shift Planning**
-    *   **Roster Feed**: Interactive, scrolling feed of upcoming shifts.
-    *   **Month View**: High-level overview of staffing allocation.
-    *   **Shift Requests**: Employees can express interest in open shifts.
+## Technologie-Stack
 
-*   **⏱️ Precision Time Tracking**
-    *   **Digital Time Clock**: Simple start/stop for shifts.
-    *   **Correction Management**: Request changes to past entries with admin approval.
-    *   **Automatic Breaks**: Smart calculation of legally required breaks.
+*   **Frontend**: React, Vite
+*   **Styling**: Tailwind CSS
+*   **Backend / Datenbank**: Supabase (PostgreSQL, Auth, Realtime)
+*   **Hosting**: Cloudflare Pages / Netlify (Empfohlen)
 
-*   **🏖️ Absence Management**
-    *   **Vacation Planner**: Request and track vacation days.
-    *   **Sick Leave**: Document sick days and relevant notes.
-    *   **Holiday Handling**: Automatic handling of public holidays and weekend logic.
+## Installation & Setup
 
-*   **🛡️ Admin Dashboard**
-    *   **Approvals**: Centralized hub for approving timesheets and absence requests.
-    *   **Audit Logging**: Immutable tracking of all administrative actions.
-    *   **Reports**: Generate PDF monthly reports with cryptographic verification hashes.
+Voraussetzungen: Node.js (v18+)
 
-## 🛠️ Tech Stack
-
-*   **Frontend**: React 19, Vite 6
-*   **Styling**: Tailwind CSS 4, Lucide React (Icons)
-*   **Backend**: Supabase (PostgreSQL, Auth, Realtime, Edge Functions)
-*   **State Management**: React Context & Hooks
-*   **Utils**: date-fns (Dates), jspdf (Reporting)
-
-## 📦 Getting Started
-
-### Prerequisites
-*   Node.js 18+ installed
-*   A Supabase project setup
-
-### Installation
-
-1.  **Clone the repository**
+1.  **Repository klonen**
     ```bash
     git clone <repository-url>
     cd dienstplan-app
     ```
 
-2.  **Install dependencies**
+2.  **Abhängigkeiten installieren**
     ```bash
     npm install
     ```
 
-3.  **Environment Setup**
-    Create a `.env` file in the root directory (or rename `.env.example`):
-    ```env
-    VITE_SUPABASE_URL=your_supabase_project_url
-    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+3.  **Umgebungsvariablen konfigurieren**
+    Erstelle eine `.env` Datei im Hauptverzeichnis basierend auf `.env.example`:
+    ```
+    VITE_SUPABASE_URL=your_project_url
+    VITE_SUPABASE_ANON_KEY=your_anon_key
     ```
 
-4.  **Run Locally**
+4.  **Entwicklungsserver starten**
     ```bash
     npm run dev
     ```
-    Open `http://localhost:5173` in your browser.
 
-## 📂 Project Structure
+## Build für Production
 
-*   `/src/components` - React UI components (Views, Modals, Cards)
-*   `/src/utils` - Helper functions (Time calc, Security, Rules)
-*   `/src/hooks` - Custom React hooks
-*   `/migrations` - SQL scripts for database schema and RLS policies
+```bash
+npm run build
+```
+Die Dateien liegen anschließend im `dist` Ordner bereit für das Deployment.
 
-## 📄 License
+## Sicherheit
 
-Private / Proprietary.
+Diese Anwendung nutzt Supabase Row Level Security (RLS) policies, um sicherzustellen, dass Nutzer nur auf Daten zugreifen können, für die sie berechtigt sind.

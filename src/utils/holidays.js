@@ -1,4 +1,4 @@
-import { addDays, format, isSameDay } from 'date-fns'
+import { addDays, isSameDay } from 'date-fns'
 
 export const getHolidays = (year) => {
     const holidays = [

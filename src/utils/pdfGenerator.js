@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import { format, parseISO, differenceInMinutes, addDays } from 'date-fns'
+import { format, parseISO, differenceInMinutes } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { getShiftSegments } from './timeCalculations'
 
@@ -21,7 +21,6 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
         const primaryColor = [0, 0, 0]
         const accentColor = [60, 60, 60]
         const lightGray = [245, 245, 245]
-        const lineColor = [220, 220, 220]
         const correctionColor = [200, 0, 0]
 
         const margin = 10
@@ -77,19 +76,7 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
 
         // Row height for consistent vertical spacing
         const rowHeight = 8  // Increased for better text separation
-        const textOffset = 4  // Vertical offset to center text in row
-
-        // Define Columns similar to Excel Screenshot
-        // Date | Day | Work (Start | End) | Standby (Start | End) | Type | Hours | Notes
-        const cols = [
-            { name: "Datum", width: 18, align: 'left' },
-            { name: "Tag", width: 8, align: 'left' },
-            { name: "Arbeitszeit", width: 30, align: 'center', subCols: ["Von", "Bis"] },
-            { name: "Bereitschaftszeit", width: 30, align: 'center', subCols: ["Von", "Bis"] },
-            { name: "Dienst", width: 22, align: 'left' },
-            { name: "Stunden", width: 16, align: 'left' },
-            { name: "Anm.", width: 45, align: 'left' }
-        ]
+        // Note: Column layout is hardcoded below for precise control
 
         // Header Background
         doc.setFillColor(...lightGray)
@@ -138,7 +125,7 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
 
         let lastDateStr = ''
 
-        sortedEntries.forEach((entry, index) => {
+        sortedEntries.forEach((entry) => {
             if (y > doc.internal.pageSize.height - 15) { doc.addPage(); y = 20 }
 
             const shift = entry.shifts

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabase'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, addDays, parseISO } from 'date-fns'
-import { de } from 'date-fns/locale'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addDays, parseISO } from 'date-fns'
 import { AlertTriangle, RefreshCw, CheckCircle } from 'lucide-react'
 
 export default function ShiftRepair() {
@@ -68,7 +67,7 @@ export default function ShiftRepair() {
                 setProgress('Lösche Zuweisungen & Zeiten...')
                 await supabase.from('shift_interests').delete().in('shift_id', ids)
                 await supabase.from('time_entries').delete().in('shift_id', ids)
-                try { await supabase.from('shift_logs').delete().in('shift_id', ids) } catch (e) { }
+                try { await supabase.from('shift_logs').delete().in('shift_id', ids) } catch { /* ignore if table doesn't exist */ }
 
                 setProgress('Lösche Dienste...')
                 const { error: deleteError } = await supabase
