@@ -6,7 +6,9 @@ dist/
 build/
 
 # Environment variables (keep .env.example but not actual .env)
-# .env
+.env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
