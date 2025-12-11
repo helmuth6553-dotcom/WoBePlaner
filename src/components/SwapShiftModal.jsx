@@ -13,7 +13,7 @@ export default function SwapShiftModal({ isOpen, onClose, shift, onSwap, current
         const fetchColleagues = async () => {
             const { data } = await supabase
                 .from('profiles')
-                .select('id, full_name, email')
+                .select('id, full_name, display_name, email')
                 .neq('id', currentUser.id) // Exclude self
                 .neq('role', 'admin') // Exclude Admins
                 .order('full_name')
@@ -58,7 +58,7 @@ export default function SwapShiftModal({ isOpen, onClose, shift, onSwap, current
                                 <option value="">-- Bitte wählen --</option>
                                 {colleagues.map(c => (
                                     <option key={c.id} value={c.id}>
-                                        {c.full_name || c.email}
+                                        {c.display_name || c.full_name || c.email}
                                     </option>
                                 ))}
                             </select>
@@ -87,7 +87,7 @@ export default function SwapShiftModal({ isOpen, onClose, shift, onSwap, current
                                 <div>
                                     <h4 className="font-bold text-yellow-800 text-sm">Bestätigung erforderlich</h4>
                                     <p className="text-xs text-yellow-700 mt-1">
-                                        Hast du diesen Tausch mit <b>{selectedColleague?.full_name || selectedColleague?.email}</b> besprochen und hat er/sie zugestimmt?
+                                        Hast du diesen Tausch mit <b>{selectedColleague?.display_name || selectedColleague?.full_name || selectedColleague?.email}</b> besprochen und hat er/sie zugestimmt?
                                     </p>
                                 </div>
                             </div>

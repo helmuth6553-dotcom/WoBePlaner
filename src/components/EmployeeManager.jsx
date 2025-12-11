@@ -12,7 +12,7 @@ export default function EmployeeManager({ isOpen, onClose, onUpdate }) {
     }, [isOpen])
 
     const fetchProfiles = async () => {
-        const { data } = await supabase.from('profiles').select('*').order('full_name')
+        const { data } = await supabase.from('profiles').select('*').or('is_active.eq.true,is_active.is.null').order('full_name')
         setProfiles(data || [])
     }
 

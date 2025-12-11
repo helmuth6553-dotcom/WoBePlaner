@@ -7,20 +7,28 @@ import {
     isWithinInterval, parseISO, isWeekend, isToday
 } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Trash2, Calendar, CheckCircle, Clock, AlertCircle, List } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, Calendar, CheckCircle, Clock, AlertCircle, List, XCircle } from 'lucide-react'
 import { useHolidays } from '../hooks/useHolidays'
+import { logAdminAction } from '../utils/adminAudit'
 import ActionSheet from './ActionSheet'
 import ConfirmModal from './ConfirmModal'
 import AlertModal from './AlertModal'
 import SignatureModal from './SignatureModal'
 
-export default function AbsencePlanner() {
+export default function AbsencePlanner({ initialDate }) {
     const { user, isAdmin } = useAuth()
-    const [currentMonth, setCurrentMonth] = useState(new Date())
+    const [currentMonth, setCurrentMonth] = useState(initialDate || new Date())
     const [absences, setAbsences] = useState([])
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { } })
     const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' })
     const [signatureConfig, setSignatureConfig] = useState({ isOpen: false, payload: null })
+
+    // If initialDate changes (e.g. navigation from admin dashboard), update currentMonth
+    useEffect(() => {
+        if (initialDate) {
+            setCurrentMonth(new Date(initialDate))
+        }
+    }, [initialDate])
 
     const { getHoliday } = useHolidays()
 
@@ -186,6 +194,40 @@ export default function AbsencePlanner() {
         })
     }
 
+    // --- ADMIN INTERACTIVITY ---
+    const [selectedAbsence, setSelectedAbsence] = useState(null) // For Admin Modal
+
+    const handleAdminAction = async (absence, status) => {
+        if (!isAdmin) return
+
+        const updates = { status }
+        if (status === 'genehmigt') {
+            updates.approved_by = user.id
+            updates.approved_at = new Date().toISOString()
+        }
+
+        const { error } = await supabase.from('absences').update(updates).eq('id', absence.id)
+
+        if (!error) {
+            // Audit Log
+            await logAdminAction(
+                `absence_${status}`,
+                absence.user_id,
+                'absence_request',
+                absence.id,
+                { before: { status: absence.status }, after: { status: status } }
+            )
+
+            // Close modal and refresh
+            setSelectedAbsence(null)
+            fetchAbsences()
+            setAlertConfig({ isOpen: true, title: 'Erfolg', message: `Antrag wurde ${status}.`, type: 'info' })
+        } else {
+            console.error(error)
+            setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
+        }
+    }
+
     const myRequests = absences.filter(a => a.user_id === user.id).sort((a, b) => new Date(b.start_date) - new Date(a.start_date))
 
     return (
@@ -273,8 +315,15 @@ export default function AbsencePlanner() {
                                             {dayAbsences.map((abs, i) => (
                                                 <div
                                                     key={i}
+                                                    onClick={(e) => {
+                                                        if (isAdmin) {
+                                                            e.stopPropagation()
+                                                            setSelectedAbsence(abs)
+                                                        }
+                                                    }}
                                                     className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium border border-white/50 shadow-sm
                                                         ${abs.status === 'genehmigt' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}
+                                                        ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}
                                                     `}
                                                     title={abs.profiles?.full_name}
                                                 >
@@ -289,6 +338,7 @@ export default function AbsencePlanner() {
                     </div>
                 ) : (
                     <div className="space-y-4 pb-4">
+                        {/* List View logic remains similar, can iterate on it separately if needed */}
                         {eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) })
                             .filter(day => {
                                 const hasAbsence = absences.some(a => isAbsentOnDay(a, day))
@@ -406,6 +456,92 @@ export default function AbsencePlanner() {
                 payload={signatureConfig.payload}
                 title="Urlaub beantragen"
             />
+            {/* ADMIN DETAIL MODAL */}
+            {selectedAbsence && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 relative animate-in zoom-in-95 duration-200">
+                        <button onClick={() => setSelectedAbsence(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                            <XCircle size={24} />
+                        </button>
+
+                        <h3 className="text-xl font-bold mb-4 pr-8">Antragsdetails</h3>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase">Mitarbeiter</label>
+                                <div className="font-bold text-lg">{selectedAbsence.profiles?.full_name || selectedAbsence.profiles?.email}</div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase">Von</label>
+                                    <div className="font-medium">{format(new Date(selectedAbsence.start_date), 'dd.MM.yyyy')}</div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase">Bis</label>
+                                    <div className="font-medium">{format(new Date(selectedAbsence.end_date), 'dd.MM.yyyy')}</div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
+                                <div className={`inline-block px-2 py-1 rounded text-sm font-bold mt-1
+                                    ${selectedAbsence.status === 'genehmigt' ? 'bg-green-100 text-green-800' :
+                                        selectedAbsence.status === 'abgelehnt' ? 'bg-red-100 text-red-800' :
+                                            'bg-yellow-100 text-yellow-800'}
+                                `}>
+                                    {selectedAbsence.status.toUpperCase()}
+                                </div>
+                            </div>
+
+                            <hr className="border-gray-100 my-4" />
+
+                            <div className="flex gap-3">
+                                {selectedAbsence.status === 'beantragt' && (
+                                    <>
+                                        <button
+                                            onClick={() => handleAdminAction(selectedAbsence, 'genehmigt')}
+                                            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+                                        >
+                                            <CheckCircle size={18} /> Genehmigen
+                                        </button>
+                                        <button
+                                            onClick={() => handleAdminAction(selectedAbsence, 'abgelehnt')}
+                                            className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+                                        >
+                                            <XCircle size={18} /> Ablehnen
+                                        </button>
+                                    </>
+                                )}
+                                {selectedAbsence.status !== 'beantragt' && (
+                                    <button
+                                        onClick={() => setSelectedAbsence(null)}
+                                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors"
+                                    >
+                                        Schließen
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Allow cancellation of approved items if needed */}
+                            {selectedAbsence.status === 'genehmigt' && (
+                                <div className="pt-2 text-center">
+                                    <button
+                                        onClick={() => {
+                                            if (confirm("Diesen genehmigten Urlaub wirklich stornieren?")) {
+                                                handleAdminAction(selectedAbsence, 'storniert')
+                                            }
+                                        }}
+                                        className="text-xs text-red-400 hover:text-red-600 underline"
+                                    >
+                                        Genehmigten Urlaub stornieren
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

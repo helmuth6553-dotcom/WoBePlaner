@@ -22,3 +22,7 @@ npm-debug.log*
 
 # Cache
 .cache/
+
+# Generated Reports
+public/*.pdf
+public/*.crdownload

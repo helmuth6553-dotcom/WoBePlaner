@@ -33,16 +33,32 @@ export default function TeamPanel() {
 
     const fetchBalances = async () => {
         try {
+            // Date filter: Only fetch shifts from the last 12 months for balance calculation
+            const oneYearAgo = new Date()
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+            oneYearAgo.setDate(1) // Start of month
+            const dateFilter = oneYearAgo.toISOString()
+
             const { data: allProfiles } = await supabase
                 .from('profiles')
-                .select('id, full_name, email, role, weekly_hours, start_date')
+                .select('id, full_name, display_name, email, role, weekly_hours, start_date')
+                .or('is_active.eq.true,is_active.is.null')
                 .order('full_name')
 
             // LOAD BOTH: Direct Assignments AND Shift Interests
-            // 1. Direct Assignments
+            // 1. Direct Assignments (non-TEAM shifts with assigned_to) - last 12 months only
             const { data: allShifts } = await supabase
                 .from('shifts')
                 .select('id, start_time, end_time, type, assigned_to')
+                .not('type', 'eq', 'TEAM')
+                .gte('start_time', dateFilter)
+
+            // 1b. TEAM shifts are separate (they apply to all employees) - last 12 months only
+            const { data: allTeamShifts } = await supabase
+                .from('shifts')
+                .select('id, start_time, end_time, type')
+                .eq('type', 'TEAM')
+                .gte('start_time', dateFilter)
 
             // 2. Shift Interests (User showed interest and was assigned)
             const { data: allInterests } = await supabase
@@ -75,6 +91,14 @@ export default function TeamPanel() {
                 }
             })
 
+            // Use the separately fetched TEAM shifts (these apply to ALL employees)
+            const teamShifts = (allTeamShifts || []).map(s => ({
+                id: s.id,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                type: s.type
+            }))
+
             const { data: allAbsencesHistory } = await supabase
                 .from('absences')
                 .select('start_date, end_date, user_id, status, type, planned_hours')
@@ -88,7 +112,20 @@ export default function TeamPanel() {
             const results = []
 
             allProfiles?.filter(p => p.role !== 'admin').forEach(profile => {
-                const userShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+                // Get personal shifts
+                const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+
+                // Add Team shifts for this user (they apply to everyone)
+                const userTeamShifts = teamShifts.map(s => ({ ...s, user_id: profile.id }))
+
+                // Merge personal + team shifts, avoiding duplicates
+                const userShifts = [...personalShifts]
+                userTeamShifts.forEach(ts => {
+                    if (!userShifts.some(s => s.id === ts.id)) {
+                        userShifts.push(ts)
+                    }
+                })
+
                 const userAbsences = (allAbsencesHistory || []).filter(a => a.user_id === profile.id)
                 const userEntries = (allTimeEntriesHistory || []).filter(e => e.user_id === profile.id)
 
@@ -97,7 +134,7 @@ export default function TeamPanel() {
                 if (b) {
                     results.push({
                         id: profile.id,
-                        name: profile.full_name || profile.email || 'Unbekannt',
+                        name: profile.display_name || profile.full_name || profile.email || 'Unbekannt',
                         target: b.target,
                         actual: b.actual + b.vacation,
                         carryover: b.carryover,

@@ -7,7 +7,7 @@ import { logAdminAction } from '../utils/adminAudit'
 
 import ShiftRepair from './ShiftRepair'
 
-export default function AdminDashboard() {
+export default function AdminDashboard(props) {
     const [activeTab, setActiveTab] = useState('employees')
 
     return (
@@ -39,7 +39,7 @@ export default function AdminDashboard() {
             {/* Content Container */}
             <div className="min-h-[400px]">
                 {activeTab === 'employees' && <AdminEmployees />}
-                {activeTab === 'absences' && <AdminAbsences />}
+                {activeTab === 'absences' && <AdminAbsences onNavigateToCalendar={props.onNavigateToCalendar} />}
                 {activeTab === 'sick' && <AdminSickLeaves />}
                 {activeTab === 'roster' && <AdminRoster />}
                 {activeTab === 'system' && <ShiftRepair />}
@@ -179,6 +179,8 @@ function AdminAuditLog() {
  */
 function AdminEmployees() {
     const [users, setUsers] = useState([])
+    const [inactiveUsers, setInactiveUsers] = useState([])
+    const [showInactive, setShowInactive] = useState(false)
     const [invites, setInvites] = useState([])
     const [showInviteModal, setShowInviteModal] = useState(false)
     const [editingUser, setEditingUser] = useState(null)
@@ -189,9 +191,24 @@ function AdminEmployees() {
     useEffect(() => { fetchData() }, [])
 
     const fetchData = async () => {
-        const { data: userData } = await supabase.from('profiles').select('*').order('full_name')
-        const { data: inviteData } = await supabase.from('invitations').select('*').order('created_at', { ascending: false })
-        setUsers(userData || [])
+        // Aktive Mitarbeiter
+        const { data: activeData } = await supabase.from('profiles')
+            .select('*')
+            .or('is_active.eq.true,is_active.is.null')  // Auch NULL als aktiv behandeln
+            .order('full_name')
+
+        // Inaktive Mitarbeiter
+        const { data: inactiveData } = await supabase.from('profiles')
+            .select('*')
+            .eq('is_active', false)
+            .order('full_name')
+
+        const { data: inviteData } = await supabase.from('invitations')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+        setUsers(activeData || [])
+        setInactiveUsers(inactiveData || [])
         setInvites(inviteData || [])
     }
 
@@ -218,6 +235,58 @@ function AdminEmployees() {
         }
     }
 
+    const handleDeactivate = async () => {
+        if (!editingUser) return
+        if (!confirm(`${editingUser.full_name || editingUser.email} wirklich deaktivieren?\n\nDer Mitarbeiter kann sich nicht mehr einloggen und erscheint nicht mehr in Listen.\n\nDie Daten bleiben erhalten und können später wiederhergestellt werden.`)) return
+
+        const { data: { user } } = await supabase.auth.getUser()
+
+        const { error } = await supabase.from('profiles').update({
+            is_active: false,
+            deactivated_at: new Date().toISOString(),
+            deactivated_by: user?.id
+        }).eq('id', editingUser.id)
+
+        if (error) {
+            alert('Fehler: ' + error.message)
+        } else {
+            // Audit Log
+            await logAdminAction(
+                'deactivate_user',
+                editingUser.id,
+                'profile',
+                editingUser.id,
+                { before: { is_active: true }, after: { is_active: false } }
+            )
+            setEditingUser(null)
+            fetchData()
+        }
+    }
+
+    const handleReactivate = async (userId) => {
+        if (!confirm('Mitarbeiter wieder aktivieren?')) return
+
+        const { error } = await supabase.from('profiles').update({
+            is_active: true,
+            deactivated_at: null,
+            deactivated_by: null
+        }).eq('id', userId)
+
+        if (error) {
+            alert('Fehler: ' + error.message)
+        } else {
+            const { data: { user } } = await supabase.auth.getUser()
+            await logAdminAction(
+                'reactivate_user',
+                userId,
+                'profile',
+                userId,
+                { before: { is_active: false }, after: { is_active: true } }
+            )
+            fetchData()
+        }
+    }
+
     const openEdit = (user) => {
         setEditingUser(user)
         setFormData({
@@ -229,11 +298,22 @@ function AdminEmployees() {
     const admins = users.filter(u => u.role === 'admin')
     const employees = users.filter(u => u.role !== 'admin')
 
-    const UserCard = ({ user }) => (
-        <div onClick={() => openEdit(user)} className="flex flex-col items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all active:scale-95">
+    const UserCard = ({ user, isInactive = false }) => (
+        <div
+            onClick={() => !isInactive && openEdit(user)}
+            className={`flex flex-col items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all active:scale-95 ${isInactive ? 'opacity-50 grayscale' : ''}`}
+        >
             <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3 overflow-hidden border-2 border-white shadow-sm text-gray-400"><Users size={32} /></div>
             <span className="font-bold text-center text-gray-900 leading-tight text-sm line-clamp-2">{user.full_name || 'Unbenannt'}</span>
             <span className="text-[10px] text-gray-400 mt-1 truncate max-w-full px-2">{user.email}</span>
+            {isInactive && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); handleReactivate(user.id) }}
+                    className="mt-2 text-xs bg-green-50 text-green-700 px-3 py-1 rounded-full font-bold hover:bg-green-100"
+                >
+                    Reaktivieren
+                </button>
+            )}
         </div>
     )
 
@@ -245,8 +325,67 @@ function AdminEmployees() {
             </div>
             {admins.length > 0 && (<div className="mb-8"><h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-2">Administratoren</h3><div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-2">{admins.map(u => <UserCard key={u.id} user={u} />)}</div></div>)}
             <div className="mb-8"><h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-2">Mitarbeiter</h3><div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-2">{employees.map(u => <UserCard key={u.id} user={u} />)}</div></div>
+
+            {/* Inaktive Mitarbeiter */}
+            {inactiveUsers.length > 0 && (
+                <div className="mb-8 border-t pt-6">
+                    <button
+                        onClick={() => setShowInactive(!showInactive)}
+                        className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2 hover:text-gray-600"
+                    >
+                        <Users size={14} />
+                        Ehemalige Mitarbeiter ({inactiveUsers.length})
+                        <span className="text-gray-300">{showInactive ? '▼' : '▶'}</span>
+                    </button>
+                    {showInactive && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-2">
+                            {inactiveUsers.map(u => <UserCard key={u.id} user={u} isInactive={true} />)}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {invites.length > 0 && (<div className="mb-8"><div className="flex items-center gap-2 mb-3 px-2 text-xs font-bold text-yellow-600 uppercase tracking-wider"><Mail size={14} /> Ausstehende Einladungen ({invites.length})</div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-2">{invites.map(i => (<div key={i.email} className="bg-yellow-50 border border-yellow-100 rounded-xl p-3 shadow-sm"><div className="flex justify-between items-start mb-2"><div><div className="font-bold text-gray-900 truncate text-sm">{i.email}</div><div className="text-[10px] text-yellow-700 mt-1">{i.full_name}</div></div><span className="bg-white/50 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase text-yellow-800 border border-yellow-100">{i.role}</span></div><button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}?login=true`); alert('Link in die Zwischenablage kopiert!') }} className="w-full mt-2 text-yellow-800 hover:text-yellow-900 font-bold text-[10px] bg-white border border-yellow-200 hover:bg-yellow-100 px-2 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"><LinkIcon size={12} /> Link kopieren</button></div>))}</div></div>)}
-            {(showInviteModal || editingUser) && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"><div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200"><h3 className="text-xl font-bold mb-4">{editingUser ? 'Mitarbeiter bearbeiten' : 'Neuen Mitarbeiter einladen'}</h3><div className="space-y-4">{!editingUser && (<div><label className="block text-sm font-bold mb-1">Email Adresse</label><input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full border p-2 rounded-lg" /><p className="text-xs text-orange-500 mt-1 flex items-center gap-1"><AlertTriangle size={12} /> Hinweis: Manuell senden.</p></div>)}<div><label className="block text-sm font-bold mb-1">Name</label><input type="text" value={formData.full_name} onChange={e => setFormData({ ...formData, full_name: e.target.value })} className="w-full border p-2 rounded-lg" /></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold mb-1">Wochenstunden</label><input type="number" value={formData.weekly_hours} onChange={e => setFormData({ ...formData, weekly_hours: e.target.value })} className="w-full border p-2 rounded-lg" /></div><div><label className="block text-sm font-bold mb-1">Urlaubstage</label><input type="number" value={formData.vacation_days_per_year} onChange={e => setFormData({ ...formData, vacation_days_per_year: e.target.value })} className="w-full border p-2 rounded-lg" /></div></div><div><label className="block text-sm font-bold mb-1">Eintritt</label><input type="date" value={formData.start_date} onChange={e => setFormData({ ...formData, start_date: e.target.value })} className="w-full border p-2 rounded-lg" /></div><div><label className="block text-sm font-bold mb-1">Rolle</label><select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} className="w-full border p-2 rounded-lg bg-white"><option value="user">Mitarbeiter</option><option value="admin">Administrator</option></select></div></div><div className="flex gap-3 mt-8"><button onClick={() => { setShowInviteModal(false); setEditingUser(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-medium hover:bg-gray-200">Abbrechen</button><button onClick={editingUser ? handleUpdateUser : handleInvite} className="flex-1 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800">{editingUser ? 'Speichern' : 'Einladen'}</button></div></div></div>)}
+
+            {/* Edit Modal - mit Deaktivieren Button */}
+            {(showInviteModal || editingUser) && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+                        <h3 className="text-xl font-bold mb-4">{editingUser ? 'Mitarbeiter bearbeiten' : 'Neuen Mitarbeiter einladen'}</h3>
+                        <div className="space-y-4">
+                            {!editingUser && (<div><label className="block text-sm font-bold mb-1">Email Adresse</label><input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full border p-2 rounded-lg" /><p className="text-xs text-orange-500 mt-1 flex items-center gap-1"><AlertTriangle size={12} /> Hinweis: Manuell senden.</p></div>)}
+                            <div><label className="block text-sm font-bold mb-1">Name</label><input type="text" value={formData.full_name} onChange={e => setFormData({ ...formData, full_name: e.target.value })} className="w-full border p-2 rounded-lg" /></div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-sm font-bold mb-1">Wochenstunden</label><input type="number" value={formData.weekly_hours} onChange={e => setFormData({ ...formData, weekly_hours: e.target.value })} className="w-full border p-2 rounded-lg" /></div>
+                                <div><label className="block text-sm font-bold mb-1">Urlaubstage</label><input type="number" value={formData.vacation_days_per_year} onChange={e => setFormData({ ...formData, vacation_days_per_year: e.target.value })} className="w-full border p-2 rounded-lg" /></div>
+                            </div>
+                            <div><label className="block text-sm font-bold mb-1">Eintritt</label><input type="date" value={formData.start_date} onChange={e => setFormData({ ...formData, start_date: e.target.value })} className="w-full border p-2 rounded-lg" /></div>
+                            <div><label className="block text-sm font-bold mb-1">Rolle</label><select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} className="w-full border p-2 rounded-lg bg-white"><option value="user">Mitarbeiter</option><option value="admin">Administrator</option></select></div>
+                        </div>
+
+                        <div className="flex gap-3 mt-8">
+                            <button onClick={() => { setShowInviteModal(false); setEditingUser(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-medium hover:bg-gray-200">Abbrechen</button>
+                            <button onClick={editingUser ? handleUpdateUser : handleInvite} className="flex-1 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800">{editingUser ? 'Speichern' : 'Einladen'}</button>
+                        </div>
+
+                        {/* Deaktivieren Button - nur bei bestehenden Mitarbeitern (nicht Admins) */}
+                        {editingUser && editingUser.role !== 'admin' && (
+                            <div className="mt-6 pt-6 border-t border-gray-200">
+                                <button
+                                    onClick={handleDeactivate}
+                                    className="w-full bg-red-50 text-red-600 border border-red-200 py-3 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 size={16} />
+                                    Mitarbeiter deaktivieren
+                                </button>
+                                <p className="text-xs text-gray-400 mt-2 text-center">
+                                    Der Mitarbeiter kann sich nicht mehr einloggen. Daten bleiben erhalten.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -261,7 +400,7 @@ function AdminEmployees() {
  * - Approval Flow: Updates status and logs to Audit
  * =========================================================================
  */
-function AdminAbsences() {
+function AdminAbsences({ onNavigateToCalendar }) {
     const [requests, setRequests] = useState([])
     const [archive, setArchive] = useState([])
     const [downloadedIds, setDownloadedIds] = useState(new Set())
@@ -563,7 +702,30 @@ function AdminAbsences() {
         <div>
             <h2 className="text-xl font-bold mb-6">Offene Urlaubsanträge</h2>
             {requests.length === 0 && (<div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200 mb-8"><CheckCircle className="mx-auto text-green-500 mb-2" size={32} /><p className="text-gray-500">Alles erledigt!</p></div>)}
-            <div className="space-y-3 mb-12">{requests.map(req => (<div key={req.id} className="bg-white border p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center shadow-sm gap-4"><div className="w-full md:w-auto"><div className="flex items-center gap-2 mb-1"><span className="font-bold text-lg">{req.profiles?.full_name || req.profiles?.email}</span><span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-0.5 rounded uppercase">{req.type}</span></div><p className="text-gray-600 flex items-center gap-2"><Calendar size={14} />{format(new Date(req.start_date), 'dd.MM.yyyy')} - {format(new Date(req.end_date), 'dd.MM.yyyy')}</p></div><div className="flex gap-2 w-full md:w-auto"><button onClick={() => handleAction(req.id, 'genehmigt')} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 flex items-center gap-2"><CheckCircle size={18} /> Genehmigen</button><button onClick={() => handleAction(req.id, 'abgelehnt')} className="bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-200 flex items-center gap-2"><XCircle size={18} /> Ablehnen</button></div></div>))}</div>
+            <div className="space-y-3 mb-12">{requests.map(req => (
+                <div key={req.id} className="bg-white border p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center shadow-sm gap-4">
+                    <div className="w-full md:w-auto">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-lg">{req.profiles?.full_name || req.profiles?.email}</span>
+                            <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-0.5 rounded uppercase">{req.type}</span>
+                        </div>
+                        <p className="text-gray-600 flex items-center gap-2 mb-2">
+                            <Calendar size={14} />{format(new Date(req.start_date), 'dd.MM.yyyy')} - {format(new Date(req.end_date), 'dd.MM.yyyy')}
+                        </p>
+                        {/* VIEW IN CALENDAR BUTTON */}
+                        <button
+                            onClick={() => onNavigateToCalendar && onNavigateToCalendar(req.start_date)}
+                            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                        >
+                            <Calendar size={12} /> Im Kalender ansehen
+                        </button>
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                        <button onClick={() => handleAction(req.id, 'genehmigt')} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 flex items-center gap-2"><CheckCircle size={18} /> Genehmigen</button>
+                        <button onClick={() => handleAction(req.id, 'abgelehnt')} className="bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-200 flex items-center gap-2"><XCircle size={18} /> Ablehnen</button>
+                    </div>
+                </div>
+            ))}</div>
 
             <h2 className="text-xl font-bold mb-6 pt-8 border-t border-gray-200">Archiv</h2>
             <div className="space-y-3">{archive.map(req => (

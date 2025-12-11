@@ -34,7 +34,7 @@ export default function AdminTimeTracking() {
     // Fetch Users
     useEffect(() => {
         const fetchUsers = async () => {
-            const { data } = await supabase.from('profiles').select('*').neq('role', 'admin').order('full_name')
+            const { data } = await supabase.from('profiles').select('*').or('is_active.eq.true,is_active.is.null').neq('role', 'admin').order('full_name')
             setUsers(data || [])
         }
         fetchUsers()
@@ -53,9 +53,10 @@ export default function AdminTimeTracking() {
         const [year, month] = selectedMonth.split('-').map(Number)
 
         // 0. Profile (for Hours)
-        const { data: profile } = await supabase.from('profiles').select('weekly_hours').eq('id', selectedUserId).single()
+        const { data: profile } = await supabase.from('profiles').select('weekly_hours, start_date').eq('id', selectedUserId).single()
         const weeklyHours = profile?.weekly_hours || 40
         const dailyHours = weeklyHours / 5
+        const effectiveStartDate = profile?.start_date ? new Date(profile.start_date) : null
 
         // 1. Report Status
         const { data: report } = await supabase.from('monthly_reports')
@@ -156,6 +157,12 @@ export default function AdminTimeTracking() {
             }
         })
 
+        // FILTER: Remove shifts before start_date
+        const filteredPersonalShifts = effectiveStartDate ? allPersonalShifts.filter(s => {
+            if (!s.start_time) return false
+            return new Date(s.start_time) >= effectiveStartDate
+        }) : allPersonalShifts
+
         const { data: teamShifts } = await supabase
             .from('shifts')
             .select('*')
@@ -163,8 +170,14 @@ export default function AdminTimeTracking() {
             .gte('start_time', startIso)
             .lte('start_time', endIso)
 
+        // FILTER: Remove Team shifts before start_date
+        const filteredTeamShifts = effectiveStartDate ? (teamShifts || []).filter(s => {
+            if (!s.start_time) return false
+            return new Date(s.start_time) >= effectiveStartDate
+        }) : (teamShifts || [])
+
         // Combine all planned shifts
-        const allPlannedShifts = [...allPersonalShifts, ...(teamShifts || [])]
+        const allPlannedShifts = [...filteredPersonalShifts, ...filteredTeamShifts]
 
         // 5. Create absence items (virtual entries for each day of approved absence)
         const absenceItems = []
@@ -527,7 +540,7 @@ export default function AdminTimeTracking() {
                             className="w-full appearance-none bg-white hover:bg-gray-50 border border-gray-200 text-gray-900 text-base rounded-xl focus:ring-2 focus:ring-black focus:border-transparent block p-4 pr-10 font-bold transition-all cursor-pointer outline-none shadow-sm"
                         >
                             <option value="">Mitarbeiter wählen...</option>
-                            {users.map(u => (<option key={u.id} value={u.id}>{u.full_name}</option>))}
+                            {users.map(u => (<option key={u.id} value={u.id}>{u.display_name || u.full_name}</option>))}
                         </select>
                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>

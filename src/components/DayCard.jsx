@@ -79,7 +79,9 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onA
     }
 
     const getDisplayName = (profile) => {
-        if (profile?.full_name) return profile.full_name.trim().split(' ')[0]
+        // Prefer display_name (nickname) for rosters, fallback to full_name
+        const name = profile?.display_name || profile?.full_name
+        if (name) return name.trim().split(' ')[0]
         return profile?.email?.split('@')[0]
     }
 
@@ -174,9 +176,12 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onA
 
         // Flex Logic
         const interestNames = shift.interests?.map(i => {
+            // FLEX: Day 0 = sick report, then 3 more days (until end of Day 3)
+            const urgentDate = new Date(shift.urgent_since)
+            const interestDate = new Date(i.created_at)
+            const daysDiff = Math.floor((interestDate - urgentDate) / (24 * 60 * 60 * 1000))
             const isFlex = shift.urgent_since && i.created_at &&
-                new Date(i.created_at) > new Date(shift.urgent_since) &&
-                (new Date(i.created_at) - new Date(shift.urgent_since)) < (96 * 60 * 60 * 1000)
+                interestDate > urgentDate && daysDiff <= 3
 
             return {
                 name: getDisplayName(i.profiles),
@@ -189,8 +194,8 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onA
         let rowBg = "bg-white hover:bg-gray-50"
         let iconBg = "bg-gray-100 text-gray-500"
 
-        // Urgency Logic
-        const isUrgent = !!shift.urgent_since && interestNames.length === 0
+        // Urgency Logic - only show as urgent if no one has shown interest yet
+        const isUrgent = !!shift.urgent_since && !shift.assigned_to && interestNames.length === 0
 
         if (interestNames.length === 1) {
             // Single User - Special Display
@@ -290,10 +295,12 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onA
         let participants = []
 
         if (isTeam) {
-            // Calculate participants: All profiles minus absentees
+            // Calculate participants: All profiles minus absentees and admins
+            // Admins are controllers, not employees - they don't participate in team meetings
             participants = allProfiles.filter(p => {
                 const isAbsent = absences.some(a => a.user_id === p.id)
-                return !isAbsent
+                const isAdmin = p.role === 'admin'
+                return !isAbsent && !isAdmin
             }).map(p => ({
                 id: p.id,
                 name: getDisplayName(p),

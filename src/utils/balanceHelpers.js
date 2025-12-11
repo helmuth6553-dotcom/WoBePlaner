@@ -41,14 +41,21 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
     }
 
     // --- 1. Current Month ---
-    const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd })
-    const workDays = daysInMonth.filter(d => !isWeekend(d) && !checkIsHoliday(d)).length
-    const targetMinutes = workDays * dailyHours * 60
+    // Ensure we respect the start date if it falls in the current month
+    const effectiveMonthStart = startDate > monthStart ? startDate : monthStart
+
+    // If the effective start is after the month end (future employee), target is 0
+    let targetMinutes = 0
+    if (effectiveMonthStart <= monthEnd) {
+        const daysInMonth = eachDayOfInterval({ start: effectiveMonthStart, end: monthEnd })
+        const workDays = daysInMonth.filter(d => !isWeekend(d) && !checkIsHoliday(d)).length
+        targetMinutes = workDays * dailyHours * 60
+    }
 
     let currentMonthShifts = historyShifts.filter(s => {
         if (!s.start_time) return false
         const d = new Date(s.start_time)
-        return !isNaN(d.getTime()) && isSameMonth(d, currentDate)
+        return !isNaN(d.getTime()) && isSameMonth(d, currentDate) && d >= startDate
     })
 
     let actualMinutes = 0

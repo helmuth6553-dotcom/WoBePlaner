@@ -194,3 +194,150 @@ export const calculateDailyAbsenceHours = (dateInput, absence, plannedShifts = [
         return isNonWork ? 0 : dailyHours
     }
 }
+
+/**
+ * PDF SEGMENTATION HACK
+ * 
+ * Objectives:
+ * Break down a shift into strict time segments for the PDF listing.
+ * 
+ * Rules:
+ * 1. WORK: Normal Time
+ * 2. STANDBY: 00:30-06:00 (ND Only) minus Interruptions
+ * 3. WORK (Interruption): Interruptions within Standby (Inflated + Merged)
+ * 4. MIDNIGHT SPLIT: If a segment crosses midnight, it must be split (Handled by caller or here? Let's handle it here for ease)
+ * 
+ * Returns array of: { start: Date, end: Date, type: 'WORK'|'STANDBY' }
+ */
+export const getShiftSegments = (startIso, endIso, type, interruptions = []) => {
+    if (!startIso || !endIso) return []
+    const start = new Date(startIso)
+    const end = new Date(endIso)
+
+    // Base segment
+    if (type !== 'ND') {
+        return [{ start, end, type: 'WORK' }]
+    }
+
+    // ND Logic
+    let segments = []
+
+    // Define Readiness Window (similar to calculation logic)
+    let readinessStart = new Date(start)
+    if (start.getHours() >= 12) {
+        readinessStart = addDays(readinessStart, 1)
+    }
+    readinessStart.setHours(0, 30, 0, 0) // 00:30
+
+    let readinessEnd = new Date(readinessStart)
+    readinessEnd.setHours(6, 0, 0, 0) // 06:00
+
+    // Overlap with readiness
+    const readOverlapStart = max([start, readinessStart])
+    const readOverlapEnd = min([end, readinessEnd])
+
+    const hasReadiness = isBefore(readOverlapStart, readOverlapEnd)
+
+    if (!hasReadiness) {
+        // Just Work
+        segments.push({ start, end, type: 'WORK' })
+    } else {
+        // 1. Work before Readiness
+        if (isBefore(start, readOverlapStart)) {
+            segments.push({ start, end: readOverlapStart, type: 'WORK' })
+        }
+
+        // 2. Readiness Block (Must handle interruptions!)
+        // Get Inflated Interruptions for this block
+        const activeIntervals = []
+        if (interruptions && interruptions.length > 0) {
+            const rawIntervals = []
+            interruptions.forEach(int => {
+                if (!int.start || !int.end) return
+                const iStart = new Date(int.start)
+                const iEnd = new Date(int.end)
+
+                // Check overlap with readiness window
+                const iOverlapStart = max([iStart, readOverlapStart])
+                const iOverlapEnd = min([iEnd, readOverlapEnd])
+
+                if (isBefore(iOverlapStart, iOverlapEnd)) {
+                    // Inflate (Visual needs the full inflated block as "WORK")
+                    const inflatedEnd = max([iOverlapEnd, addMinutes(iOverlapStart, 30)])
+                    // Clip to readiness end (Visual shouldn't spill over readiness for this logic block normally, but strictly speaking inflation extends work... let's keep it simple: clip to actual shift end or readiness end?)
+                    // If inflation goes past 06:00, it becomes Work anyway. 
+                    // Simplification: Clip to Readiness End for "Interruption" label, or let it flow?
+                    // Let's clip to Readiness End to keep the "Standby" column logic clean.
+                    // Any work after 06:00 is handled by step 3.
+                    const effectiveEnd = min([inflatedEnd, readOverlapEnd])
+
+                    rawIntervals.push({ start: iOverlapStart, end: effectiveEnd })
+                }
+            })
+
+            // Merge
+            if (rawIntervals.length > 0) {
+                rawIntervals.sort((a, b) => a.start - b.start)
+                let merged = [rawIntervals[0]]
+                for (let i = 1; i < rawIntervals.length; i++) {
+                    let last = merged[merged.length - 1]
+                    let cur = rawIntervals[i]
+                    if (cur.start < last.end) {
+                        last.end = max([last.end, cur.end])
+                    } else {
+                        merged.push(cur)
+                    }
+                }
+                activeIntervals.push(...merged)
+            }
+        }
+
+        // Fill Readiness Block with STANDBY vs WORK
+        let cursor = new Date(readOverlapStart)
+        activeIntervals.forEach(int => {
+            // Standby before this interruption?
+            if (isBefore(cursor, int.start)) {
+                segments.push({ start: new Date(cursor), end: new Date(int.start), type: 'STANDBY' })
+            }
+            // The interruption (WORK)
+            segments.push({ start: new Date(int.start), end: new Date(int.end), type: 'WORK' })
+            cursor = new Date(int.end)
+        })
+        // Remaining Standby after last interruption
+        if (isBefore(cursor, readOverlapEnd)) {
+            segments.push({ start: new Date(cursor), end: new Date(readOverlapEnd), type: 'STANDBY' })
+        }
+
+        // 3. Work after Readiness
+        if (isBefore(readOverlapEnd, end)) {
+            segments.push({ start: readOverlapEnd, end, type: 'WORK' })
+        }
+    }
+
+    // FINAL PASS: Split at Midnight (00:00:00)
+    // Only needed if a segment crosses it.
+    // Logic: Iterate generated segments, check for midnight crossing.
+    const finalSegments = []
+
+    segments.forEach(seg => {
+        const s = seg.start
+        const e = seg.end
+
+        // Check for midnight crossing
+        // (If start day != end day)
+        // Caveat: What if span serves multiple days? (Unlikely for single shift, max 24h usually)
+        // Check if there is a midnight between s and e.
+        const sMidnight = new Date(s)
+        sMidnight.setHours(24, 0, 0, 0) // Midnight of start day
+
+        if (isBefore(s, sMidnight) && isBefore(sMidnight, e)) {
+            // Split!
+            finalSegments.push({ start: s, end: sMidnight, type: seg.type })
+            finalSegments.push({ start: sMidnight, end: e, type: seg.type })
+        } else {
+            finalSegments.push(seg)
+        }
+    })
+
+    return finalSegments
+}

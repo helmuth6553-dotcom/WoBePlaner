@@ -1,0 +1,15 @@
+{
+    "short_name": "WoBePlaner",
+    "name": "WoBePlaner Dienstplan",
+    "icons": [
+        {
+            "src": "logo2.png",
+            "sizes": "192x192 512x512",
+            "type": "image/png"
+        }
+    ],
+    "start_url": ".",
+    "display": "standalone",
+    "theme_color": "#ffffff",
+    "background_color": "#ffffff"
+}

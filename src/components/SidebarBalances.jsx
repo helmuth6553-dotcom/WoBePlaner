@@ -31,19 +31,34 @@ export default function SidebarBalances() {
 
     const fetchBalances = async () => {
         try {
+            // Date filter: Only fetch shifts from the last 12 months
+            const oneYearAgo = new Date()
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+            oneYearAgo.setDate(1)
+            const dateFilter = oneYearAgo.toISOString()
+
             // 1. Fetch all profiles
             const { data: allProfiles, error: pErr } = await supabase
                 .from('profiles')
-                .select('id, full_name, email, role, weekly_hours, start_date, vacation_days_per_year')
+                .select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year')
                 .order('full_name')
 
             if (pErr) throw pErr
 
-            // 2. Fetch shift history via assignments
+            // 2. Fetch shift history via assignments (last 12 months)
             const { data: allShifts } = await supabase
                 .from('shifts')
                 .select('id, start_time, end_time, type, assigned_to')
                 .not('assigned_to', 'is', null)
+                .not('type', 'eq', 'TEAM')
+                .gte('start_time', dateFilter)
+
+            // 2b. Fetch TEAM shifts separately (they apply to all employees)
+            const { data: allTeamShifts } = await supabase
+                .from('shifts')
+                .select('id, start_time, end_time, type')
+                .eq('type', 'TEAM')
+                .gte('start_time', dateFilter)
 
             const allShiftsHistory = allShifts?.map(s => ({
                 user_id: s.assigned_to,
@@ -52,6 +67,35 @@ export default function SidebarBalances() {
                 end_time: s.end_time,
                 type: s.type
             })) || []
+
+            // 2c. Also fetch shift interests
+            const { data: allInterests } = await supabase
+                .from('shift_interests')
+                .select('user_id, shift:shifts(id, start_time, end_time, type)')
+
+            const historyFromInterests = allInterests?.map(i => ({
+                user_id: i.user_id,
+                id: i.shift?.id,
+                start_time: i.shift?.start_time,
+                end_time: i.shift?.end_time,
+                type: i.shift?.type
+            })).filter(s => s.start_time && new Date(s.start_time) >= oneYearAgo) || []
+
+            // Merge direct assignments and interests
+            historyFromInterests.forEach(s => {
+                const exists = allShiftsHistory.some(h => h.id === s.id && h.user_id === s.user_id)
+                if (!exists) {
+                    allShiftsHistory.push(s)
+                }
+            })
+
+            // Prepare team shifts
+            const teamShifts = (allTeamShifts || []).map(s => ({
+                id: s.id,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                type: s.type
+            }))
 
             // 3. Fetch absences
             const { data: allAbsencesHistory } = await supabase
@@ -69,7 +113,18 @@ export default function SidebarBalances() {
             const results = []
 
             allProfiles?.filter(p => p.role !== 'admin').forEach(profile => {
-                const userShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+                // Personal shifts
+                const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+
+                // Add team shifts for this user
+                const userTeamShifts = teamShifts.map(s => ({ ...s, user_id: profile.id }))
+                const userShifts = [...personalShifts]
+                userTeamShifts.forEach(ts => {
+                    if (!userShifts.some(s => s.id === ts.id)) {
+                        userShifts.push(ts)
+                    }
+                })
+
                 const userAbsences = (allAbsencesHistory || []).filter(a => a.user_id === profile.id)
                 const userEntries = (allTimeEntriesHistory || []).filter(e => e.user_id === profile.id)
 
@@ -78,7 +133,7 @@ export default function SidebarBalances() {
                 if (b) {
                     results.push({
                         id: profile.id,
-                        name: profile.full_name || profile.email || 'Unbekannt',
+                        name: profile.display_name || profile.full_name || profile.email || 'Unbekannt',
                         target: b.target,
                         actual: b.actual + b.vacation,
                         carryover: b.carryover,

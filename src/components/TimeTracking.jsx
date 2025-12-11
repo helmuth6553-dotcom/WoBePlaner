@@ -11,7 +11,26 @@ import { getHolidays, isHoliday } from '../utils/holidays'
 import { getYear, isWeekend } from 'date-fns'
 
 export default function TimeTracking() {
-    const { user } = useAuth()
+    const { user, isAdmin } = useAuth()
+
+    // Admins don't have personal time tracking - they only control employee time tracking
+    if (isAdmin) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+                <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-md">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Users className="text-blue-600" size={32} />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Administrator</h2>
+                    <p className="text-gray-500">
+                        Als Administrator hast du keine persönliche Zeiterfassung.
+                        Nutze die <strong>Admin Zeiterfassung</strong> im Menü, um die Stunden deiner Mitarbeiter zu kontrollieren.
+                    </p>
+                </div>
+            </div>
+        )
+    }
+
     const [items, setItems] = useState([]) // Combined Shifts + Absence Days
     const [entries, setEntries] = useState({}) // Stores time_entries by key
     const [plannedShifts, setPlannedShifts] = useState([]) // Store all planned shifts for absence calculation
@@ -47,14 +66,18 @@ export default function TimeTracking() {
         const end = endOfMonth(new Date(selectedMonth))
         const [year, month] = selectedMonth.split('-').map(Number)
 
-        // Load user profile for default hours calculation
-        if (!userProfile) {
+        // Load user profile for default hours calculation and start date filtering
+        let currentProfile = userProfile
+        if (!currentProfile) {
             const { data: profile } = await supabase
                 .from('profiles')
-                .select('weekly_hours')
+                .select('weekly_hours, start_date')
                 .eq('id', user.id)
                 .single()
-            if (profile) setUserProfile(profile)
+            if (profile) {
+                setUserProfile(profile)
+                currentProfile = profile
+            }
         }
 
         // 0. Get Month Status
@@ -129,7 +152,14 @@ export default function TimeTracking() {
             }
         })
 
-        const shiftItems = allPersonalShifts.map(s => ({
+        // FILTER: Remove shifts before start_date
+        const effectiveStartDate = currentProfile?.start_date ? new Date(currentProfile.start_date) : null
+        const filteredPersonalShifts = effectiveStartDate ? allPersonalShifts.filter(s => {
+            if (!s.start_time) return false
+            return new Date(s.start_time) >= effectiveStartDate
+        }) : allPersonalShifts
+
+        const shiftItems = filteredPersonalShifts.map(s => ({
             ...s,
             itemType: 'shift',
             sortDate: new Date(s.start_time)
@@ -146,8 +176,14 @@ export default function TimeTracking() {
             .gte('start_time', startIso)
             .lte('start_time', endIso)
 
+        // FILTER: Remove Team shifts before start_date
+        const filteredTeamShifts = effectiveStartDate ? (teamShifts || []).filter(s => {
+            if (!s.start_time) return false
+            return new Date(s.start_time) >= effectiveStartDate
+        }) : (teamShifts || [])
+
         // Store ALL planned shifts (Personal + Team) for absence calculation
-        const allPlannedRaw = [...allPersonalShifts, ...(teamShifts || [])]
+        const allPlannedRaw = [...filteredPersonalShifts, ...filteredTeamShifts]
         setPlannedShifts(allPlannedRaw)
 
         // 2. Get Absences (Approved only)
@@ -206,7 +242,7 @@ export default function TimeTracking() {
         })
 
         // Process Team Shifts
-        const teamItems = teamShifts?.map(s => {
+        const teamItems = filteredTeamShifts?.map(s => {
             // Collision Check
             const sStart = new Date(s.start_time)
             const sEnd = new Date(s.end_time)
@@ -275,7 +311,7 @@ export default function TimeTracking() {
             })
 
             // Also map TEAM shifts
-            teamShifts?.forEach(shift => {
+            filteredTeamShifts?.forEach(shift => {
                 const entry = allTimeEntries.find(e => e.shift_id === shift.id)
                 if (entry) entriesMap[shift.id] = entry
             })

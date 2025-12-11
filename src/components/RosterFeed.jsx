@@ -172,7 +172,7 @@ export default function RosterFeed() {
         const { data: profile } = await supabase.from('profiles').select('weekly_hours, start_date').eq('id', user?.id).single()
         if (profile) setMyProfile(profile)
 
-        const { data: allProfs } = await supabase.from('profiles').select('id, full_name, email, role, weekly_hours, start_date, vacation_days_per_year').order('full_name')
+        const { data: allProfs } = await supabase.from('profiles').select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year').or('is_active.eq.true,is_active.is.null').order('full_name')
         if (allProfs) setAllProfiles(allProfs)
 
         const { data: myInterests } = await supabase
@@ -189,9 +189,24 @@ export default function RosterFeed() {
         const shiftsFromInterests = myInterests?.map(i => i.shift).filter(s => s) || []
         const shiftsFromDirect = myDirectShifts || []
 
+        // TEAM shifts are mandatory for all employees - fetch them too
+        const { data: teamShifts } = await supabase
+            .from('shifts')
+            .select('id, start_time, end_time, type')
+            .eq('type', 'TEAM')
+
+        const myTeamShifts = teamShifts || []
+
         // Merge and deduplicate
         const allMyShiftsCombined = [...shiftsFromInterests]
         shiftsFromDirect.forEach(s => {
+            const exists = allMyShiftsCombined.some(h => h.id === s.id)
+            if (!exists) {
+                allMyShiftsCombined.push(s)
+            }
+        })
+        // Add Team shifts (they apply to all employees)
+        myTeamShifts.forEach(s => {
             const exists = allMyShiftsCombined.some(h => h.id === s.id)
             if (!exists) {
                 allMyShiftsCombined.push(s)
@@ -209,8 +224,8 @@ export default function RosterFeed() {
             .from('shifts')
             .select(`
                 *, 
-                interests:shift_interests(*, profiles(email, full_name)), 
-                assigned_profile:profiles!shifts_assigned_to_fkey(email, full_name)
+                interests:shift_interests(*, profiles(email, full_name, display_name)), 
+                assigned_profile:profiles!shifts_assigned_to_fkey(email, full_name, display_name)
             `)
             .gte('start_time', queryStart)
             .lte('start_time', queryEnd)
@@ -223,7 +238,7 @@ export default function RosterFeed() {
 
         const { data: absData } = await supabase
             .from('absences')
-            .select('*, profiles!user_id(email, full_name)')
+            .select('*, profiles!user_id(email, full_name, display_name)')
             .eq('status', 'genehmigt')
             .lte('start_date', monthEndStr)
             .gte('end_date', monthStartStr)
@@ -250,16 +265,37 @@ export default function RosterFeed() {
     useEffect(() => {
         if (!user) return
         fetchData()
+
+        // Unique channel name per user session to avoid conflicts
+        const channelName = `roster-updates-${user.id}-${Date.now()}`
+
         const channel = supabase
-            .channel('roster-updates')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, () => fetchData())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => fetchData())
+            .channel(channelName)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, (payload) => {
+                console.log('Realtime: shift_interests changed', payload)
+                fetchData()
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => {
+                console.log('Realtime: shifts changed', payload)
+                fetchData()
+            })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_months' }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, () => fetchData())
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
+            .subscribe((status) => {
+                console.log('Realtime subscription status:', status)
+            })
+
+        // Backup polling every 3 seconds (in case realtime fails on mobile)
+        const pollInterval = setInterval(() => {
+            fetchData()
+        }, 3000)
+
+        return () => {
+            supabase.removeChannel(channel)
+            clearInterval(pollInterval)
+        }
     }, [currentDate, user])
 
     const shiftsByDate = useMemo(() => {
@@ -461,14 +497,27 @@ export default function RosterFeed() {
             return
         }
 
-        // 4. Now remove user from shifts
+        // 4. Now remove user from shifts and mark as urgent via RPC (bypasses RLS)
         if (shiftsInRange) {
+            const shiftIdsToMarkUrgent = []
+
             for (const shift of shiftsInRange) {
                 const myInterest = shift.interests.find(i => i.user_id === user.id)
                 if (myInterest || shift.assigned_to === user.id) {
+                    // Delete interest first
                     if (myInterest) await supabase.from('shift_interests').delete().eq('id', myInterest.id)
-                    if (shift.assigned_to === user.id) await supabase.from('shifts').update({ assigned_to: null }).eq('id', shift.id)
-                    await supabase.from('shifts').update({ urgent_since: new Date().toISOString() }).eq('id', shift.id)
+                    shiftIdsToMarkUrgent.push(shift.id)
+                }
+            }
+
+            // Use RPC to mark shifts as urgent (bypasses RLS)
+            if (shiftIdsToMarkUrgent.length > 0) {
+                const { error: rpcError } = await supabase.rpc('mark_shifts_urgent', {
+                    p_shift_ids: shiftIdsToMarkUrgent,
+                    p_user_id: user.id
+                })
+                if (rpcError) {
+                    console.error('Error marking shifts urgent:', rpcError)
                 }
             }
         }
@@ -671,7 +720,7 @@ export default function RosterFeed() {
 
                                             return (
                                                 <div key={profile.id} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded-lg">
-                                                    <span className="font-medium text-gray-700">{profile.full_name || profile.email}</span>
+                                                    <span className="font-medium text-gray-700">{profile.display_name || profile.full_name || profile.email}</span>
                                                     <div className="flex gap-3">
                                                         <span className="text-gray-500">Soll: {b.target}h</span>
                                                         <span className={`font-bold ${b.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>

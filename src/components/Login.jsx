@@ -32,8 +32,17 @@ export default function Login() {
     return (
         <div className="flex h-screen items-center justify-center p-4 bg-gray-50">
             <form onSubmit={handleLogin} className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+                {/* Logo */}
+                <div className="flex justify-center mb-6">
+                    <img
+                        src="/logo2.png"
+                        alt="Logo"
+                        className="h-32 w-auto object-contain"
+                    />
+                </div>
+
                 <h1 className="text-2xl font-bold mb-6 text-center">
-                    {useMagicLink ? 'Login per Link' : 'Willkommen zurück'}
+                    {useMagicLink ? 'Login per Link' : 'WoBePlaner'}
                 </h1>
 
                 {message && (

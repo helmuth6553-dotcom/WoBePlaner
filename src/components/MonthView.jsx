@@ -32,8 +32,10 @@ export default function MonthView({ shiftsByDate, userId, onToggleInterest, getA
     const { getHoliday } = useHolidays()
 
     const getDisplayName = (profile, fullName = false) => {
-        if (fullName && profile?.full_name) return profile.full_name
-        if (profile?.full_name) return profile.full_name.split(' ')[0]
+        // Prefer display_name (nickname) for rosters
+        const name = profile?.display_name || profile?.full_name
+        if (fullName && name) return name
+        if (name) return name.split(' ')[0]
         return profile?.email?.split('@')[0] || '?'
     }
 
@@ -58,7 +60,7 @@ export default function MonthView({ shiftsByDate, userId, onToggleInterest, getA
         if (!shift) return <div className="bg-gray-50/30 h-full w-full border-r border-gray-100"></div>
 
         const interestCount = shift.interests?.length || 0
-        const isUrgent = !!shift.urgent_since && interestCount === 0
+        const isUrgent = !!shift.urgent_since && !shift.assigned_to && interestCount === 0
         const amIInterested = shift.interests?.some(i => i.user_id === userId)
 
         // Determine who to show (Assigned OR Single Interest)
@@ -68,7 +70,7 @@ export default function MonthView({ shiftsByDate, userId, onToggleInterest, getA
         if (shift.assigned_to) {
             displayProfile = shift.assigned_profile
             isAssignedState = true
-        } else if (interestCount === 1) {
+        } else if (interestCount === 1 && !isUrgent) { // Only show single interest if NOT urgent
             displayProfile = shift.interests[0].profiles
         }
 
@@ -95,11 +97,14 @@ export default function MonthView({ shiftsByDate, userId, onToggleInterest, getA
             )
         }
 
-        // Multiple Interests or Empty
+        // Multiple Interests or Empty or Urgent
         let cellClass = "bg-white"
         let content = null
 
-        if (interestCount > 1) {
+        if (isUrgent) {
+            cellClass = "bg-red-100 text-red-700 animate-pulse font-bold border-red-200 border"
+            content = interestCount > 0 ? "!" : "!" // Always show ! for urgent
+        } else if (interestCount > 1) {
             if (amIInterested) {
                 cellClass = "bg-blue-50 text-blue-600"
                 content = <span className="text-[10px] font-bold">+{interestCount} (Ich)</span>
@@ -107,9 +112,6 @@ export default function MonthView({ shiftsByDate, userId, onToggleInterest, getA
                 cellClass = "bg-yellow-50 text-yellow-600"
                 content = <span className="text-[10px] font-bold">{interestCount}</span>
             }
-        } else if (isUrgent) {
-            cellClass = "bg-red-100 text-red-700 animate-pulse font-bold border-red-200 border"
-            content = "!"
         }
 
         const interactiveClass = isBlocked ? 'cursor-not-allowed opacity-40 bg-gray-50' : 'cursor-pointer hover:bg-gray-50'
