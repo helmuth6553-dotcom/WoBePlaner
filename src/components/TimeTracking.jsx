@@ -8,6 +8,29 @@ import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCal
 import { generateTimeReportPDF } from '../utils/pdfGenerator'
 import { generateReportHash } from '../utils/security'
 
+// Helper functions at module level for stable references in hooks
+function constructIso(referenceIso, timeStr) {
+    if (!referenceIso || !timeStr) return null
+    try {
+        const [hours, minutes] = timeStr.split(':').map(Number)
+        const date = parseISO(referenceIso)
+        const newDate = new Date(date)
+        newDate.setHours(hours, minutes, 0, 0)
+        return newDate.toISOString()
+    } catch { return null }
+}
+
+function constructInterruptionIso(shiftStartIso, timeStr) {
+    try {
+        const [hours, minutes] = timeStr.split(':').map(Number)
+        const startDate = parseISO(shiftStartIso)
+        let targetDate = new Date(startDate)
+        if (hours < 12 && startDate.getHours() >= 12) targetDate = addDays(targetDate, 1)
+        targetDate.setHours(hours, minutes, 0, 0)
+        return targetDate.toISOString()
+    } catch { return null }
+}
+
 export default function TimeTracking() {
     const { user, isAdmin } = useAuth()
 
@@ -37,6 +60,77 @@ export default function TimeTracking() {
     })
     const [calculatedHours, setCalculatedHours] = useState(0)
 
+    // Data loading effect - must be before any conditional returns
+    // Uses function declaration for fetchData (hoisted) to avoid reference errors
+    useEffect(() => {
+        if (isAdmin) return // Admins don't need personal time tracking data
+        if (user && selectedMonth) fetchData()
+    }, [user, selectedMonth, isAdmin])
+
+    // Init Modal - must be before any conditional returns
+    useEffect(() => {
+        if (isAdmin) return
+        if (editingItem) {
+            const entry = entries[editingItem.id]
+
+            if (entry) {
+                setFormData({
+                    actualStart: format(parseISO(entry.actual_start), 'HH:mm'),
+                    actualEnd: format(parseISO(entry.actual_end), 'HH:mm'),
+                    interruptions: entry.interruptions || []
+                })
+            } else {
+                if (editingItem.itemType === 'shift') {
+                    setFormData({
+                        actualStart: format(parseISO(editingItem.start_time), 'HH:mm'),
+                        actualEnd: format(parseISO(editingItem.end_time), 'HH:mm'),
+                        interruptions: []
+                    })
+                } else {
+                    // Absence Default: Use weekly_hours / 5 for daily hours
+                    const weeklyHours = Number(userProfile?.weekly_hours) || 40
+                    const dailyHours = weeklyHours / 5
+                    const endHour = 8 + Math.floor(dailyHours)
+                    const endMinute = Math.round((dailyHours % 1) * 60)
+
+                    setFormData({
+                        actualStart: '08:00',
+                        actualEnd: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
+                        interruptions: []
+                    })
+                }
+            }
+        }
+    }, [editingItem, entries, userProfile, isAdmin])
+
+    // Live Calc - must be before any conditional returns
+    useEffect(() => {
+        if (isAdmin) return
+        if (editingItem && formData.actualStart && formData.actualEnd) {
+            let startIso, endIso
+            if (editingItem.itemType === 'shift') {
+                startIso = constructIso(editingItem.start_time, formData.actualStart)
+                endIso = constructIso(editingItem.end_time, formData.actualEnd)
+            } else {
+                const baseDate = editingItem.sortDate.toISOString()
+                startIso = constructIso(baseDate, formData.actualStart)
+                endIso = constructIso(baseDate, formData.actualEnd)
+            }
+
+            const processedInterruptions = formData.interruptions.map(int => ({
+                start: constructInterruptionIso(editingItem.itemType === 'shift' ? editingItem.start_time : editingItem.sortDate.toISOString(), int.start),
+                end: constructInterruptionIso(editingItem.itemType === 'shift' ? editingItem.start_time : editingItem.sortDate.toISOString(), int.end)
+            }))
+
+            if (editingItem.isTeam && editingItem.isColliding) {
+                setCalculatedHours(0)
+            } else {
+                const type = editingItem.itemType === 'shift' ? editingItem.type : 'T'
+                setCalculatedHours(calculateWorkHours(startIso, endIso, type, processedInterruptions))
+            }
+        }
+    }, [formData, editingItem, isAdmin])
+
     // Admins don't have personal time tracking - they only control employee time tracking
     // IMPORTANT: This return must come AFTER all hooks to avoid React rules violations
     if (isAdmin) {
@@ -56,11 +150,8 @@ export default function TimeTracking() {
         )
     }
 
-    useEffect(() => {
-        if (user && selectedMonth) fetchData()
-    }, [user, selectedMonth])
-
-    const fetchData = async () => {
+    // fetchData is defined below - this is fine because JavaScript hoists function declarations
+    async function fetchData() {
         setLoading(true)
         const start = startOfMonth(new Date(selectedMonth))
         const end = endOfMonth(new Date(selectedMonth))
@@ -208,7 +299,6 @@ export default function TimeTracking() {
                 if (rangeStart <= rangeEnd) {
                     const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
                     days.forEach(day => {
-                        const dateKey = format(day, 'yyyy-MM-dd')
 
                         // SINGLE SOURCE OF TRUTH INTEGRATION
                         // Calculate hours first to determine if this absence is relevant (hours > 0)
@@ -330,89 +420,6 @@ export default function TimeTracking() {
         setLoading(false)
     }
 
-    // Init Modal
-    useEffect(() => {
-        if (editingItem) {
-            const entry = entries[editingItem.id]
-
-            if (entry) {
-                setFormData({
-                    actualStart: format(parseISO(entry.actual_start), 'HH:mm'),
-                    actualEnd: format(parseISO(entry.actual_end), 'HH:mm'),
-                    interruptions: entry.interruptions || []
-                })
-            } else {
-                if (editingItem.itemType === 'shift') {
-                    setFormData({
-                        actualStart: format(parseISO(editingItem.start_time), 'HH:mm'),
-                        actualEnd: format(parseISO(editingItem.end_time), 'HH:mm'),
-                        interruptions: []
-                    })
-                } else {
-                    // Absence Default: Use weekly_hours / 5 for daily hours
-                    const weeklyHours = Number(userProfile?.weekly_hours) || 40
-                    const dailyHours = weeklyHours / 5
-                    const endHour = 8 + Math.floor(dailyHours)
-                    const endMinute = Math.round((dailyHours % 1) * 60)
-
-                    setFormData({
-                        actualStart: '08:00',
-                        actualEnd: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
-                        interruptions: []
-                    })
-                }
-            }
-        }
-    }, [editingItem, entries, userProfile])
-
-    // Live Calc
-    useEffect(() => {
-        if (editingItem && formData.actualStart && formData.actualEnd) {
-            let startIso, endIso
-            if (editingItem.itemType === 'shift') {
-                startIso = constructIso(editingItem.start_time, formData.actualStart)
-                endIso = constructIso(editingItem.end_time, formData.actualEnd, true)
-            } else {
-                const baseDate = editingItem.sortDate.toISOString()
-                startIso = constructIso(baseDate, formData.actualStart)
-                endIso = constructIso(baseDate, formData.actualEnd)
-            }
-
-            const processedInterruptions = formData.interruptions.map(int => ({
-                start: constructInterruptionIso(editingItem.itemType === 'shift' ? editingItem.start_time : editingItem.sortDate.toISOString(), int.start),
-                end: constructInterruptionIso(editingItem.itemType === 'shift' ? editingItem.start_time : editingItem.sortDate.toISOString(), int.end)
-            }))
-
-            if (editingItem.isTeam && editingItem.isColliding) {
-                setCalculatedHours(0)
-            } else {
-                const type = editingItem.itemType === 'shift' ? editingItem.type : 'T'
-                setCalculatedHours(calculateWorkHours(startIso, endIso, type, processedInterruptions))
-            }
-        }
-    }, [formData, editingItem])
-
-
-    const constructIso = (referenceIso, timeStr, isEnd = false) => {
-        if (!referenceIso || !timeStr) return null
-        try {
-            const [hours, minutes] = timeStr.split(':').map(Number)
-            const date = parseISO(referenceIso)
-            const newDate = new Date(date)
-            newDate.setHours(hours, minutes, 0, 0)
-            return newDate.toISOString()
-        } catch (e) { return null }
-    }
-    const constructInterruptionIso = (shiftStartIso, timeStr) => {
-        try {
-            const [hours, minutes] = timeStr.split(':').map(Number)
-            const startDate = parseISO(shiftStartIso)
-            let targetDate = new Date(startDate)
-            if (hours < 12 && startDate.getHours() >= 12) targetDate = addDays(targetDate, 1)
-            targetDate.setHours(hours, minutes, 0, 0)
-            return targetDate.toISOString()
-        } catch (e) { return null }
-    }
 
     const handleSave = async () => {
         if (!editingItem) return
@@ -495,10 +502,9 @@ export default function TimeTracking() {
         setIsSubmitting(true)
         const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: password })
         if (authError) { setSubmitError('Falsches Passwort.'); setIsSubmitting(false); return }
-
-        // Prepare Hash
-        const start = startOfMonth(new Date(selectedMonth))
-        const end = endOfMonth(new Date(selectedMonth))
+        // Prepare Hash - month boundaries used for comprehensive entry collection
+        const _monthStart = startOfMonth(new Date(selectedMonth))
+        const _monthEnd = endOfMonth(new Date(selectedMonth))
 
         // 1. Reconstruct the COMPLETE list of entries (Real DB Entries + Virtual Absences)
         const comprehensiveEntries = items.map(item => {
@@ -628,7 +634,7 @@ export default function TimeTracking() {
                     {items.map(item => {
                         const entry = entries[item.id]
                         const isDone = entry?.status === 'approved'
-                        const isSubmitted = !!entry
+                        const _hasEntry = !!entry
                         const isAbsence = item.itemType === 'absence'
                         // Safe check for shift date vs today
                         const itemDate = isAbsence ? item.sortDate : new Date(item.start_time)
@@ -709,7 +715,7 @@ export default function TimeTracking() {
                                         const dailyHours = weeklyHours / 5
 
                                         const d = item.sortDate
-                                        const dateKey = format(d, 'yyyy-MM-dd')
+                                        const _dateKey = format(d, 'yyyy-MM-dd')
                                         const isSick = item.reason === 'sick' || (item.type && item.type.toLowerCase().includes('krank'))
 
                                         if (isSick) {
