@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext'
 import { eachDayOfInterval, isWeekend, parseISO, startOfYear, endOfYear, isWithinInterval } from 'date-fns'
 import { User, Save, Briefcase, CalendarCheck, Clock, PieChart, Shield, LogOut } from 'lucide-react'
 import { useHolidays } from '../hooks/useHolidays'
+import NotificationToggle from './NotificationToggle'
 
 export default function Profile() {
     const { user, isAdmin } = useAuth()
@@ -159,6 +160,8 @@ export default function Profile() {
                     <Save size={20} /> Speichern
                 </button>
             </div>
+
+            <NotificationToggle />
 
             {/* Sicherheit / Passwort */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">

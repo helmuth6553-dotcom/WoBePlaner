@@ -751,6 +751,7 @@ export default function RosterFeed() {
                             <MonthView
                                 shiftsByDate={visibleShiftsByDate}
                                 userId={user.id}
+                                isAdmin={isAdmin}
                                 onToggleInterest={toggleInterest}
                                 getAbsencesForDate={getAbsencesForDate}
                             />

@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
                 console.warn('Auth loading timed out, forcing render')
                 setLoading(false)
             }
-        }, 3000)
+        }, 5000)
 
         const initAuth = async () => {
 
@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }) => {
                 if (mounted) {
                     setUser(session?.user ?? null)
                     if (session?.user) {
-                        fetchRole(session.user.id)
+                        await fetchRole(session.user.id)
                     }
                 }
             } catch (error) {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
 import Login from './components/Login'
 import RosterFeed from './components/RosterFeed'
@@ -11,6 +11,7 @@ import TeamPanel from './components/TeamPanel'
 import ErrorBoundary from './components/ErrorBoundary'
 import TimeTracking from './components/TimeTracking'
 import AdminTimeTracking from './components/AdminTimeTracking'
+import SplashScreen from './components/SplashScreen'
 
 function AppContent() {
   const { user, isAdmin } = useAuth()
@@ -54,6 +55,17 @@ function AppContent() {
 }
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true)
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), 2000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  if (showSplash) {
+    return <SplashScreen />
+  }
+
   return (
     <ErrorBoundary>
       <AuthProvider>

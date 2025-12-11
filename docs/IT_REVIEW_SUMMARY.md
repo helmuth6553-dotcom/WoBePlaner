@@ -155,7 +155,34 @@ Alle Tabellen haben RLS aktiviert mit korrekten Policies:
 
 ---
 
-## 8. Kontakt & Verantwortlichkeiten
+## 8. Push Notifications & PWA
+
+**Status:** ✅ Implementiert und DSGVO-konform
+
+### Architektur
+Das System nutzt den **Web Push Standard** (RFC 8292) ohne externe Drittanbieter-Dienste (wie Firebase/OneSignal), um maximale Datenhoheit zu gewährleisten.
+
+*   **VAPID:** Authentifizierung der App-Server gegenüber den Push-Services (Google/Apple/Mozilla) mittels ECDSA P-256 Keys.
+*   **Edge Function:** `notify-sickness` (Deno) versendet die Nachrichten.
+*   **Trigger:** Supabase Database Webhook auf `INSERT` in Tabelle `absences`.
+
+### Datenschutz & Logik
+Um sensible Gesundheitsdaten zu schützen ("Datensparsamkeit"), wurden folgende Maßnahmen getroffen:
+
+1.  **Anonymisierung:** Nachrichten enthalten **keinen** Hinweis auf Krankheit oder den Namen des Erkrankten.
+    *   *Text:* "Dienstausfall! Kannst du im Zeitraum DD.MM. - DD.MM. einspringen?"
+2.  **Intelligente Filterung:**
+    *   Nutzer, die im betroffenen Zeitraum selbst eine genehmigte Abwesenheit haben (Urlaub, Krank), werden **automatisch ausgeschlossen**.
+    *   Der erkrankte Nutzer selbst erhält keine Nachricht.
+3.  **Verschlüsselung:** Payload ist nach Web Push Standard Ende-zu-Ende verschlüsselt.
+
+### PWA Integration
+*   **Scope:** Strict `/` Scope in `manifest.json` verhindert Session-Verlust bei Deep-Links.
+*   **Service Worker:** Prüft vor dem Öffnen neuer Fenster auf existierende Sessions (`clients.matchAll`), um Re-Logins zu vermeiden.
+
+---
+
+## 9. Kontakt & Verantwortlichkeiten
 
 | Rolle | Verantwortlich für |
 |-------|-------------------|

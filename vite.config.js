@@ -1,9 +1,26 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
+      includeAssets: ['logo2.png', 'logo.png', 'manifest.json'],
+      manifest: false, // We use our own manifest.json
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true
+      }
+    })
+  ],
   build: {
     rollupOptions: {
       output: {
