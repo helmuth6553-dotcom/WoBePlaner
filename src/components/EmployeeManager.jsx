@@ -8,10 +8,15 @@ export default function EmployeeManager({ isOpen, onClose, onUpdate }) {
     const [editForm, setEditForm] = useState({})
 
     useEffect(() => {
+        const fetchProfiles = async () => {
+            const { data } = await supabase.from('profiles').select('*').or('is_active.eq.true,is_active.is.null').order('full_name')
+            setProfiles(data || [])
+        }
         if (isOpen) fetchProfiles()
     }, [isOpen])
 
-    const fetchProfiles = async () => {
+    // Refetch function for use after saves
+    const refetchProfiles = async () => {
         const { data } = await supabase.from('profiles').select('*').or('is_active.eq.true,is_active.is.null').order('full_name')
         setProfiles(data || [])
     }
@@ -35,7 +40,7 @@ export default function EmployeeManager({ isOpen, onClose, onUpdate }) {
         if (error) alert(error.message)
         else {
             setEditingId(null)
-            fetchProfiles()
+            refetchProfiles()
             if (onUpdate) onUpdate()
         }
     }

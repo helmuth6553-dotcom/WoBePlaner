@@ -133,7 +133,7 @@ export default function MonthView({ shiftsByDate, userId, onToggleInterest, getA
 
         return (
             <div className="flex flex-col justify-center items-center h-full gap-0.5 p-0.5">
-                {absences.slice(0, 2).map((abs, i) => (
+                {absences.slice(0, 2).map((abs) => (
                     <div
                         key={abs.id}
                         className={`w-full rounded text-[8px] lg:text-[10px] font-bold text-center truncate px-0.5 lg:px-1 leading-tight ${abs.type === 'Krank' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}

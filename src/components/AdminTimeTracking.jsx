@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, addMonths, subMonths, subDays, addDays, getYear } from 'date-fns'
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, subDays, addDays } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { CheckCircle, XCircle, Download, FileText, Sun, Thermometer, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert, Eye } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
 import { generateTimeReportPDF } from '../utils/pdfGenerator'
 import { generateReportHash } from '../utils/security'
 import { logAdminAction } from '../utils/adminAudit'
-import { getHolidays, isHoliday } from '../utils/holidays'
+
 
 export default function AdminTimeTracking() {
     const [users, setUsers] = useState([])
@@ -55,7 +55,7 @@ export default function AdminTimeTracking() {
         // 0. Profile (for Hours)
         const { data: profile } = await supabase.from('profiles').select('weekly_hours, start_date').eq('id', selectedUserId).single()
         const weeklyHours = profile?.weekly_hours || 40
-        const dailyHours = weeklyHours / 5
+        // dailyHours not used directly but weeklyHours is needed for absence calculations
         const effectiveStartDate = profile?.start_date ? new Date(profile.start_date) : null
 
         // 1. Report Status
@@ -131,8 +131,8 @@ export default function AdminTimeTracking() {
                 .in('shift_id', shiftIds)
 
             const interestCounts = {}
-            allInterests?.forEach(i => {
-                interestCounts[i.shift_id] = (interestCounts[i.shift_id] || 0) + 1
+            allInterests?.forEach(int => {
+                interestCounts[int.shift_id] = (interestCounts[int.shift_id] || 0) + 1
             })
 
             confirmedShifts = monthInterests
@@ -617,8 +617,6 @@ export default function AdminTimeTracking() {
                     let hasDeviation = false
                     let plannedHours = null
                     if (!isAbsence && e.shifts) {
-                        const start = new Date(e.shifts.start_time)
-                        const end = new Date(e.shifts.end_time)
                         plannedHours = calculateWorkHours(e.shifts.start_time, e.shifts.end_time, e.shifts.type)
                         const hasInterruptions = e.interruptions && e.interruptions.length > 0
                         const timeDifference = Math.abs(e.calculated_hours - plannedHours) > 0.01
@@ -676,7 +674,7 @@ export default function AdminTimeTracking() {
                                                         {format(parseISO(int.start), 'HH:mm')} - {format(parseISO(int.end), 'HH:mm')}
                                                     </span>
                                                 )
-                                            } catch (e) {
+                                            } catch {
                                                 return null
                                             }
                                         })}

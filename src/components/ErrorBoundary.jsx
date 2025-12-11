@@ -6,7 +6,9 @@ class ErrorBoundary extends React.Component {
         this.state = { hasError: false, error: null, errorInfo: null }
     }
 
+    // eslint-disable-next-line no-unused-vars
     static getDerivedStateFromError(error) {
+        // React requires this parameter even though we don't use it
         return { hasError: true }
     }
 

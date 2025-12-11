@@ -22,18 +22,68 @@ export default function Profile() {
     const { getHoliday } = useHolidays()
 
     useEffect(() => {
-        fetchProfile()
-        calculateVacationStats()
-    }, [user])
-
-    const fetchProfile = async () => {
-        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-        if (data) {
-            setProfile(data)
-            setFullName(data.full_name || '')
-            setDisplayName(data.display_name || '')
+        // Inline function definitions to avoid 'accessed before declared' errors
+        const fetchProfile = async () => {
+            const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+            if (data) {
+                setProfile(data)
+                setFullName(data.full_name || '')
+                setDisplayName(data.display_name || '')
+            }
         }
-    }
+
+        const calculateVacationStats = async () => {
+            // Hole Profil Daten für Urlaubsanspruch
+            const { data: profileData } = await supabase.from('profiles').select('vacation_days_per_year').eq('id', user.id).single()
+            const totalVacation = profileData?.vacation_days_per_year || 25
+
+            // Hole alle Abwesenheiten des aktuellen Jahres
+            const start = startOfYear(new Date())
+            const end = endOfYear(new Date())
+
+            const { data: absences } = await supabase
+                .from('absences')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('type', 'Urlaub') // Nur Urlaub zählt
+
+            if (!absences) return
+
+            let usedDays = 0
+            let plannedDays = 0
+
+            absences.forEach(abs => {
+                // Berechne Tage im aktuellen Jahr
+                const absStart = parseISO(abs.start_date)
+                const absEnd = parseISO(abs.end_date)
+
+                // Intervall der Abwesenheit
+                const days = eachDayOfInterval({ start: absStart, end: absEnd })
+
+                // Zähle nur Werktage (Mo-Fr) und nur Tage im aktuellen Jahr, die KEINE Feiertage sind
+                const count = days.filter(day =>
+                    !isWeekend(day) &&
+                    isWithinInterval(day, { start, end }) &&
+                    !getHoliday(day)
+                ).length
+
+                if (abs.status === 'genehmigt') usedDays += count
+                else if (abs.status === 'beantragt') plannedDays += count
+            })
+
+            setStats({
+                total: totalVacation,
+                used: usedDays,
+                planned: plannedDays,
+                remaining: totalVacation - usedDays - plannedDays
+            })
+        }
+
+        if (user) {
+            fetchProfile()
+            calculateVacationStats()
+        }
+    }, [user, getHoliday])
 
     const updateProfile = async () => {
         setLoading(true)
@@ -55,53 +105,6 @@ export default function Profile() {
             alert('Passwort erfolgreich gesetzt!')
             setPassword('')
         }
-    }
-
-    const calculateVacationStats = async () => {
-        // Hole Profil Daten für Urlaubsanspruch
-        const { data: profileData } = await supabase.from('profiles').select('vacation_days_per_year').eq('id', user.id).single()
-        const totalVacation = profileData?.vacation_days_per_year || 25
-
-        // Hole alle Abwesenheiten des aktuellen Jahres
-        const start = startOfYear(new Date())
-        const end = endOfYear(new Date())
-
-        const { data: absences } = await supabase
-            .from('absences')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('type', 'Urlaub') // Nur Urlaub zählt
-
-        if (!absences) return
-
-        let usedDays = 0
-        let plannedDays = 0
-
-        absences.forEach(abs => {
-            // Berechne Tage im aktuellen Jahr
-            const absStart = parseISO(abs.start_date)
-            const absEnd = parseISO(abs.end_date)
-
-            // Intervall der Abwesenheit
-            const days = eachDayOfInterval({ start: absStart, end: absEnd })
-
-            // Zähle nur Werktage (Mo-Fr) und nur Tage im aktuellen Jahr, die KEINE Feiertage sind
-            const count = days.filter(day =>
-                !isWeekend(day) &&
-                isWithinInterval(day, { start, end }) &&
-                !getHoliday(day)
-            ).length
-
-            if (abs.status === 'genehmigt') usedDays += count
-            else if (abs.status === 'beantragt') plannedDays += count
-        })
-
-        setStats({
-            total: totalVacation,
-            used: usedDays,
-            planned: plannedDays,
-            remaining: totalVacation - usedDays - plannedDays
-        })
     }
 
     const handleLogout = async () => {

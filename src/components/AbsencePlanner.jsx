@@ -38,17 +38,12 @@ export default function AbsencePlanner({ initialDate }) {
 
     const [viewMode, setViewMode] = useState('grid') // 'grid' | 'list'
 
-    const getInitials = (name) => {
-        if (!name) return '??'
-        return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
-    }
-
     const isAbsentOnDay = (absence, day) => {
         if (!absence.start_date || !absence.end_date) return false
         try {
             return absence.status !== 'abgelehnt' && absence.status !== 'storniert' &&
                 isWithinInterval(day, { start: parseISO(absence.start_date), end: parseISO(absence.end_date) })
-        } catch (e) {
+        } catch {
             console.error('Invalid date in absence:', absence)
             return false
         }
@@ -157,7 +152,7 @@ export default function AbsencePlanner({ initialDate }) {
             p_signature_data: signatureData
         }
 
-        const { data, error } = await supabase.rpc('create_signed_absence', rpcParams)
+        const { error } = await supabase.rpc('create_signed_absence', rpcParams)
 
         // Fallback or specific error handling
         if (error) {

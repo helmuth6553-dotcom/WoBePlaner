@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { format, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { User, Check, Moon, Sun, CalendarOff, Users, Clock, AlertCircle, Thermometer, Plus, BookOpen } from 'lucide-react'
@@ -123,7 +123,8 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onU
         return format(d, 'HH:mm')
     }
 
-    const SpecialEventRow = ({ shift }) => {
+    // Render function (not a component) to avoid 'created during render' errors
+    const renderSpecialEventRow = (shift) => {
         const isTeam = shift.type === 'TEAM'
         const label = isTeam ? 'Teamsitzung' : 'Fortbildung'
         const icon = isTeam ? <Users size={18} /> : <BookOpen size={18} />
@@ -172,7 +173,8 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onU
         )
     }
 
-    const ShiftRow = ({ slotCode, label, icon }) => {
+    // Render function (not a component) to avoid 'created during render' errors
+    const renderShiftRow = (slotCode, label, icon) => {
         const shift = getShiftForSlot(slotCode)
         if (!shift) return null
 
@@ -529,13 +531,15 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onU
                 </div>
                 <div className="p-3 bg-gray-50/30">
                     {specialShifts.map(s => (
-                        <SpecialEventRow key={s.id} shift={s} />
+                        <React.Fragment key={s.id}>
+                            {renderSpecialEventRow(s)}
+                        </React.Fragment>
                     ))}
 
-                    <ShiftRow slotCode="TD1" label="Tagdienst 1" icon={<Sun size={18} />} />
-                    <ShiftRow slotCode="TD2" label="Tagdienst 2" icon={<Sun size={18} />} />
-                    <ShiftRow slotCode="ND" label="Nachtdienst" icon={<Moon size={18} />} />
-                    <ShiftRow slotCode="DBD" label="DBD" icon={<Users size={18} />} />
+                    {renderShiftRow('TD1', 'Tagdienst 1', <Sun size={18} />)}
+                    {renderShiftRow('TD2', 'Tagdienst 2', <Sun size={18} />)}
+                    {renderShiftRow('ND', 'Nachtdienst', <Moon size={18} />)}
+                    {renderShiftRow('DBD', 'DBD', <Users size={18} />)}
 
                     {isAdmin && isAddMenuOpen && (
                         <div className="mt-2 border-t border-dashed border-gray-200 pt-2 grid grid-cols-3 gap-1 animate-in slide-in-from-top-2 fade-in duration-200">
