@@ -12,6 +12,9 @@ import ErrorBoundary from './components/ErrorBoundary'
 import TimeTracking from './components/TimeTracking'
 import AdminTimeTracking from './components/AdminTimeTracking'
 import SplashScreen from './components/SplashScreen'
+import Impressum from './pages/Impressum'
+import Datenschutz from './pages/Datenschutz'
+import { Routes, Route } from 'react-router-dom'
 
 function AppContent() {
   const { user, isAdmin } = useAuth()
@@ -69,7 +72,11 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <AppContent />
+        <Routes>
+          <Route path="/impressum" element={<Impressum />} />
+          <Route path="/datenschutz" element={<Datenschutz />} />
+          <Route path="/*" element={<AppContent />} />
+        </Routes>
       </AuthProvider>
     </ErrorBoundary>
   )

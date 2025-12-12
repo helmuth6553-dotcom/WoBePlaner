@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
 import { eachDayOfInterval, isWeekend, parseISO, startOfYear, endOfYear, isWithinInterval } from 'date-fns'
-import { User, Save, Briefcase, CalendarCheck, Clock, PieChart, Shield, LogOut } from 'lucide-react'
+import { User, Save, Briefcase, CalendarCheck, Clock, PieChart, Shield, LogOut, Lock, FileCheck, Download } from 'lucide-react'
 import { useHolidays } from '../hooks/useHolidays'
 import NotificationToggle from './NotificationToggle'
 
@@ -230,6 +230,52 @@ export default function Profile() {
                     </div>
                 </>
             )}
+
+            {/* Signature Info Card */}
+            <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6 mb-8 mt-8">
+                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Shield className="text-blue-600" size={20} />
+                    Wie sicher ist meine Unterschrift?
+                </h3>
+
+                <div className="space-y-4">
+                    <div className="flex gap-3">
+                        <div className="bg-white p-2 rounded-lg shadow-sm h-fit text-blue-600 shrink-0">
+                            <Lock size={18} />
+                        </div>
+                        <div>
+                            <p className="font-bold text-sm text-gray-900">1. Identität geprüft</p>
+                            <p className="text-xs text-gray-500">Durch Login & Passwort bestätigen Sie, dass Sie es wirklich sind.</p>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <div className="bg-white p-2 rounded-lg shadow-sm h-fit text-blue-600 shrink-0">
+                            <FileCheck size={18} />
+                        </div>
+                        <div>
+                            <p className="font-bold text-sm text-gray-900">2. Daten versiegelt</p>
+                            <p className="text-xs text-gray-500">Aus dem Dokument (Urlaubsantrag oder Zeitbericht) wird ein unveränderbarer Code (Hash) berechnet.</p>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <div className="bg-white p-2 rounded-lg shadow-sm h-fit text-blue-600 shrink-0">
+                            <Download size={18} />
+                        </div>
+                        <div>
+                            <p className="font-bold text-sm text-gray-900">3. Beweisbar</p>
+                            <p className="text-xs text-gray-500">Der Code steht auf Ihrem PDF. Niemand kann die Datenbank unbemerkt ändern.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-blue-100">
+                    <p className="text-[10px] text-blue-400 font-mono text-center uppercase tracking-wider">
+                        Fortgeschrittene Elektronische Signatur (FES)
+                    </p>
+                </div>
+            </div>
 
             <button
                 onClick={handleLogout}

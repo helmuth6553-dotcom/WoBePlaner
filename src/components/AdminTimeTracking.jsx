@@ -337,9 +337,16 @@ export default function AdminTimeTracking() {
                     return false
                 }
 
-                // For shifts: compare times normally
-                return snapEntry.actual_start !== liveEntry.actual_start ||
+                // For shifts: compare times AND interruptions
+                const timesChanged = snapEntry.actual_start !== liveEntry.actual_start ||
                     snapEntry.actual_end !== liveEntry.actual_end
+
+                // Compare interruptions (stringify for deep comparison)
+                const snapInts = JSON.stringify(snapEntry.interruptions || [])
+                const liveInts = JSON.stringify(liveEntry.interruptions || [])
+                const interruptionsChanged = snapInts !== liveInts
+
+                return timesChanged || interruptionsChanged
             })
 
             if (hasChanges) {
@@ -458,10 +465,20 @@ export default function AdminTimeTracking() {
             note: i.note
         }))
 
-        const { error } = await supabase.from('time_entries').update({
+        console.log('[AdminTimeTracking] Saving entry:', editingEntry.id, {
+            actual_start: startIso,
+            actual_end: endIso,
+            interruptions: finalInts,
+            calculated_hours: calculatedHours,
+            admin_note: formData.adminNote
+        })
+
+        const { error, data } = await supabase.from('time_entries').update({
             actual_start: startIso, actual_end: endIso, interruptions: finalInts,
             calculated_hours: calculatedHours, status: 'approved', admin_note: formData.adminNote
-        }).eq('id', editingEntry.id)
+        }).eq('id', editingEntry.id).select()
+
+        console.log('[AdminTimeTracking] Save result:', { error, data })
 
         if (error) alert(error.message); else { setEditingEntry(null); fetchData() }
     }
@@ -734,8 +751,12 @@ export default function AdminTimeTracking() {
                                             changed = snapEntry.actual_start !== liveEntry.actual_start || snapEntry.actual_end !== liveEntry.actual_end
                                         }
                                     } else {
-                                        // Standard entry check
-                                        changed = snapEntry.actual_start !== liveEntry.actual_start || snapEntry.actual_end !== liveEntry.actual_end
+                                        // Standard entry check - times AND interruptions
+                                        const timesChanged = snapEntry.actual_start !== liveEntry.actual_start ||
+                                            snapEntry.actual_end !== liveEntry.actual_end
+                                        const snapInts = JSON.stringify(snapEntry.interruptions || [])
+                                        const liveInts = JSON.stringify(liveEntry.interruptions || [])
+                                        changed = timesChanged || (snapInts !== liveInts)
                                     }
 
                                     if (changed) {

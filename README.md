@@ -11,6 +11,13 @@ Eine moderne Webanwendung zur Verwaltung von Dienstplänen, Urlaubsanträgen und
 *   **Admin-Dashboard**: Zentrale Verwaltung von Mitarbeitern, Rollen und System-Einstellungen.
 *   **PDF-Export**: Generierung von Monatsberichten und Stundennachweisen.
 
+## 📚 Dokumentation
+
+Detaillierte technische Informationen finden Sie im `docs/` Ordner:
+*   [Technische Dokumentation](docs/TECHNICAL_DOCS.md)
+*   [Datenbank Schema](docs/DATABASE_SCHEMA.md)
+*   [Architektur Übersicht](docs/TECHNICAL_DOCS.md#architecture-overview)
+
 ## Technologie-Stack
 
 *   **Frontend**: React, Vite

@@ -49,6 +49,7 @@ export default function TimeTracking() {
     const [password, setPassword] = useState('')
     const [submitError, setSubmitError] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [showSnapshotModal, setShowSnapshotModal] = useState(false)
 
     // Form State
     const [formData, setFormData] = useState({
@@ -620,6 +621,11 @@ export default function TimeTracking() {
                             <Download size={18} /> Arbeitsnachweis herunterladen (PDF)
                         </button>
                     )}
+                    {monthStatus.original_data_snapshot && (
+                        <button onClick={() => setShowSnapshotModal(true)} className="w-full mt-2 bg-yellow-50 border border-yellow-200 text-yellow-800 py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-yellow-100">
+                            Original-Daten anzeigen
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -958,6 +964,32 @@ export default function TimeTracking() {
                     </div>
                 )
             })()}
+
+            {showSnapshotModal && monthStatus?.original_data_snapshot && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
+                        <h2 className="text-xl font-bold mb-2">Meine Original-Eingabe</h2>
+                        <p className="text-sm text-gray-500 mb-4">Eingereicht am {monthStatus.submitted_at && format(parseISO(monthStatus.submitted_at), 'dd.MM.yyyy HH:mm')}</p>
+                        <div className="space-y-1 text-sm">
+                            <div className="grid grid-cols-4 font-bold border-b pb-2 text-xs text-gray-500 uppercase">
+                                <div>Datum</div>
+                                <div>Zeit</div>
+                                <div>Std</div>
+                                <div>Typ</div>
+                            </div>
+                            {monthStatus.original_data_snapshot.map(snap => (
+                                <div key={snap.id} className="grid grid-cols-4 items-center py-1.5 border-b border-gray-50 text-xs">
+                                    <div>{snap.entry_date ? format(parseISO(snap.entry_date), 'dd.MM.') : '--'}</div>
+                                    <div className="font-mono">{snap.actual_start ? format(parseISO(snap.actual_start), 'HH:mm') : '--:--'}</div>
+                                    <div>{Number(snap.calculated_hours || 0).toFixed(1)}h</div>
+                                    <div className="uppercase">{snap.shifts?.type || 'Url'}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <button onClick={() => setShowSnapshotModal(false)} className="mt-4 w-full bg-gray-100 hover:bg-gray-200 py-2 rounded-lg font-bold">Schließen</button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

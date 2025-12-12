@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 
 export default function Login() {
@@ -94,6 +95,11 @@ export default function Login() {
                     </div>
                 </div>
             </form>
+            <div className="fixed bottom-4 text-center w-full text-xs text-gray-400 space-x-4">
+                <Link to="/impressum" className="hover:text-gray-600">Impressum</Link>
+                <span>•</span>
+                <Link to="/datenschutz" className="hover:text-gray-600">Datenschutz</Link>
+            </div>
         </div>
     )
 }

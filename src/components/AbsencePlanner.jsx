@@ -7,7 +7,7 @@ import {
     isWithinInterval, parseISO, isWeekend, isToday
 } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Trash2, Calendar, CheckCircle, Clock, AlertCircle, List, XCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, Calendar, CheckCircle, Clock, AlertCircle, List, XCircle, Download, Shield } from 'lucide-react'
 import { useHolidays } from '../hooks/useHolidays'
 import { logAdminAction } from '../utils/adminAudit'
 import ActionSheet from './ActionSheet'
@@ -223,6 +223,71 @@ export default function AbsencePlanner({ initialDate }) {
         }
     }
 
+    // PDF Download for approved vacation requests
+    const handleDownloadVacationPDF = async (request, days) => {
+        try {
+            const { jsPDF } = await import('jspdf')
+            const doc = new jsPDF()
+
+            const userName = user?.full_name || user?.email || 'Mitarbeiter'
+            const startDate = format(parseISO(request.start_date), 'dd.MM.yyyy')
+            const endDate = format(parseISO(request.end_date), 'dd.MM.yyyy')
+            const approvedDate = request.approved_at ? format(parseISO(request.approved_at), 'dd.MM.yyyy HH:mm') : 'N/A'
+
+            // Header
+            doc.setFontSize(20)
+            doc.setFont("helvetica", "bold")
+            doc.text("Urlaubsbestätigung", 20, 30)
+
+            // Status Badge
+            doc.setFillColor(220, 255, 220)
+            doc.setDrawColor(0, 150, 0)
+            doc.roundedRect(150, 22, 40, 10, 2, 2, 'FD')
+            doc.setFontSize(10)
+            doc.setTextColor(0, 100, 0)
+            doc.text("GENEHMIGT", 155, 29)
+
+            // Reset color
+            doc.setTextColor(0, 0, 0)
+            doc.setFontSize(12)
+            doc.setFont("helvetica", "normal")
+
+            // Content
+            let y = 50
+            doc.text(`Mitarbeiter: ${userName}`, 20, y); y += 10
+            doc.text(`Zeitraum: ${startDate} - ${endDate}`, 20, y); y += 10
+            doc.setFont("helvetica", "bold")
+            doc.text(`Urlaubstage: ${days} ${days === 1 ? 'Tag' : 'Tage'}`, 20, y); y += 10
+            doc.setFont("helvetica", "normal")
+            doc.text(`Genehmigt am: ${approvedDate}`, 20, y); y += 20
+
+            // Signature Section
+            doc.setFillColor(245, 245, 245)
+            doc.rect(20, y, 170, 35, 'F')
+            doc.setFontSize(9)
+            doc.setTextColor(100, 100, 100)
+            y += 8
+            doc.text("Digitale Signatur (FES)", 25, y); y += 8
+
+            if (request.data_hash) {
+                doc.setFont("helvetica", "bold")
+                doc.text(`Hash: ${request.data_hash}`, 25, y); y += 8
+                doc.setFont("helvetica", "normal")
+            }
+            doc.text(`Antrag-ID: ${request.id}`, 25, y)
+
+            // Footer
+            doc.setFontSize(8)
+            doc.setTextColor(150, 150, 150)
+            doc.text("Dieses Dokument wurde digital signiert und ist ohne Unterschrift gültig.", 20, 280)
+
+            doc.save(`Urlaubsbestätigung_${userName.replace(/\s/g, '_')}_${startDate.replace(/\./g, '')}.pdf`)
+        } catch (e) {
+            console.error('PDF Error:', e)
+            setAlertConfig({ isOpen: true, title: 'Fehler', message: 'PDF konnte nicht erstellt werden.', type: 'error' })
+        }
+    }
+
     const myRequests = absences.filter(a => a.user_id === user.id).sort((a, b) => new Date(b.start_date) - new Date(a.start_date))
 
     return (
@@ -404,25 +469,56 @@ export default function AbsencePlanner({ initialDate }) {
                 <div className="px-4 mt-8 shrink-0">
                     <h3 className="font-bold text-lg mb-4 text-gray-900">Meine Anträge</h3>
                     <div className="space-y-3">
-                        {myRequests.map(req => (
-                            <div key={req.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center">
-                                <div className="flex items-center gap-4">
-                                    <div className={`p-3 rounded-full ${req.status === 'genehmigt' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
-                                        {req.status === 'genehmigt' ? <CheckCircle size={20} /> : <Clock size={20} />}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-gray-900">
-                                            {format(parseISO(req.start_date), 'dd.MM.')} - {format(parseISO(req.end_date), 'dd.MM.yyyy')}
-                                        </p>
+                        {myRequests.map(req => {
+                            // Calculate work days (excluding weekends and holidays)
+                            const days = eachDayOfInterval({ start: parseISO(req.start_date), end: parseISO(req.end_date) })
+                                .filter(d => !isWeekend(d) && !getHoliday(d))
+                                .length
+
+                            // Check if signed (has data_hash)
+                            const isSigned = !!req.data_hash
+
+                            return (
+                                <div key={req.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2.5 rounded-xl ${req.status === 'genehmigt' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                                                {req.status === 'genehmigt' ? <CheckCircle size={20} /> : <Clock size={20} />}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-gray-900">
+                                                    {format(parseISO(req.start_date), 'dd.MM.')} - {format(parseISO(req.end_date), 'dd.MM.yyyy')}
+                                                </p>
+                                                <p className="text-sm text-gray-500 flex items-center gap-2">
+                                                    <span className="font-bold text-gray-700">{days} {days === 1 ? 'Tag' : 'Tage'}</span>
+                                                    {isSigned && (
+                                                        <span className="text-green-600 flex items-center gap-1 text-xs">
+                                                            <Shield size={12} /> Signiert
+                                                        </span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {req.status === 'genehmigt' && (
+                                                <button
+                                                    onClick={() => handleDownloadVacationPDF(req, days)}
+                                                    className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="PDF herunterladen"
+                                                >
+                                                    <Download size={18} />
+                                                </button>
+                                            )}
+                                            {req.status === 'beantragt' && (
+                                                <button onClick={() => handleDelete(req.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                                {req.status === 'beantragt' && (
-                                    <button onClick={() => handleDelete(req.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
-                                        <Trash2 size={18} />
-                                    </button>
-                                )}
-                            </div>
-                        ))}
+                            )
+                        })}
                         {myRequests.length === 0 && <p className="text-gray-400 text-sm text-center py-4">Keine Anträge vorhanden.</p>}
                     </div>
                 </div>

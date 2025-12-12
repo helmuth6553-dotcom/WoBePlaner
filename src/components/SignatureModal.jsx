@@ -60,7 +60,7 @@ export default function SignatureModal({ isOpen, onClose, onConfirm, payload, ti
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900">{title || 'Dokument signieren'}</h3>
-                                <p className="text-xs text-gray-500 font-medium">Rechtsverbindliche Unterschrift</p>
+                                <p className="text-xs text-gray-500 font-medium">Digitale Signaturerstellung (FES)</p>
                             </div>
                         </div>
                         <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -73,25 +73,25 @@ export default function SignatureModal({ isOpen, onClose, onConfirm, payload, ti
                             <div className="flex items-start gap-2 text-gray-600">
                                 <FileText size={16} className="mt-0.5 shrink-0" />
                                 <div className="font-mono text-xs break-all opacity-70">
-                                    Dokumenten-Hash (SHA-256 Vorschau):<br />
-                                    <span className="text-gray-400">Wird beim Signieren generiert...</span>
+                                    Dokumenten-Hash (SHA-256):<br />
+                                    <span className="text-gray-400">Wird basierend auf den Daten generiert...</span>
                                 </div>
                             </div>
                         </div>
 
                         <p className="text-sm text-gray-600 mb-4">
-                            Bitte bestätigen Sie Ihre Identität, um den Antrag zu signieren.
-                            Dies entspricht einer digitalen Unterschrift.
+                            Bitte bestätigen Sie mit Ihrem Passwort, dass Sie diesen Antrag wirklich stellen möchten.
+                            Dies erstellt eine <strong>unveränderbare digitale Signatur</strong>.
                         </p>
 
                         <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Passwort bestätigen</label>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Passwort zur Bestätigung</label>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 className="w-full border-2 border-gray-200 p-3 rounded-xl focus:border-black focus:ring-0 outline-none transition-all font-bold"
-                                placeholder="Ihr Passwort..."
+                                placeholder="Ihr App-Passwort"
                                 autoFocus
                             />
                         </div>
@@ -113,7 +113,7 @@ export default function SignatureModal({ isOpen, onClose, onConfirm, payload, ti
                             ) : (
                                 <>
                                     <CheckCircle size={20} />
-                                    Verbindlich Signieren
+                                    Signieren & Einreichen
                                 </>
                             )}
                         </button>
