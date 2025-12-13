@@ -23,8 +23,8 @@ export default function Sidebar({ activeTab, onTabChange, isAdmin }) {
                         key={item.id}
                         onClick={() => onTabChange(item.id)}
                         className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id
-                                ? 'bg-[#00c2cb] text-white shadow-md font-bold'
-                                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                            ? 'bg-[#00c2cb] text-white shadow-md font-bold'
+                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                             }`}
                     >
                         <item.icon size={20} />

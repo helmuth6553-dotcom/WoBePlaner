@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, Calendar, FileText, CheckCircle, XCircle, AlertTriangle, Plus, Mail, Download, Trash2, Link as LinkIcon, Thermometer, Settings, ShieldCheck } from 'lucide-react'
+import { Users, Calendar, FileText, CheckCircle, XCircle, AlertTriangle, Plus, Mail, Download, Trash2, Link as LinkIcon, Thermometer, Settings, ShieldCheck, Shield } from 'lucide-react'
 import { supabase } from '../supabase'
 import { format, differenceInBusinessDays } from 'date-fns'
 import { jsPDF } from 'jspdf'
@@ -186,6 +186,10 @@ function AdminEmployees() {
     const [editingUser, setEditingUser] = useState(null)
     const [isCreatingUser, setIsCreatingUser] = useState(false)
     const [createError, setCreateError] = useState(null)
+    // Re-Authentication for Admin creation
+    const [showPasswordConfirm, setShowPasswordConfirm] = useState(false)
+    const [adminPassword, setAdminPassword] = useState('')
+    const [passwordError, setPasswordError] = useState('')
     const [formData, setFormData] = useState({
         email: '', full_name: '', weekly_hours: 40, start_date: format(new Date(), 'yyyy-MM-dd'), vacation_days_per_year: 25, role: 'user'
     })
@@ -212,6 +216,57 @@ function AdminEmployees() {
         setUsers(activeData || [])
         setInactiveUsers(inactiveData || [])
         setInvites(inviteData || [])
+    }
+
+    /**
+     * Initiates the invite process.
+     * If creating an admin, requires password confirmation first.
+     */
+    const initiateInvite = () => {
+        if (formData.role === 'admin') {
+            // Require password confirmation for admin creation
+            setAdminPassword('')
+            setPasswordError('')
+            setShowPasswordConfirm(true)
+        } else {
+            // Regular user - proceed directly
+            handleInvite()
+        }
+    }
+
+    /**
+     * Verifies admin password before creating another admin
+     */
+    const verifyPasswordAndInvite = async () => {
+        setPasswordError('')
+
+        try {
+            // Get current user's email
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user?.email) {
+                setPasswordError('Benutzer nicht gefunden')
+                return
+            }
+
+            // Re-authenticate with password
+            const { error } = await supabase.auth.signInWithPassword({
+                email: user.email,
+                password: adminPassword
+            })
+
+            if (error) {
+                setPasswordError('Falsches Passwort')
+                return
+            }
+
+            // Password verified - proceed with invite
+            setShowPasswordConfirm(false)
+            setAdminPassword('')
+            handleInvite()
+
+        } catch (err) {
+            setPasswordError('Fehler bei der Verifizierung')
+        }
     }
 
     /**
@@ -443,7 +498,7 @@ function AdminEmployees() {
                                 Abbrechen
                             </button>
                             <button
-                                onClick={editingUser ? handleUpdateUser : handleInvite}
+                                onClick={editingUser ? handleUpdateUser : initiateInvite}
                                 className="flex-1 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2"
                                 disabled={isCreatingUser}
                             >
@@ -473,6 +528,60 @@ function AdminEmployees() {
                                 </p>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Password Confirmation Modal for Admin Creation */}
+            {showPasswordConfirm && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="text-center mb-6">
+                            <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Shield size={28} className="text-red-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">Admin-Berechtigung bestätigen</h3>
+                            <p className="text-sm text-gray-500">
+                                Du erstellst einen neuen <strong>Administrator</strong>. Bitte bestätige mit deinem Passwort.
+                            </p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold mb-1">Dein Passwort</label>
+                                <input
+                                    type="password"
+                                    value={adminPassword}
+                                    onChange={e => setAdminPassword(e.target.value)}
+                                    placeholder="Passwort eingeben"
+                                    className="w-full border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-black focus:outline-none"
+                                    autoFocus
+                                    onKeyDown={e => e.key === 'Enter' && verifyPasswordAndInvite()}
+                                />
+                            </div>
+
+                            {passwordError && (
+                                <div className="bg-red-50 text-red-600 border border-red-100 p-3 rounded-lg text-sm flex items-center gap-2">
+                                    <XCircle size={16} />
+                                    {passwordError}
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    onClick={() => { setShowPasswordConfirm(false); setAdminPassword(''); setPasswordError(''); }}
+                                    className="flex-1 py-3 rounded-xl bg-gray-100 font-medium hover:bg-gray-200"
+                                >
+                                    Abbrechen
+                                </button>
+                                <button
+                                    onClick={verifyPasswordAndInvite}
+                                    className="flex-1 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800"
+                                >
+                                    Bestätigen
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

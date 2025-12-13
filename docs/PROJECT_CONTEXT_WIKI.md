@@ -83,15 +83,32 @@
 ## 6. OFFENE PUNKTE & BUGS (Current Issues)
 
 *   **PDF Design:** Das Layout der generierten PDFs (Stundennachweise) benötigt ggf. noch Feinschliff bzgl. Seitenumbrüchen und Signatur-Platzierung.
-*   **Login Redirects:** Sicherstellen, dass die `Site URL` in Supabase für Production (`https://wobeplaner.pages.dev`) und Dev korrekt gesetzt bleibt, um "Connection Refused" Fehler bei Magic Links zu vermeiden.
+*   **Login Redirects:** Sicherstellen, dass die `Site URL` in Supabase für Production (`https://wobeplaner.pages.dev`) und Dev korrekt gesetzt bleibt.
 
-## 7. PLAN FÜR DIE NÄCHSTE SITZUNG
+## 7. NEUE FEATURES (Diese Session)
 
-**Fokus:** **Maintenance & PDF Refinement**
+*   ✅ **3-Step Onboarding Wizard** (`SetPassword.jsx`):
+    1. Willkommen & Features (Dienstplan, Urlaub, Zeit)
+    2. Daten & Sicherheit (Was speichern wir? Wer sieht was?)
+    3. Passwort setzen
+*   ✅ **Re-Authentication für Admin-Erstellung**: Beim Erstellen eines neuen Admins muss der aktuelle Admin sein Passwort eingeben.
 
-1.  **PDF Layout Check:** Prüfen, ob die generierten PDFs (insb. bei langen Berichten) korrekt formatieren sind.
-2.  **Code Cleanup:** Entfernen von nicht genutzten SQL-Dateien im `sql_archive` falls nötig.
-3.  **Deployment Monitoring:** Prüfen, ob die Production-Umgebung stabil läuft.
+## 8. FEATURE REQUESTS (Für spätere Sessions)
+
+*   **🔮 Beobachter-Rolle ("Observer")**: 
+    *   Neuer Rollentyp neben Admin & Mitarbeiter
+    *   Nur Lese-Zugriff auf Dienstplan und Urlaubsplan
+    *   Keine eigene Zeiterfassung
+    *   Use Case: Teamleiter anderer Abteilungen, Betriebsrat, Praktikanten
+    *   Aufwand: Mittel (1-2 Stunden)
+
+## 9. PLAN FÜR DIE NÄCHSTE SITZUNG
+
+**Fokus:** **PDF Refinement & Optional Observer-Rolle**
+
+1.  **PDF Layout Check:** Prüfen, ob die generierten PDFs korrekt formatieren.
+2.  **Beobachter-Rolle:** Falls gewünscht, implementieren (DB-Migration + Frontend).
+3.  **Deployment:** Änderungen auf Production pushen.
 
 **Kontext für die KI:**
-Die Anwendung ist funktional vollständig und sicherheitstechnisch gehärtet. Änderungen am Auth-Flow (`create-user`, `App.jsx`, `SetPassword.jsx`) sollten nur mit äußerster Vorsicht vorgenommen werden, da dieser Flow jetzt kritisch für den Systemzugang ist. Fokus liegt auf UI/UX und Reporting.
+Die Anwendung ist funktional vollständig und sicherheitstechnisch gehärtet. Der Onboarding-Flow (`SetPassword.jsx`) hat jetzt 3 Schritte mit Datenschutz-Infos. Die Admin-Erstellung erfordert Passwort-Bestätigung ("Re-Auth"). Änderungen am Auth-Flow sollten nur mit äußerster Vorsicht vorgenommen werden.

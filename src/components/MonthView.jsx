@@ -32,14 +32,114 @@ export default function MonthView({ shiftsByDate, userId, isAdmin, onToggleInter
     const { getHoliday } = useHolidays()
 
     const getDisplayName = (profile, fullName = false) => {
-        // ... (unchanged)
         const name = profile?.display_name || profile?.full_name
         if (fullName && name) return name
         if (name) return name.split(' ')[0]
         return profile?.email?.split('@')[0] || '?'
     }
 
-    // ... (unchanged helper functions)
+    const getInitials = (name) => {
+        if (!name) return '?'
+        const parts = name.split(' ')
+        if (parts.length >= 2) {
+            return parts[0][0] + parts[1][0]
+        }
+        return name.substring(0, 2).toUpperCase()
+    }
+
+    const getShift = (shifts, type) => {
+        return shifts?.find(s => s.type === type) || null
+    }
+
+    const renderCell = (shift, isBlocked = false) => {
+        if (!shift) {
+            return <div className="border-r border-gray-100 flex items-center justify-center text-gray-300">-</div>
+        }
+
+        const myInterest = shift.interests?.find(i => i.user_id === userId)
+        const isAssigned = shift.assigned_to === userId
+        const isMine = myInterest || isAssigned
+        const isUrgent = shift.is_freigabe || shift.urgent_since
+
+        // Get all interested/assigned users
+        const assignedUsers = []
+        if (shift.assigned_profile) {
+            assignedUsers.push(shift.assigned_profile)
+        }
+        shift.interests?.forEach(i => {
+            if (i.profiles && !assignedUsers.find(u => u.email === i.profiles.email)) {
+                assignedUsers.push(i.profiles)
+            }
+        })
+
+        const handleClick = () => {
+            if (isBlocked) return
+            onToggleInterest(shift.id, isMine)
+        }
+
+        // Single user - fill entire cell with color (like DayCard)
+        if (assignedUsers.length === 1) {
+            const profile = assignedUsers[0]
+            // Use first name only for color hash (consistent with DayCard)
+            const firstName = getDisplayName(profile) // This returns first name only
+            const colorClass = getUserColor(firstName)
+            const isMe = profile.email === myInterest?.profiles?.email ||
+                (shift.assigned_to === userId && shift.assigned_profile?.email === profile.email)
+
+            return (
+                <div
+                    onClick={handleClick}
+                    className={`border-r border-gray-100 flex items-center justify-center cursor-pointer transition-all h-full
+                        ${isBlocked ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80'}
+                        ${colorClass}
+                    `}
+                >
+                    <div className="flex items-center justify-center gap-1 px-1">
+                        {isMe && <Check size={14} className="flex-shrink-0" />}
+                        <span className="font-bold text-sm lg:text-base truncate">{firstName}</span>
+                    </div>
+                </div>
+            )
+        }
+
+        // Multiple users or empty
+        return (
+            <div
+                onClick={handleClick}
+                className={`border-r border-gray-100 flex flex-col justify-center items-center cursor-pointer transition-all p-1 lg:p-2 gap-1
+                    ${isBlocked ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-50'}
+                    ${isUrgent ? 'bg-red-50 animate-pulse' : ''}
+                `}
+            >
+                {assignedUsers.length === 0 ? (
+                    <div className={`text-[10px] lg:text-xs font-bold ${isUrgent ? 'text-red-600' : 'text-gray-400'}`}>
+                        {isUrgent ? '!' : 'Frei'}
+                    </div>
+                ) : (
+                    assignedUsers.slice(0, 2).map((profile, idx) => {
+                        const firstName = getDisplayName(profile)
+                        const colorClass = getUserColor(firstName)
+                        const isMe = profile.email === myInterest?.profiles?.email ||
+                            (shift.assigned_to === userId && shift.assigned_profile?.email === profile.email)
+
+                        return (
+                            <div
+                                key={idx}
+                                className={`w-full rounded-md py-0.5 lg:py-1 text-[10px] lg:text-xs font-bold text-center truncate px-1 lg:px-2 flex items-center justify-center gap-1 ${colorClass}`}
+                            >
+                                {isMe && <Check size={12} className="flex-shrink-0" />}
+                                <span className="lg:hidden">{getInitials(firstName)}</span>
+                                <span className="hidden lg:inline">{firstName}</span>
+                            </div>
+                        )
+                    })
+                )}
+                {assignedUsers.length > 2 && (
+                    <div className="text-[9px] text-gray-400 font-bold leading-none">+{assignedUsers.length - 2}</div>
+                )}
+            </div>
+        )
+    }
 
     const renderAbsenceCell = (dateStr) => {
         const absences = getAbsencesForDate ? getAbsencesForDate(dateStr) : []

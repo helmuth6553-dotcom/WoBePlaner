@@ -45,6 +45,7 @@
     "vite": "^7.2.4",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.0.15",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "wrangler": "^4.54.0"
   }
 }
