@@ -8,12 +8,14 @@ export const AuthProvider = ({ children }) => {
 
     const [user, setUser] = useState(null)
     const [role, setRole] = useState(null)
+    const [passwordSet, setPasswordSet] = useState(true) // Default true for existing users
     const [loading, setLoading] = useState(true)
 
     const fetchRole = async (userId) => {
         try {
             if (!userId) {
                 setRole(null)
+                setPasswordSet(true)
                 return
             }
             // Timeout for fetchRole specifically
@@ -23,7 +25,7 @@ export const AuthProvider = ({ children }) => {
 
             const fetchPromise = supabase
                 .from('profiles')
-                .select('role')
+                .select('role, password_set')
                 .eq('id', userId)
                 .single()
 
@@ -32,12 +34,16 @@ export const AuthProvider = ({ children }) => {
             if (error) {
                 console.error('Error fetching role:', error)
                 setRole('user')
+                setPasswordSet(true) // Assume set if we can't check
             } else {
                 setRole(data?.role || 'user')
+                // password_set might be null for old users, treat as true
+                setPasswordSet(data?.password_set !== false)
             }
         } catch (e) {
             console.error('Exception/Timeout fetching role:', e)
             setRole('user')
+            setPasswordSet(true)
         }
     }
 
@@ -96,9 +102,12 @@ export const AuthProvider = ({ children }) => {
 
 
 
-
-
     const isAdmin = role === 'admin'
+
+    // Function to refresh password_set status after user sets their password
+    const refreshPasswordSet = () => {
+        setPasswordSet(true)
+    }
 
     if (loading) {
         return (
@@ -110,7 +119,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ user, role, isAdmin, loading }}>
+        <AuthContext.Provider value={{ user, role, isAdmin, loading, passwordSet, refreshPasswordSet }}>
             {children}
         </AuthContext.Provider>
     )

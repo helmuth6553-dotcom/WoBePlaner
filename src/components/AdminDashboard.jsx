@@ -184,6 +184,8 @@ function AdminEmployees() {
     const [invites, setInvites] = useState([])
     const [showInviteModal, setShowInviteModal] = useState(false)
     const [editingUser, setEditingUser] = useState(null)
+    const [isCreatingUser, setIsCreatingUser] = useState(false)
+    const [createError, setCreateError] = useState(null)
     const [formData, setFormData] = useState({
         email: '', full_name: '', weekly_hours: 40, start_date: format(new Date(), 'yyyy-MM-dd'), vacation_days_per_year: 25, role: 'user'
     })
@@ -212,13 +214,59 @@ function AdminEmployees() {
         setInvites(inviteData || [])
     }
 
+    /**
+     * Secure User Creation via Edge Function
+     * - Calls the create-user Edge Function which uses Admin API
+     * - Falls back to invitation system if Edge Function is not deployed
+     */
     const handleInvite = async () => {
-        const { error } = await supabase.from('invitations').insert([formData])
-        if (error) alert(error.message)
-        else {
-            alert('Einladung erstellt!')
+        setIsCreatingUser(true)
+        setCreateError(null)
+
+        try {
+            // Try the secure Edge Function first
+            const { data: sessionData } = await supabase.auth.getSession()
+
+            const response = await supabase.functions.invoke('create-user', {
+                body: {
+                    email: formData.email,
+                    full_name: formData.full_name,
+                    weekly_hours: parseFloat(formData.weekly_hours) || 40,
+                    start_date: formData.start_date,
+                    vacation_days_per_year: parseFloat(formData.vacation_days_per_year) || 25,
+                    role: formData.role
+                }
+            })
+
+            if (response.error) {
+                // If Edge Function failed, fall back to invitation system
+                console.warn('Edge Function failed, using invitation fallback:', response.error)
+
+                const { error: inviteError } = await supabase.from('invitations').insert([formData])
+                if (inviteError) {
+                    throw new Error(inviteError.message)
+                }
+
+                alert('⚠️ Einladung erstellt (Legacy-Modus).\n\nHinweis: Der Mitarbeiter muss sich manuell registrieren. Für automatische Kontoerstellung bitte Edge Function deployen.')
+            } else if (response.data?.success) {
+                alert(`✅ Benutzer "${formData.full_name || formData.email}" erfolgreich erstellt!\n\nDer Mitarbeiter erhält eine E-Mail zum Setzen des Passworts.`)
+            } else {
+                throw new Error(response.data?.error || 'Unbekannter Fehler')
+            }
+
             setShowInviteModal(false)
+            setFormData({
+                email: '', full_name: '', weekly_hours: 40,
+                start_date: format(new Date(), 'yyyy-MM-dd'),
+                vacation_days_per_year: 25, role: 'user'
+            })
             fetchData()
+
+        } catch (error) {
+            console.error('User creation error:', error)
+            setCreateError(error.message)
+        } finally {
+            setIsCreatingUser(false)
         }
     }
 
@@ -351,21 +399,63 @@ function AdminEmployees() {
             {(showInviteModal || editingUser) && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-xl font-bold mb-4">{editingUser ? 'Mitarbeiter bearbeiten' : 'Neuen Mitarbeiter einladen'}</h3>
-                        <div className="space-y-4">
-                            {!editingUser && (<div><label className="block text-sm font-bold mb-1">Email Adresse</label><input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full border p-2 rounded-lg" /><p className="text-xs text-orange-500 mt-1 flex items-center gap-1"><AlertTriangle size={12} /> Hinweis: Manuell senden.</p></div>)}
-                            <div><label className="block text-sm font-bold mb-1">Name</label><input type="text" value={formData.full_name} onChange={e => setFormData({ ...formData, full_name: e.target.value })} className="w-full border p-2 rounded-lg" /></div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><label className="block text-sm font-bold mb-1">Wochenstunden</label><input type="number" value={formData.weekly_hours} onChange={e => setFormData({ ...formData, weekly_hours: e.target.value })} className="w-full border p-2 rounded-lg" /></div>
-                                <div><label className="block text-sm font-bold mb-1">Urlaubstage</label><input type="number" value={formData.vacation_days_per_year} onChange={e => setFormData({ ...formData, vacation_days_per_year: e.target.value })} className="w-full border p-2 rounded-lg" /></div>
+                        <h3 className="text-xl font-bold mb-4">{editingUser ? 'Mitarbeiter bearbeiten' : 'Neuen Mitarbeiter anlegen'}</h3>
+
+                        {/* Error Display */}
+                        {createError && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg mb-4 text-sm flex items-start gap-2">
+                                <XCircle size={16} className="mt-0.5 flex-shrink-0" />
+                                <span>{createError}</span>
                             </div>
-                            <div><label className="block text-sm font-bold mb-1">Eintritt</label><input type="date" value={formData.start_date} onChange={e => setFormData({ ...formData, start_date: e.target.value })} className="w-full border p-2 rounded-lg" /></div>
-                            <div><label className="block text-sm font-bold mb-1">Rolle</label><select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} className="w-full border p-2 rounded-lg bg-white"><option value="user">Mitarbeiter</option><option value="admin">Administrator</option></select></div>
+                        )}
+
+                        <div className="space-y-4">
+                            {!editingUser && (
+                                <div>
+                                    <label className="block text-sm font-bold mb-1">Email Adresse</label>
+                                    <input
+                                        type="email"
+                                        value={formData.email}
+                                        onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                        className="w-full border p-2 rounded-lg"
+                                        disabled={isCreatingUser}
+                                    />
+                                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                                        <CheckCircle size={12} /> Der Mitarbeiter erhält automatisch eine E-Mail zum Setzen des Passworts.
+                                    </p>
+                                </div>
+                            )}
+                            <div><label className="block text-sm font-bold mb-1">Name</label><input type="text" value={formData.full_name} onChange={e => setFormData({ ...formData, full_name: e.target.value })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} /></div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-sm font-bold mb-1">Wochenstunden</label><input type="number" value={formData.weekly_hours} onChange={e => setFormData({ ...formData, weekly_hours: e.target.value })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} /></div>
+                                <div><label className="block text-sm font-bold mb-1">Urlaubstage</label><input type="number" value={formData.vacation_days_per_year} onChange={e => setFormData({ ...formData, vacation_days_per_year: e.target.value })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} /></div>
+                            </div>
+                            <div><label className="block text-sm font-bold mb-1">Eintritt</label><input type="date" value={formData.start_date} onChange={e => setFormData({ ...formData, start_date: e.target.value })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} /></div>
+                            <div><label className="block text-sm font-bold mb-1">Rolle</label><select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} className="w-full border p-2 rounded-lg bg-white" disabled={isCreatingUser}><option value="user">Mitarbeiter</option><option value="admin">Administrator</option></select></div>
                         </div>
 
                         <div className="flex gap-3 mt-8">
-                            <button onClick={() => { setShowInviteModal(false); setEditingUser(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-medium hover:bg-gray-200">Abbrechen</button>
-                            <button onClick={editingUser ? handleUpdateUser : handleInvite} className="flex-1 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800">{editingUser ? 'Speichern' : 'Einladen'}</button>
+                            <button
+                                onClick={() => { setShowInviteModal(false); setEditingUser(null); setCreateError(null); }}
+                                className="flex-1 py-3 rounded-xl bg-gray-100 font-medium hover:bg-gray-200"
+                                disabled={isCreatingUser}
+                            >
+                                Abbrechen
+                            </button>
+                            <button
+                                onClick={editingUser ? handleUpdateUser : handleInvite}
+                                className="flex-1 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2"
+                                disabled={isCreatingUser}
+                            >
+                                {isCreatingUser ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                                        Erstelle...
+                                    </>
+                                ) : (
+                                    editingUser ? 'Speichern' : 'Mitarbeiter anlegen'
+                                )}
+                            </button>
                         </div>
 
                         {/* Deaktivieren Button - nur bei bestehenden Mitarbeitern (nicht Admins) */}

@@ -16,6 +16,7 @@ Eine moderne Webanwendung zur Verwaltung von Dienstplänen, Urlaubsanträgen und
 Detaillierte technische Informationen finden Sie im `docs/` Ordner:
 *   [Technische Dokumentation](docs/TECHNICAL_DOCS.md)
 *   [Datenbank Schema](docs/DATABASE_SCHEMA.md)
+*   [Sicheres Onboarding & Auth](docs/SECURE_ONBOARDING.md)
 *   [Architektur Übersicht](docs/TECHNICAL_DOCS.md#architecture-overview)
 
 ## Technologie-Stack

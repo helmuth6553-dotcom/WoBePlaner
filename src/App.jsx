@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
 import Login from './components/Login'
+import SetPassword from './components/SetPassword'
 import RosterFeed from './components/RosterFeed'
 import AbsencePlanner from './components/AbsencePlanner'
 import Profile from './components/Profile'
@@ -17,7 +18,7 @@ import Datenschutz from './pages/Datenschutz'
 import { Routes, Route } from 'react-router-dom'
 
 function AppContent() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, passwordSet, refreshPasswordSet } = useAuth()
   const [activeTab, setActiveTab] = useState('roster')
   const [calendarDate, setCalendarDate] = useState(null)
 
@@ -27,6 +28,11 @@ function AppContent() {
   }
 
   if (!user) return <Login />
+
+  // Show password setup screen for new users who haven't set their password
+  if (!passwordSet) {
+    return <SetPassword user={user} onPasswordSet={refreshPasswordSet} />
+  }
 
   return (
     <div className="min-h-screen flex bg-gray-50">
