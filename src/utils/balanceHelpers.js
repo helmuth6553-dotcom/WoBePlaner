@@ -2,7 +2,7 @@ import { startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, subDays, isSame
 import { calculateWorkHours, calculateDailyAbsenceHours } from './timeCalculations'
 import { getHolidays, isHoliday } from './holidays'
 
-export const calculateGenericBalance = (profile, historyShifts, historyAbsences, timeEntries = [], currentDate = new Date()) => {
+export const calculateGenericBalance = (profile, historyShifts, historyAbsences, timeEntries = [], currentDate = new Date(), corrections = []) => {
     if (!profile) return null
 
     const startDate = profile.start_date ? new Date(profile.start_date) : (profile.created_at ? new Date(profile.created_at) : new Date('2024-01-01'))
@@ -233,18 +233,33 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
     }
 
     // Initial balance from profile (for migrated employees with existing hour balances)
+    // This is added to carryover because it represents historical balance before app usage
     const initialBalanceMinutes = (profile.initial_balance || 0) * 60
+    const totalCarryoverMinutes = carryoverMinutes + initialBalanceMinutes
 
-    const totalDiffMinutes = currentDiffMinutes + carryoverMinutes + initialBalanceMinutes
+    // Admin corrections for the current month - ADDED TO ACTUAL (Ist)
+    // This makes corrections affect the "worked hours" and thus also the carryover for next month
+    const currentMonthCorrections = corrections.filter(c => {
+        if (!c.effective_month) return false
+        const effectiveMonth = new Date(c.effective_month)
+        return isSameMonth(effectiveMonth, currentDate)
+    })
+    const correctionMinutes = currentMonthCorrections.reduce((sum, c) => sum + (parseFloat(c.correction_hours) || 0) * 60, 0)
+
+    // Correction is added to actual minutes (Ist)
+    const correctedActualMinutes = actualMinutes + correctionMinutes
+    const correctedDiffMinutes = (correctedActualMinutes + vacationMinutes) - targetMinutes
+
+    const totalDiffMinutes = correctedDiffMinutes + totalCarryoverMinutes
     const toFixedNum = (num) => Math.round(num * 100) / 100
 
     return {
         target: toFixedNum(targetMinutes / 60),
-        actual: toFixedNum(actualMinutes / 60),
+        actual: toFixedNum(correctedActualMinutes / 60),  // Now includes corrections
         vacation: toFixedNum(vacationMinutes / 60),
-        diff: toFixedNum(currentDiffMinutes / 60),
-        carryover: toFixedNum(carryoverMinutes / 60),
-        initialBalance: toFixedNum(profile.initial_balance || 0),
+        diff: toFixedNum(correctedDiffMinutes / 60),
+        carryover: toFixedNum(totalCarryoverMinutes / 60),
+        correction: toFixedNum(correctionMinutes / 60),
         total: toFixedNum(totalDiffMinutes / 60)
     }
 }

@@ -154,6 +154,7 @@ export default function RosterFeed() {
     const [allMyShifts, setAllMyShifts] = useState([])
     const [allMyAbsences, setAllMyAbsences] = useState([])
     const [allMyTimeEntries, setAllMyTimeEntries] = useState([])
+    const [allMyCorrections, setAllMyCorrections] = useState([])
 
     // For Transparency View & Admin Assignment
     const [isBalanceExpanded, setIsBalanceExpanded] = useState(false)
@@ -161,6 +162,7 @@ export default function RosterFeed() {
     const [allShiftsHistory, setAllShiftsHistory] = useState([])
     const [allAbsencesHistory, setAllAbsencesHistory] = useState([])
     const [allTimeEntriesHistory, setAllTimeEntriesHistory] = useState([])
+    const [allCorrectionsHistory, setAllCorrectionsHistory] = useState([])
 
     const { getHoliday } = useHolidays()
 
@@ -171,10 +173,10 @@ export default function RosterFeed() {
         const queryStart = subDays(monthStart, 1).toISOString()
         const queryEnd = monthEnd.toISOString()
 
-        const { data: profile } = await supabase.from('profiles').select('weekly_hours, start_date').eq('id', user?.id).single()
+        const { data: profile } = await supabase.from('profiles').select('weekly_hours, start_date, initial_balance').eq('id', user?.id).single()
         if (profile) setMyProfile(profile)
 
-        const { data: allProfs } = await supabase.from('profiles').select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year').or('is_active.eq.true,is_active.is.null').order('full_name')
+        const { data: allProfs } = await supabase.from('profiles').select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year, initial_balance').or('is_active.eq.true,is_active.is.null').order('full_name')
         if (allProfs) setAllProfiles(allProfs)
 
         const { data: myInterests } = await supabase
@@ -221,6 +223,9 @@ export default function RosterFeed() {
 
         const { data: myHistoryAbsences } = await supabase.from('absences').select('start_date, end_date, user_id, status, type, planned_hours').eq('user_id', user?.id).eq('status', 'genehmigt')
         if (myHistoryAbsences) setAllMyAbsences(myHistoryAbsences)
+
+        const { data: myCorrs } = await supabase.from('balance_corrections').select('correction_hours, effective_month').eq('user_id', user?.id)
+        if (myCorrs) setAllMyCorrections(myCorrs)
 
         const { data: shiftData } = await supabase
             .from('shifts')
@@ -577,6 +582,10 @@ export default function RosterFeed() {
                     if (entError) throw new Error('Entries Error: ' + entError.message)
                     setAllTimeEntriesHistory(allEntries || [])
 
+                    // 5. Corrections
+                    const { data: allCorrs } = await supabase.from('balance_corrections').select('user_id, correction_hours, effective_month')
+                    setAllCorrectionsHistory(allCorrs || [])
+
                 } catch (err) {
                     console.error('Balance Load Error', err)
                     setAlertConfig({ isOpen: true, title: 'Ladefehler', message: err.message, type: 'error' })
@@ -588,7 +597,7 @@ export default function RosterFeed() {
 
     let balance = null
     try {
-        balance = calculateGenericBalance(myProfile, allMyShifts, allMyAbsences, allMyTimeEntries, currentDate)
+        balance = calculateGenericBalance(myProfile, allMyShifts, allMyAbsences, allMyTimeEntries, currentDate, allMyCorrections)
     } catch (err) {
         console.error("Error calculating balance:", err)
     }
@@ -712,7 +721,8 @@ export default function RosterFeed() {
                                             const userShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
                                             const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
                                             const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
-                                            const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate)
+                                            const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
+                                            const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
 
                                             if (!b) return null
 

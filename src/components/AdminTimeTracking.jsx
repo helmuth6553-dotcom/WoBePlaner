@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, subDays, addDays } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { CheckCircle, XCircle, Download, FileText, Sun, Thermometer, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert, Eye } from 'lucide-react'
+import { CheckCircle, XCircle, Download, FileText, Sun, Thermometer, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert, Eye, PenTool } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
+import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateTimeReportPDF } from '../utils/pdfGenerator'
 import { generateReportHash } from '../utils/security'
 import { logAdminAction } from '../utils/adminAudit'
@@ -21,6 +22,12 @@ export default function AdminTimeTracking() {
     const [loading, setLoading] = useState(false)
     const [editingEntry, setEditingEntry] = useState(null)
 
+    // Balance Correction States
+    const [corrections, setCorrections] = useState([])
+    const [showCorrectionModal, setShowCorrectionModal] = useState(false)
+    const [correctionData, setCorrectionData] = useState({ targetTotal: '', reason: '' })
+    const [currentBalance, setCurrentBalance] = useState(null)
+
     const [formData, setFormData] = useState({
         actualStart: '',
         actualEnd: '',
@@ -31,14 +38,28 @@ export default function AdminTimeTracking() {
     })
     const [calculatedHours, setCalculatedHours] = useState(0)
 
-    // Fetch Users
+    // Fetch Users with their status for current month
     useEffect(() => {
         const fetchUsers = async () => {
             const { data } = await supabase.from('profiles').select('*').or('is_active.eq.true,is_active.is.null').neq('role', 'admin').order('full_name')
-            setUsers(data || [])
+
+            // Fetch status for selected month
+            const [year, month] = selectedMonth.split('-').map(Number)
+            const { data: reports } = await supabase.from('monthly_reports')
+                .select('user_id, status')
+                .eq('year', year)
+                .eq('month', month)
+
+            // Merge status into users
+            const usersWithStatus = (data || []).map(u => ({
+                ...u,
+                monthStatus: reports?.find(r => r.user_id === u.id)?.status || null
+            }))
+
+            setUsers(usersWithStatus)
         }
         fetchUsers()
-    }, [])
+    }, [selectedMonth])
 
     // Fetch Data
     useEffect(() => {
@@ -355,6 +376,137 @@ export default function AdminTimeTracking() {
         }
 
         setLoading(false)
+
+        // Fetch corrections for this month
+        const monthStart = startOfMonth(new Date(selectedMonth))
+        const { data: corrs } = await supabase
+            .from('balance_corrections')
+            .select('*, created_by_profile:profiles!balance_corrections_created_by_fkey(full_name, display_name)')
+            .eq('user_id', selectedUserId)
+            .eq('effective_month', format(monthStart, 'yyyy-MM-dd'))
+        setCorrections(corrs || [])
+    }
+
+    // Open Correction Modal with current balance calculation
+    const handleOpenCorrectionModal = async () => {
+        // We need to calculate the current balance for this user/month
+        // Fetch all necessary data
+        const monthDate = new Date(selectedMonth + '-01')
+        const oneYearAgo = new Date(monthDate)
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+
+        const selectedProfile = users.find(u => u.id === selectedUserId)
+        if (!selectedProfile) {
+            alert('Benutzer nicht gefunden')
+            return
+        }
+
+        // Fetch shifts, absences, entries, corrections for this user
+        const [shiftsRes, absencesRes, entriesRes, corrsRes] = await Promise.all([
+            supabase.from('shifts').select('id, start_time, end_time, type, assigned_to').gte('start_time', oneYearAgo.toISOString()),
+            supabase.from('absences').select('*').eq('user_id', selectedUserId).eq('status', 'genehmigt'),
+            supabase.from('time_entries').select('*').eq('user_id', selectedUserId),
+            supabase.from('balance_corrections').select('*').eq('user_id', selectedUserId)
+        ])
+
+        const userShifts = (shiftsRes.data || []).filter(s => s.assigned_to === selectedUserId).map(s => ({
+            user_id: s.assigned_to,
+            id: s.id,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            type: s.type
+        }))
+
+        // Calculate balance
+        const balance = calculateGenericBalance(
+            selectedProfile,
+            userShifts,
+            absencesRes.data || [],
+            entriesRes.data || [],
+            monthDate,
+            corrsRes.data || []
+        )
+
+        setCurrentBalance(balance)
+        setCorrectionData({ targetTotal: '', reason: '' })
+        setShowCorrectionModal(true)
+    }
+
+    // Save Balance Correction (new logic: targetTotal instead of direct hours)
+    const handleSaveCorrection = async () => {
+        const targetTotal = parseFloat(correctionData.targetTotal)
+        if (isNaN(targetTotal)) {
+            alert('Bitte gültigen Ziel-Übertrag eingeben')
+            return
+        }
+        if (!correctionData.reason.trim()) {
+            alert('Bitte Begründung angeben')
+            return
+        }
+        if (!currentBalance) {
+            alert('Balance konnte nicht berechnet werden')
+            return
+        }
+
+        // Calculate the correction needed
+        const currentTotal = currentBalance.total
+        const correctionHours = targetTotal - currentTotal
+
+        if (Math.abs(correctionHours) < 0.01) {
+            alert('Der Ziel-Übertrag entspricht dem aktuellen Wert. Keine Korrektur nötig.')
+            return
+        }
+
+        const { data: { user } } = await supabase.auth.getUser()
+        const monthStart = startOfMonth(new Date(selectedMonth))
+
+        const { error } = await supabase.from('balance_corrections').insert({
+            user_id: selectedUserId,
+            correction_hours: correctionHours,
+            effective_month: format(monthStart, 'yyyy-MM-dd'),
+            reason: correctionData.reason.trim(),
+            created_by: user?.id
+        })
+
+        if (error) {
+            alert('Fehler: ' + error.message)
+        } else {
+            // Log admin action
+            await logAdminAction(
+                'create_correction',
+                selectedUserId,
+                'balance_correction',
+                null,
+                {
+                    previous_total: currentTotal,
+                    target_total: targetTotal,
+                    correction_hours: correctionHours,
+                    reason: correctionData.reason
+                },
+                { month: selectedMonth }
+            )
+
+            setShowCorrectionModal(false)
+            setCorrectionData({ targetTotal: '', reason: '' })
+            setCurrentBalance(null)
+            fetchData()
+        }
+    }
+
+    // Delete Correction
+    const handleDeleteCorrection = async (correctionId) => {
+        if (!confirm('Korrektur wirklich löschen?')) return
+
+        const { error } = await supabase
+            .from('balance_corrections')
+            .delete()
+            .eq('id', correctionId)
+
+        if (error) {
+            alert('Fehler: ' + error.message)
+        } else {
+            fetchData()
+        }
     }
 
     // --- Actions ---
@@ -557,7 +709,12 @@ export default function AdminTimeTracking() {
                             className="w-full appearance-none bg-white hover:bg-gray-50 border border-gray-200 text-gray-900 text-base rounded-xl focus:ring-2 focus:ring-black focus:border-transparent block p-4 pr-10 font-bold transition-all cursor-pointer outline-none shadow-sm"
                         >
                             <option value="">Mitarbeiter wählen...</option>
-                            {users.map(u => (<option key={u.id} value={u.id}>{u.display_name || u.full_name}</option>))}
+                            {users.map(u => (
+                                <option key={u.id} value={u.id}>
+                                    {u.monthStatus === 'genehmigt' ? '✅ ' : u.monthStatus === 'eingereicht' ? '🟡 ' : '⚪ '}
+                                    {u.display_name || u.full_name}
+                                </option>
+                            ))}
                         </select>
                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
@@ -703,7 +860,143 @@ export default function AdminTimeTracking() {
                 })}
                 {entries.length === 0 && !loading && <div className="text-center text-gray-400 py-10">Keine Einträge für diesen Monat</div>}
                 {loading && <div className="text-center text-gray-400 py-10">Lade Daten...</div>}
+
+                {/* Corrections Section */}
+                {selectedUserId && corrections.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                        <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Korrekturen</div>
+                        {corrections.map(c => (
+                            <div key={c.id} className="bg-purple-50 p-4 rounded-xl border border-purple-200">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <PenTool size={16} className="text-purple-600" />
+                                        <span className="font-bold text-purple-800">Korrektur</span>
+                                    </div>
+                                    <div className={`font-bold font-mono text-lg ${c.correction_hours >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {c.correction_hours > 0 ? '+' : ''}{c.correction_hours}h
+                                    </div>
+                                </div>
+                                <div className="text-sm text-gray-700 bg-white p-2 rounded-lg border border-purple-100 mb-2">
+                                    {c.reason}
+                                </div>
+                                <div className="flex justify-between items-center text-xs text-gray-400">
+                                    <span>
+                                        {c.created_by_profile?.display_name || c.created_by_profile?.full_name || 'Admin'} • {format(parseISO(c.created_at), 'dd.MM.yyyy HH:mm')}
+                                    </span>
+                                    <button
+                                        onClick={() => handleDeleteCorrection(c.id)}
+                                        className="text-red-500 hover:text-red-700 font-bold"
+                                    >
+                                        Löschen
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Add Correction Button */}
+                {selectedUserId && (
+                    <button
+                        onClick={handleOpenCorrectionModal}
+                        className="mt-4 w-full py-3 bg-purple-100 text-purple-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-purple-200 transition-colors border border-purple-200"
+                    >
+                        <PenTool size={18} />
+                        Korrektur erstellen
+                    </button>
+                )}
             </div>
+
+
+            {/* Correction Modal */}
+            {showCorrectionModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-3 bg-purple-100 rounded-full">
+                                <PenTool size={24} className="text-purple-600" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900">Übertrag korrigieren</h2>
+                                <p className="text-sm text-gray-500">
+                                    {format(parseISO(selectedMonth + '-01'), 'MMMM yyyy', { locale: de })}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {/* Current Balance Display */}
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div className="text-sm text-gray-500 mb-1">Aktueller Übertrag (berechnet)</div>
+                                <div className={`text-3xl font-bold ${currentBalance?.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {currentBalance?.total > 0 ? '+' : ''}{currentBalance?.total ?? '...'}h
+                                </div>
+                            </div>
+
+                            {/* Target Input */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">
+                                    Korrekter Übertrag laut Buchhaltung
+                                </label>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={correctionData.targetTotal}
+                                    onChange={e => {
+                                        const val = e.target.value
+                                        if (val === '' || val === '-' || !isNaN(parseFloat(val))) {
+                                            setCorrectionData({ ...correctionData, targetTotal: val })
+                                        }
+                                    }}
+                                    className="w-full border-2 border-gray-200 p-3 rounded-xl text-center text-2xl font-bold focus:border-purple-500 focus:outline-none"
+                                    placeholder="z.B. -29"
+                                />
+                            </div>
+
+                            {/* Calculated Difference */}
+                            {correctionData.targetTotal !== '' && !isNaN(parseFloat(correctionData.targetTotal)) && currentBalance && (
+                                <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
+                                    <div className="text-sm text-purple-600 mb-1">Notwendige Korrektur</div>
+                                    <div className={`text-2xl font-bold ${(parseFloat(correctionData.targetTotal) - currentBalance.total) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {(parseFloat(correctionData.targetTotal) - currentBalance.total) > 0 ? '+' : ''}
+                                        {(parseFloat(correctionData.targetTotal) - currentBalance.total).toFixed(2)}h
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                        Wird automatisch berechnet und gespeichert
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Reason */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Begründung *</label>
+                                <textarea
+                                    value={correctionData.reason}
+                                    onChange={e => setCorrectionData({ ...correctionData, reason: e.target.value })}
+                                    className="w-full border-2 border-gray-200 p-3 rounded-xl focus:border-purple-500 focus:outline-none resize-none"
+                                    rows={2}
+                                    placeholder="z.B. Korrektur nach Buchhaltungsprüfung"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={() => { setShowCorrectionModal(false); setCorrectionData({ targetTotal: '', reason: '' }); setCurrentBalance(null) }}
+                                className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                            >
+                                Abbrechen
+                            </button>
+                            <button
+                                onClick={handleSaveCorrection}
+                                className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors"
+                            >
+                                Korrektur speichern
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Snapshot Modal */}
             {showSnapshotModal && userMonthStatus && (

@@ -40,7 +40,7 @@ export default function SidebarBalances() {
             // 1. Fetch all profiles
             const { data: allProfiles, error: pErr } = await supabase
                 .from('profiles')
-                .select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year')
+                .select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year, initial_balance')
                 .order('full_name')
 
             if (pErr) throw pErr
@@ -108,7 +108,12 @@ export default function SidebarBalances() {
                 .from('time_entries')
                 .select('user_id, shift_id, calculated_hours, status')
 
-            // 5. Calculate for each employee
+            // 5. Fetch corrections
+            const { data: allCorrections } = await supabase
+                .from('balance_corrections')
+                .select('user_id, correction_hours, effective_month')
+
+            // 6. Calculate for each employee
             const currentDate = new Date()
             const results = []
 
@@ -127,8 +132,9 @@ export default function SidebarBalances() {
 
                 const userAbsences = (allAbsencesHistory || []).filter(a => a.user_id === profile.id)
                 const userEntries = (allTimeEntriesHistory || []).filter(e => e.user_id === profile.id)
+                const userCorrections = (allCorrections || []).filter(c => c.user_id === profile.id)
 
-                const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate)
+                const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
 
                 if (b) {
                     results.push({

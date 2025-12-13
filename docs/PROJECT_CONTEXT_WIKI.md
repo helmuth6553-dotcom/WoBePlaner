@@ -112,3 +112,15 @@
 
 **Kontext für die KI:**
 Die Anwendung ist funktional vollständig und sicherheitstechnisch gehärtet. Der Onboarding-Flow (`SetPassword.jsx`) hat jetzt 3 Schritte mit Datenschutz-Infos. Die Admin-Erstellung erfordert Passwort-Bestätigung ("Re-Auth"). Änderungen am Auth-Flow sollten nur mit äußerster Vorsicht vorgenommen werden.
+
+## 10. NEUE FEATURES (Session 13.12.2025)
+
+*   ✅ **Balance Corrections (Admin-Korrekturen):**
+    *   Neue Tabelle `balance_corrections`.
+    *   Admin-Workflow: Übertrag korrigieren (Soll vs. Ist Vergleich aus Buchhaltung).
+    *   Automatische Berechnung der Differenz.
+    *   Auswirkung auf aktuellen Monat und laufenden Übertrag.
+*   ✅ **Status-Indikatoren in Admin-UI:**
+    *   Dropdown-Menü zeigt jetzt Status des Monats (✅, 🟡, ⚪).
+*   ✅ **Dokumentation:**
+    *   `docs/RULES_OF_TIME.md` massiv erweitert (Feiertage, Gesamtformel, Beispiele).

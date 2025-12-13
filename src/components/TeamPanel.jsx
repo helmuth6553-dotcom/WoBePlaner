@@ -41,7 +41,7 @@ export default function TeamPanel() {
 
             const { data: allProfiles } = await supabase
                 .from('profiles')
-                .select('id, full_name, display_name, email, role, weekly_hours, start_date')
+                .select('id, full_name, display_name, email, role, weekly_hours, start_date, initial_balance')
                 .or('is_active.eq.true,is_active.is.null')
                 .order('full_name')
 
@@ -108,6 +108,11 @@ export default function TeamPanel() {
                 .from('time_entries')
                 .select('user_id, shift_id, calculated_hours, status')
 
+            // Fetch all corrections
+            const { data: allCorrections } = await supabase
+                .from('balance_corrections')
+                .select('user_id, correction_hours, effective_month')
+
             const currentDate = new Date()
             const results = []
 
@@ -128,8 +133,9 @@ export default function TeamPanel() {
 
                 const userAbsences = (allAbsencesHistory || []).filter(a => a.user_id === profile.id)
                 const userEntries = (allTimeEntriesHistory || []).filter(e => e.user_id === profile.id)
+                const userCorrections = (allCorrections || []).filter(c => c.user_id === profile.id)
 
-                const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate)
+                const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
 
                 if (b) {
                     results.push({

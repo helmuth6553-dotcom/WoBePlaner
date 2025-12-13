@@ -493,8 +493,28 @@ function AdminEmployees() {
                             </div>
                             <div>
                                 <label className="block text-sm font-bold mb-1">Anfangssaldo (Std.)</label>
-                                <input type="number" step="0.5" value={formData.initial_balance} onChange={e => setFormData({ ...formData, initial_balance: parseFloat(e.target.value) || 0 })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} placeholder="0" />
-                                <p className="text-xs text-gray-500 mt-1">Historischer Übertrag bei App-Start</p>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    pattern="-?[0-9]*\.?[0-9]*"
+                                    value={formData.initial_balance}
+                                    onChange={e => {
+                                        const val = e.target.value
+                                        // Allow empty, minus sign, or valid numbers
+                                        if (val === '' || val === '-' || !isNaN(parseFloat(val))) {
+                                            setFormData({ ...formData, initial_balance: val === '' || val === '-' ? val : parseFloat(val) })
+                                        }
+                                    }}
+                                    onBlur={e => {
+                                        // On blur, ensure it's a valid number
+                                        const val = parseFloat(e.target.value) || 0
+                                        setFormData({ ...formData, initial_balance: val })
+                                    }}
+                                    className="w-full border p-2 rounded-lg text-center text-lg font-bold"
+                                    disabled={isCreatingUser}
+                                    placeholder="0"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">z.B. -10 für Minusstunden, +15 für Überstunden</p>
                             </div>
                             <div><label className="block text-sm font-bold mb-1">Rolle</label><select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} className="w-full border p-2 rounded-lg bg-white" disabled={isCreatingUser}><option value="user">Mitarbeiter</option><option value="admin">Administrator</option></select></div>
                         </div>
