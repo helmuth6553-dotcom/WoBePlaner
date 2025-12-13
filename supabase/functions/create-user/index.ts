@@ -66,7 +66,7 @@ serve(async (req) => {
 
         // 4. Parse the request body
         const body = await req.json()
-        const { email, full_name, weekly_hours, start_date, vacation_days_per_year, role } = body
+        const { email, full_name, weekly_hours, start_date, vacation_days_per_year, role, initial_balance } = body
 
         if (!email) {
             throw new Error('E-Mail ist erforderlich')
@@ -119,7 +119,8 @@ serve(async (req) => {
                 start_date: start_date || new Date().toISOString().split('T')[0],
                 vacation_days_per_year: vacation_days_per_year || 25,
                 is_active: true,
-                password_set: false  // User must set password on first login
+                password_set: false,  // User must set password on first login
+                initial_balance: initial_balance || 0
             }, { onConflict: 'id' })
 
         if (profileCreateError) {

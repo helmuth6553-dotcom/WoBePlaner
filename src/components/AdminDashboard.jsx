@@ -191,7 +191,7 @@ function AdminEmployees() {
     const [adminPassword, setAdminPassword] = useState('')
     const [passwordError, setPasswordError] = useState('')
     const [formData, setFormData] = useState({
-        email: '', full_name: '', weekly_hours: 40, start_date: format(new Date(), 'yyyy-MM-dd'), vacation_days_per_year: 25, role: 'user'
+        email: '', full_name: '', weekly_hours: 40, start_date: format(new Date(), 'yyyy-MM-dd'), vacation_days_per_year: 25, role: 'user', initial_balance: 0
     })
 
     useEffect(() => { fetchData() }, [])
@@ -289,7 +289,8 @@ function AdminEmployees() {
                     weekly_hours: parseFloat(formData.weekly_hours) || 40,
                     start_date: formData.start_date,
                     vacation_days_per_year: parseFloat(formData.vacation_days_per_year) || 25,
-                    role: formData.role
+                    role: formData.role,
+                    initial_balance: parseFloat(formData.initial_balance) || 0
                 }
             })
 
@@ -313,7 +314,7 @@ function AdminEmployees() {
             setFormData({
                 email: '', full_name: '', weekly_hours: 40,
                 start_date: format(new Date(), 'yyyy-MM-dd'),
-                vacation_days_per_year: 25, role: 'user'
+                vacation_days_per_year: 25, role: 'user', initial_balance: 0
             })
             fetchData()
 
@@ -328,7 +329,7 @@ function AdminEmployees() {
     const handleUpdateUser = async () => {
         const { error } = await supabase.from('profiles').update({
             full_name: formData.full_name, weekly_hours: formData.weekly_hours, start_date: formData.start_date,
-            vacation_days_per_year: formData.vacation_days_per_year, role: formData.role
+            vacation_days_per_year: formData.vacation_days_per_year, role: formData.role, initial_balance: formData.initial_balance
         }).eq('id', editingUser.id)
 
         if (error) alert(error.message)
@@ -394,7 +395,7 @@ function AdminEmployees() {
         setEditingUser(user)
         setFormData({
             email: user.email, full_name: user.full_name || '', weekly_hours: user.weekly_hours || 40,
-            start_date: user.start_date || format(new Date(), 'yyyy-MM-dd'), vacation_days_per_year: user.vacation_days_per_year || 25, role: user.role || 'user'
+            start_date: user.start_date || format(new Date(), 'yyyy-MM-dd'), vacation_days_per_year: user.vacation_days_per_year || 25, role: user.role || 'user', initial_balance: user.initial_balance || 0
         })
     }
 
@@ -485,7 +486,16 @@ function AdminEmployees() {
                                 <div><label className="block text-sm font-bold mb-1">Wochenstunden</label><input type="number" value={formData.weekly_hours} onChange={e => setFormData({ ...formData, weekly_hours: e.target.value })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} /></div>
                                 <div><label className="block text-sm font-bold mb-1">Urlaubstage</label><input type="number" value={formData.vacation_days_per_year} onChange={e => setFormData({ ...formData, vacation_days_per_year: e.target.value })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} /></div>
                             </div>
-                            <div><label className="block text-sm font-bold mb-1">Eintritt</label><input type="date" value={formData.start_date} onChange={e => setFormData({ ...formData, start_date: e.target.value })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} /></div>
+                            <div>
+                                <label className="block text-sm font-bold mb-1">Eintritt</label>
+                                <input type="date" value={formData.start_date} onChange={e => setFormData({ ...formData, start_date: e.target.value })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} />
+                                <p className="text-xs text-gray-500 mt-1">Beeinflusst die Soll-Berechnung</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold mb-1">Anfangssaldo (Std.)</label>
+                                <input type="number" step="0.5" value={formData.initial_balance} onChange={e => setFormData({ ...formData, initial_balance: parseFloat(e.target.value) || 0 })} className="w-full border p-2 rounded-lg" disabled={isCreatingUser} placeholder="0" />
+                                <p className="text-xs text-gray-500 mt-1">Historischer Übertrag bei App-Start</p>
+                            </div>
                             <div><label className="block text-sm font-bold mb-1">Rolle</label><select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} className="w-full border p-2 rounded-lg bg-white" disabled={isCreatingUser}><option value="user">Mitarbeiter</option><option value="admin">Administrator</option></select></div>
                         </div>
 

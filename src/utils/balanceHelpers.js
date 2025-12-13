@@ -232,7 +232,10 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         carryoverMinutes = (pastActual + pastVacation) - pastTarget
     }
 
-    const totalDiffMinutes = currentDiffMinutes + carryoverMinutes
+    // Initial balance from profile (for migrated employees with existing hour balances)
+    const initialBalanceMinutes = (profile.initial_balance || 0) * 60
+
+    const totalDiffMinutes = currentDiffMinutes + carryoverMinutes + initialBalanceMinutes
     const toFixedNum = (num) => Math.round(num * 100) / 100
 
     return {
@@ -241,6 +244,7 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         vacation: toFixedNum(vacationMinutes / 60),
         diff: toFixedNum(currentDiffMinutes / 60),
         carryover: toFixedNum(carryoverMinutes / 60),
+        initialBalance: toFixedNum(profile.initial_balance || 0),
         total: toFixedNum(totalDiffMinutes / 60)
     }
 }
