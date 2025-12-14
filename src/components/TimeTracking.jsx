@@ -274,8 +274,11 @@ export default function TimeTracking() {
             return new Date(s.start_time) >= effectiveStartDate
         }) : (teamShifts || [])
 
-        // Store ALL planned shifts (Personal + Team) for absence calculation
-        const allPlannedRaw = [...filteredPersonalShifts, ...filteredTeamShifts]
+        // Store ALL planned shifts (Personal + Team) for absence calculation - Deduplicated!
+        const allPlannedMap = new Map()
+        filteredPersonalShifts?.forEach(s => allPlannedMap.set(s.id, s))
+        filteredTeamShifts?.forEach(s => allPlannedMap.set(s.id, s))
+        const allPlannedRaw = Array.from(allPlannedMap.values())
         setPlannedShifts(allPlannedRaw)
 
         // 2. Get Absences (Approved only)
@@ -285,7 +288,7 @@ export default function TimeTracking() {
 
         const { data: absences } = await supabase
             .from('absences')
-            .select('start_date, end_date, user_id, status, type, planned_hours, id')
+            .select('start_date, end_date, user_id, status, type, planned_hours, planned_shifts_snapshot, id')
             .eq('user_id', user.id)
             .eq('status', 'genehmigt')
             .lte('start_date', endStr)
@@ -306,17 +309,60 @@ export default function TimeTracking() {
                         const hours = calculateDailyAbsenceHours(day, abs, allPlannedRaw, userProfile)
 
                         if (hours > 0) {
-                            absenceItems.push({
-                                id: `abs-${abs.id}-${format(day, 'yyyy-MM-dd')}`,
-                                absence_id: abs.id,
-                                date: format(day, 'yyyy-MM-dd'),
-                                type: abs.type,
-                                reason: abs.reason,
-                                note: abs.note,
-                                planned_hours: hours, // Now using calculated hours from SSOT
-                                itemType: 'absence',
-                                sortDate: day
-                            })
+                            const dateKey = format(day, 'yyyy-MM-dd')
+                            const isSick = abs.reason === 'sick' || (abs.type && abs.type.toLowerCase().includes('krank'))
+
+                            // For SICK leave: Use saved snapshot OR fall back to live data
+                            // The snapshot is saved when reporting sick, BEFORE interests are deleted
+                            let plannedShiftsForDay = []
+
+                            if (isSick && abs.planned_shifts_snapshot && abs.planned_shifts_snapshot.length > 0) {
+                                // Use saved snapshot - filter to this specific day
+                                plannedShiftsForDay = abs.planned_shifts_snapshot.filter(s => {
+                                    if (!s.start_time) return false
+                                    return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
+                                })
+                            } else {
+                                // Fall back to live data (for old absences without snapshot)
+                                plannedShiftsForDay = allPlannedRaw.filter(s => {
+                                    if (!s.start_time) return false
+                                    return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
+                                })
+                            }
+
+                            // For SICK leave: Create one entry PER planned shift (like normal shifts)
+                            // For VACATION: Create one entry per day (standard daily hours)
+                            if (isSick && plannedShiftsForDay.length > 0) {
+                                // Create separate entries for each planned shift
+                                plannedShiftsForDay.forEach((shift, idx) => {
+                                    const shiftHours = calculateWorkHours(shift.start_time, shift.end_time, shift.type)
+                                    absenceItems.push({
+                                        id: `abs-${abs.id}-${format(day, 'yyyy-MM-dd')}-${idx}`,
+                                        absence_id: abs.id,
+                                        date: format(day, 'yyyy-MM-dd'),
+                                        type: abs.type,
+                                        reason: abs.reason,
+                                        note: abs.note,
+                                        planned_hours: shiftHours,
+                                        plannedShift: shift, // Single shift for this entry
+                                        itemType: 'absence',
+                                        sortDate: new Date(shift.start_time) // Sort by shift start time
+                                    })
+                                })
+                            } else {
+                                // Vacation or no planned shifts - single entry
+                                absenceItems.push({
+                                    id: `abs-${abs.id}-${format(day, 'yyyy-MM-dd')}`,
+                                    absence_id: abs.id,
+                                    date: format(day, 'yyyy-MM-dd'),
+                                    type: abs.type,
+                                    reason: abs.reason,
+                                    note: abs.note,
+                                    planned_hours: hours,
+                                    itemType: 'absence',
+                                    sortDate: day
+                                })
+                            }
                         }
                     })
                 }
@@ -692,9 +738,17 @@ export default function TimeTracking() {
                                         </div>
                                         <div className="text-sm text-gray-500 flex items-center gap-2">
                                             {isAbsence ? (
-                                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${isSick ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>
-                                                    {item.type || 'Urlaub'}
-                                                </span>
+                                                <>
+                                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${isSick ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>
+                                                        {item.type || 'Urlaub'}
+                                                    </span>
+                                                    {/* Show original shift type for sick leave */}
+                                                    {isSick && item.plannedShift && (
+                                                        <span className="text-gray-400">
+                                                            (statt {item.plannedShift.type})
+                                                        </span>
+                                                    )}
+                                                </>
                                             ) : (
                                                 <>
                                                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${isTeam ? 'bg-purple-100 text-purple-700' : 'bg-gray-100'}`}>
@@ -753,8 +807,13 @@ export default function TimeTracking() {
                                             // SICK: Use pre-calculated SSOT hours
                                             let sickHours = item.planned_hours || 0
 
-                                            // Set display values
-                                            if (!displayStart) {
+                                            // Use original planned shift times if available
+                                            if (item.plannedShift) {
+                                                // Show original shift times (e.g., ND 19:00-08:00)
+                                                displayStart = format(parseISO(item.plannedShift.start_time), 'HH:mm')
+                                                displayEnd = format(parseISO(item.plannedShift.end_time), 'HH:mm')
+                                            } else {
+                                                // Fallback to calculated display
                                                 const endHour = 8 + Math.floor(sickHours)
                                                 const endMinute = Math.round((sickHours % 1) * 60)
                                                 displayStart = '08:00'

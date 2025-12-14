@@ -181,9 +181,26 @@ export const calculateDailyAbsenceHours = (dateInput, absence, plannedShifts = [
 
     // 4. Calculate
     if (isSick) {
-        // Rule: Stored Planned Hours (Priority 1)
-        // If the absence record has stored 'planned_hours' (saved when reporting sick), use that.
-        // This is crucial because the actual shift might have been deleted/unassigned after reporting sick.
+        const dateKey = format(date, 'yyyy-MM-dd')
+
+        // Rule: Saved Shift Snapshot (Priority 1 - NEW!)
+        // Use the snapshot saved when reporting sick - this preserves shifts even after interests deleted
+        // This takes priority so we can show separate entries per shift
+        if (absence?.planned_shifts_snapshot && absence.planned_shifts_snapshot.length > 0) {
+            const snapshotShifts = absence.planned_shifts_snapshot.filter(s => {
+                if (!s.start_time) return false
+                return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
+            })
+
+            if (snapshotShifts.length > 0) {
+                return snapshotShifts.reduce((sum, s) => {
+                    return sum + calculateWorkHours(s.start_time, s.end_time, s.type)
+                }, 0)
+            }
+        }
+
+        // Rule: Stored Planned Hours (Priority 2 - for old absences without snapshot)
+        // If the absence record has stored 'planned_hours', use that.
         // IMPORTANT: planned_hours is the TOTAL for the entire sick period, so divide by number of days.
         if (absence?.planned_hours !== undefined && absence?.planned_hours !== null && Number(absence.planned_hours) > 0) {
             // Calculate number of days in the sick period
@@ -195,9 +212,9 @@ export const calculateDailyAbsenceHours = (dateInput, absence, plannedShifts = [
             return Number(absence.planned_hours) / totalDays
         }
 
-        // Rule: Live Planned Shifts (Priority 2)
-        // If no hours stored, check if a shift still exists in the plan for this day.
-        const dateKey = format(date, 'yyyy-MM-dd')
+        // Rule: Live Planned Shifts (Priority 3 - Fallback for old absences without snapshot)
+        // Rule: Live Planned Shifts (Priority 3 - Fallback for old absences)
+        // If no snapshot, check if a shift still exists in the plan for this day.
         const dayShifts = plannedShifts.filter(s => {
             if (!s.start_time) return false
             return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey

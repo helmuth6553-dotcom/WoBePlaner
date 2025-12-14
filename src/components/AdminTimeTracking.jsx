@@ -117,7 +117,7 @@ export default function AdminTimeTracking() {
         // 3. Absences
         const { data: absences } = await supabase
             .from('absences')
-            .select('start_date, end_date, user_id, status, type, planned_hours, id')
+            .select('start_date, end_date, user_id, status, type, planned_hours, planned_shifts_snapshot, id')
             .eq('user_id', selectedUserId)
             .eq('status', 'genehmigt')
             .lte('start_date', format(end, 'yyyy-MM-dd'))
@@ -204,9 +204,6 @@ export default function AdminTimeTracking() {
         const absenceItems = []
         if (absences) {
             absences.forEach(abs => {
-                // Ensure we don't process duplicate absence objects
-                // (This happens if Supabase join/select logic returns multiples, which shouldn't happen but key errors suggest it)
-
                 const rangeStart = new Date(abs.start_date) < start ? start : new Date(abs.start_date)
                 const rangeEnd = new Date(abs.end_date) > end ? end : new Date(abs.end_date)
 
@@ -214,28 +211,64 @@ export default function AdminTimeTracking() {
                     const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
                     days.forEach(day => {
                         const dateKey = format(day, 'yyyy-MM-dd')
-                        const activeId = `abs-${abs.id}-${dateKey}`
-
-                        // Check if we already have an entry for this ID (Prevent Duplicates)
-                        if (absenceItems.some(item => item.id === activeId)) {
-                            return // Skip duplicate
-                        }
+                        const isSick = abs.type === 'Krank' || abs.type === 'Krankenstand'
 
                         // SINGLE SOURCE OF TRUTH INTEGRATION
-                        // Calculate hours via central function
                         const hours = calculateDailyAbsenceHours(day, abs, allPlannedShifts, { weekly_hours: weeklyHours })
 
                         if (hours > 0) {
-                            absenceItems.push({
-                                id: activeId,
-                                absence_id: abs.id,
-                                entry_date: dateKey,
-                                actual_start: null,
-                                actual_end: null,
-                                calculated_hours: hours,
-                                absences: abs,
-                                itemType: 'absence'
-                            })
+                            // For SICK leave: Use snapshot to create separate entries per shift
+                            let plannedShiftsForDay = []
+
+                            if (isSick && abs.planned_shifts_snapshot && abs.planned_shifts_snapshot.length > 0) {
+                                plannedShiftsForDay = abs.planned_shifts_snapshot.filter(s => {
+                                    if (!s.start_time) return false
+                                    return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
+                                })
+                            } else if (isSick) {
+                                // Fallback to live data
+                                plannedShiftsForDay = allPlannedShifts.filter(s => {
+                                    if (!s.start_time) return false
+                                    return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
+                                })
+                            }
+
+                            if (isSick && plannedShiftsForDay.length > 0) {
+                                // Create separate entries for each sick shift
+                                plannedShiftsForDay.forEach((shift, idx) => {
+                                    const shiftHours = calculateWorkHours(shift.start_time, shift.end_time, shift.type)
+                                    const activeId = `abs-${abs.id}-${dateKey}-${idx}`
+
+                                    if (!absenceItems.some(item => item.id === activeId)) {
+                                        absenceItems.push({
+                                            id: activeId,
+                                            absence_id: abs.id,
+                                            entry_date: dateKey,
+                                            actual_start: shift.start_time, // Use original shift times
+                                            actual_end: shift.end_time,
+                                            calculated_hours: shiftHours,
+                                            absences: abs,
+                                            plannedShift: shift, // Store for display
+                                            itemType: 'absence'
+                                        })
+                                    }
+                                })
+                            } else {
+                                // Vacation or no planned shifts - single entry
+                                const activeId = `abs-${abs.id}-${dateKey}`
+                                if (!absenceItems.some(item => item.id === activeId)) {
+                                    absenceItems.push({
+                                        id: activeId,
+                                        absence_id: abs.id,
+                                        entry_date: dateKey,
+                                        actual_start: null,
+                                        actual_end: null,
+                                        calculated_hours: hours,
+                                        absences: abs,
+                                        itemType: 'absence'
+                                    })
+                                }
+                            }
                         }
                     })
                 }
@@ -787,6 +820,9 @@ export default function AdminTimeTracking() {
                     const itemType = isAbsence ? (isSick ? 'Krank' : 'Urlaub') : e.shifts.type
                     const itemDate = e.actual_start || e.entry_date
 
+                    // Get original shift type for sick leave display
+                    const originalShiftType = e.plannedShift?.type || null
+
                     // Check for deviations (only for shifts, not absences)
                     let hasDeviation = false
                     let plannedHours = null
@@ -804,6 +840,10 @@ export default function AdminTimeTracking() {
                                     {safeFormatDay(itemDate)} {safeFormatDate(itemDate)}
                                     {!isAbsence && itemType && <span className="text-[10px] uppercase px-1.5 py-0.5 rounded font-bold bg-gray-100 text-gray-600">{itemType}</span>}
                                     {isAbsence && <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-bold ${isSick ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>{itemType}</span>}
+                                    {/* Show original shift type for sick leave */}
+                                    {isSick && originalShiftType && (
+                                        <span className="text-[10px] text-gray-400">(statt {originalShiftType})</span>
+                                    )}
                                     {hasDeviation && (
                                         <span className="text-[10px] uppercase px-1.5 py-0.5 rounded font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
                                             Abweichung

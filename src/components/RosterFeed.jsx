@@ -17,6 +17,7 @@ import { useHolidays } from '../hooks/useHolidays'
 import { validateShiftRules as importedValidateShiftRules } from '../utils/rosterRules'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { calculateWorkHours } from '../utils/timeCalculations'
+import { getDefaultTimes } from '../utils/shiftDefaults'
 
 export default function RosterFeed() {
 
@@ -47,6 +48,7 @@ export default function RosterFeed() {
     const [isBalanceExpanded, setIsBalanceExpanded] = useState(false)
     const [allProfiles, setAllProfiles] = useState([])
     const [allShiftsHistory, setAllShiftsHistory] = useState([])
+    const [allTeamShiftsHistory, setAllTeamShiftsHistory] = useState([]) // TEAM shifts apply to all employees
     const [allAbsencesHistory, setAllAbsencesHistory] = useState([])
     const [allTimeEntriesHistory, setAllTimeEntriesHistory] = useState([])
     const [allCorrectionsHistory, setAllCorrectionsHistory] = useState([])
@@ -360,7 +362,9 @@ export default function RosterFeed() {
         let totalPlannedHours = 0
         const myShifts = shiftsInRange?.filter(shift =>
             shift.assigned_to === user.id ||
-            shift.interests?.some(i => i.user_id === user.id)
+            shift.interests?.some(i => i.user_id === user.id) ||
+            shift.type === 'TEAM' || // TEAM is mandatory for all employees
+            shift.type === 'FORTBILDUNG' // Include FORTBILDUNG if user was participating
         ) || []
 
         myShifts.forEach(shift => {
@@ -372,14 +376,25 @@ export default function RosterFeed() {
         // Round to 2 decimal places
         totalPlannedHours = Math.round(totalPlannedHours * 100) / 100
 
-        // 3. Create absence record with planned_hours
+        // Create snapshot of planned shifts (before interests are deleted)
+        // This preserves the original shift data for display in TimeTracking
+        const plannedShiftsSnapshot = myShifts.map(shift => ({
+            id: shift.id,
+            type: shift.type,
+            start_time: shift.start_time,
+            end_time: shift.end_time,
+            title: shift.title
+        }))
+
+        // 3. Create absence record with planned_hours AND shift snapshot
         const { error: absError } = await supabase.from('absences').insert({
             user_id: user.id,
             start_date: startDate,
             end_date: endDate,
             type: 'Krank',
             status: 'genehmigt',
-            planned_hours: totalPlannedHours > 0 ? totalPlannedHours : null
+            planned_hours: totalPlannedHours > 0 ? totalPlannedHours : null,
+            planned_shifts_snapshot: plannedShiftsSnapshot.length > 0 ? plannedShiftsSnapshot : null
         })
 
         if (absError) {
@@ -396,7 +411,12 @@ export default function RosterFeed() {
                 if (myInterest || shift.assigned_to === user.id) {
                     // Delete interest first
                     if (myInterest) await supabase.from('shift_interests').delete().eq('id', myInterest.id)
-                    shiftIdsToMarkUrgent.push(shift.id)
+
+                    // Only mark REAL shifts as urgent (TD1, TD2, ND, DBD)
+                    // TEAM and FORTBILDUNG don't need coverage - no push notification needed
+                    if (shift.type !== 'TEAM' && shift.type !== 'FORTBILDUNG') {
+                        shiftIdsToMarkUrgent.push(shift.id)
+                    }
                 }
             }
 
@@ -458,6 +478,13 @@ export default function RosterFeed() {
                     })
 
                     setAllShiftsHistory(combinedHistory)
+
+                    // 2b. TEAM shifts (apply to ALL employees)
+                    const { data: teamShifts } = await supabase
+                        .from('shifts')
+                        .select('id, start_time, end_time, type')
+                        .eq('type', 'TEAM')
+                    setAllTeamShiftsHistory(teamShifts || [])
 
                     // 3. Absences
                     const { data: absences, error: absError } = await supabase.from('absences').select('start_date, end_date, user_id, status, type, planned_hours').eq('status', 'genehmigt')
@@ -605,7 +632,17 @@ export default function RosterFeed() {
                                     <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">Kollegen Übersicht</h4>
                                     <div className="space-y-2">
                                         {allProfiles.filter(p => p.id !== user.id && p.role !== 'admin').map(profile => {
-                                            const userShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+                                            // Personal shifts from interests/assignments
+                                            const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+                                            // Add TEAM shifts for this user (they apply to everyone)
+                                            const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
+                                            // Merge personal + team, avoiding duplicates
+                                            const userShifts = [...personalShifts]
+                                            teamShiftsForUser.forEach(ts => {
+                                                if (!userShifts.some(s => s.id === ts.id)) {
+                                                    userShifts.push(ts)
+                                                }
+                                            })
                                             const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
                                             const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
                                             const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
@@ -708,26 +745,19 @@ export default function RosterFeed() {
                                             onCreateShift={async (dateStr, type) => {
                                                 if (!isAdmin) return
 
-                                                let start = '07:30'
-                                                let end = '16:00'
-                                                let endDateStr = dateStr
+                                                // Use the robust utility to get Local Date Objects for start/end
+                                                // This handles rules for ND/TD1/TD2 etc.
+                                                // We pass specific holidays if we had them, otherwise default check.
+                                                const { start, end } = getDefaultTimes(dateStr, type)
 
-                                                if (type === 'TD1') { start = '07:30'; end = '16:00'; }
-                                                if (type === 'TD2') { start = '12:00'; end = '20:30'; }
-                                                if (type === 'ND') { start = '20:15'; end = '07:15'; }
-                                                if (type === 'DBD') { start = '08:00'; end = '16:00'; }
-                                                if (type === 'TEAM') { start = '09:30'; end = '11:30'; }
-                                                if (type === 'FORTBILDUNG') { start = '09:00'; end = '17:00'; }
-
-                                                if (end < start) {
-                                                    const d = new Date(dateStr)
-                                                    d.setDate(d.getDate() + 1)
-                                                    endDateStr = d.toISOString().split('T')[0]
+                                                if (!start || !end) {
+                                                    setAlertConfig({ isOpen: true, title: 'Fehler', message: 'Konnte Zeiten nicht berechnen.', type: 'error' })
+                                                    return
                                                 }
 
                                                 const { error } = await supabase.from('shifts').insert({
-                                                    start_time: `${dateStr}T${start}:00`,
-                                                    end_time: `${endDateStr}T${end}:00`,
+                                                    start_time: start.toISOString(),
+                                                    end_time: end.toISOString(),
                                                     type: type
                                                 })
 

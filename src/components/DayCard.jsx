@@ -53,14 +53,30 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onU
         if (selectedShift) {
             const freshShift = shifts.find(s => s.id === selectedShift.id)
             if (freshShift) {
-                setSelectedShift(prev => {
-                    if (!prev) return null  // Safety check
-                    return {
-                        ...freshShift,
-                        label: prev.label,
-                        icon: prev.icon
-                    }
-                })
+                // Only update if data actually changed to prevent overwriting user input
+                // specifically start_time, end_time, title OR interests (for participant list)
+
+                // Helper to check interest equality (length and user_ids)
+                const interestsChanged = (freshShift.interests?.length || 0) !== (selectedShift.interests?.length || 0) ||
+                    !freshShift.interests?.every(fi => selectedShift.interests?.some(si => si.user_id === fi.user_id))
+
+                const hasChanged =
+                    freshShift.start_time !== selectedShift.start_time ||
+                    freshShift.end_time !== selectedShift.end_time ||
+                    freshShift.title !== selectedShift.title ||
+                    freshShift.type !== selectedShift.type ||
+                    interestsChanged
+
+                if (hasChanged) {
+                    setSelectedShift(prev => {
+                        if (!prev) return null
+                        return {
+                            ...freshShift,
+                            label: prev.label, // Preserve UI state
+                            icon: prev.icon
+                        }
+                    })
+                }
             }
         }
     }, [shifts, selectedShift])
@@ -389,6 +405,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onU
                         >
                             <option value="" disabled>Auswählen...</option>
                             {allProfiles
+                                .filter(p => p.role !== 'admin') // Admins don't work shifts
                                 .filter(p => !participants.some(u => u.id === p.id))
                                 .map(p => (
                                     <option key={p.id} value={p.id}>
