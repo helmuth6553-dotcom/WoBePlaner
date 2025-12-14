@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /**
  * Vitest Setup for React Component Testing
  * This file is run before each test file.

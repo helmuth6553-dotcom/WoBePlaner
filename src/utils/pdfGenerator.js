@@ -223,7 +223,7 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
             // Check absence
             if (entry.absence_id) {
                 // Render Absence Row Simple
-                const absRowHeight = rowHeight + 2
+
 
                 const dateRaw = entry.actual_start || entry.entry_date
                 const dateStr = format(parseISO(dateRaw), 'dd.MM.yy')
