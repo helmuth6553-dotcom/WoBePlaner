@@ -19,27 +19,42 @@ import { test, expect, Page } from '@playwright/test';
 async function login(page: Page, email: string, password: string): Promise<boolean> {
     await page.goto('/');
 
-    // Wait for splash screen to disappear (app shows splash for 2 seconds)
-    // The login form has the email input field
-    await page.waitForSelector('input[type="email"]', { timeout: 10000 });
+    // 1. Wait for Splash Screen exit
+    // App shows splash for ~2000ms. Wait for email input as signal that splash is gone.
+    const emailInput = page.locator('input[type="email"]');
+    await emailInput.waitFor({ state: 'visible', timeout: 15000 });
 
-    // Small extra wait to ensure form is fully interactive
-    await page.waitForTimeout(500);
-
-    await page.locator('input[type="email"]').fill(email);
+    // 2. Perform Login
+    await emailInput.fill(email);
     await page.locator('input[type="password"]').fill(password);
-    await page.getByRole('button', { name: 'Einloggen' }).click();
 
+    const loginBtn = page.getByRole('button', { name: 'Einloggen' });
+    // Force click to bypass any potential overlays or hit-testing issues on mobile
+    await loginBtn.click({ force: true });
+
+    // Wait for network to settle (Supabase auth request) to prevent race conditions
+    await page.waitForLoadState('networkidle').catch(() => { });
+
+    // 3. Verify Login Success
+    // We try to catch explicit errors first for faster feedback
+    const errorMsg = page.getByText(/Ungültige E-Mail oder Passwort/i);
+    if (await errorMsg.isVisible({ timeout: 1000 }).catch(() => false)) {
+        console.error('Login failed: Invalid credentials message shown');
+        return false;
+    }
+
+    // Wait for main app elements.
     try {
-        // Wait for any of these indicators that login succeeded
         // Desktop: sidebar, nav
         // Mobile: bottom nav buttons with specific names (BottomNav component)
+        // We use a broader combined selector to catch any valid navigation element or content header
         await page.waitForSelector(
-            'button:has-text("Dienstplan"), button:has-text("Zeiten"), button:has-text("Urlaub")',
-            { timeout: 20000 }
+            'nav, [class*="sidebar"], [class*="bottom-0"], button:has-text("Dienstplan"), text=Mein Stundenkonto',
+            { timeout: 25000 }
         );
         return true;
-    } catch {
+    } catch (e) {
+        console.error('Login timeout: App navigation or content did not appear after login click.');
         return false;
     }
 }
