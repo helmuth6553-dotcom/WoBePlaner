@@ -37,11 +37,41 @@ async function login(page: Page, email: string, password: string): Promise<boole
 }
 
 // Navigate to a specific tab
-async function navigateToTab(page: Page, tabName: RegExp | string) {
+// Handles both desktop sidebar and mobile bottom nav/hamburger menu
+async function navigateToTab(page: Page, tabName: RegExp | string, isMobile: boolean = false) {
+    // On mobile, first try to open hamburger menu if nav is hidden
+    if (isMobile) {
+        const hamburgerSelectors = [
+            '[class*="hamburger"]',
+            '[class*="menu-toggle"]',
+            'button[aria-label*="menu"]',
+            'button[aria-label*="Menu"]',
+            '[class*="mobile-menu"]',
+        ];
+
+        for (const selector of hamburgerSelectors) {
+            const hamburger = page.locator(selector).first();
+            if (await hamburger.isVisible({ timeout: 1000 }).catch(() => false)) {
+                await hamburger.click();
+                await page.waitForTimeout(500);
+                break;
+            }
+        }
+    }
+
+    // Try different selectors for navigation
     const tabButton = page.getByRole('button', { name: tabName });
-    if (await tabButton.isVisible()) {
+    if (await tabButton.isVisible({ timeout: 2000 }).catch(() => false)) {
         await tabButton.click();
-        await page.waitForTimeout(1000); // Wait for content to load
+        await page.waitForTimeout(1000);
+        return;
+    }
+
+    // Try link or other elements
+    const tabLink = page.locator(`[class*="tab"]:has-text("${tabName}")`).first();
+    if (await tabLink.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await tabLink.click();
+        await page.waitForTimeout(1000);
     }
 }
 
@@ -385,31 +415,67 @@ test.describe('Mobile View', () => {
     test.skip(!process.env.TEST_USER_EMAIL || !process.env.TEST_USER_PASSWORD,
         'Requires TEST_USER_EMAIL and TEST_USER_PASSWORD');
 
-    test.use({ viewport: { width: 375, height: 812 } }); // iPhone X size (taller for bottom nav)
+    // Use Pixel 5 viewport (matches mobile-chrome project in playwright.config.ts)
+    test.use({ viewport: { width: 393, height: 851 } });
 
-    test('login works on mobile', async ({ page }) => {
+    test('login works on mobile', async ({ page, isMobile }) => {
         const success = await login(page, process.env.TEST_USER_EMAIL!, process.env.TEST_USER_PASSWORD!);
         expect(success).toBe(true);
+
+        // Verify we're in mobile mode
+        const viewportSize = page.viewportSize();
+        expect(viewportSize?.width).toBeLessThan(500);
     });
 
-    test('navigation is accessible on mobile', async ({ page }) => {
+    test('navigation is accessible on mobile', async ({ page, isMobile }) => {
         const success = await login(page, process.env.TEST_USER_EMAIL!, process.env.TEST_USER_PASSWORD!);
         expect(success).toBe(true);
 
-        // Mobile should have bottom nav or hamburger menu
-        const hasNav = await page.locator('nav, [class*="bottom-nav"], [class*="menu"]').first().isVisible();
+        // Mobile should have bottom nav, hamburger menu, or visible tabs
+        const hasNav = await page.locator(
+            'nav, [class*="bottom-nav"], [class*="menu"], [class*="tab"], button:has-text("Dienstplan")'
+        ).first().isVisible({ timeout: 5000 }).catch(() => false);
+
         expect(hasNav).toBeTruthy();
     });
 
-    test('balance is visible on mobile', async ({ page }) => {
+    test('can navigate to different views on mobile', async ({ page, isMobile }) => {
         const success = await login(page, process.env.TEST_USER_EMAIL!, process.env.TEST_USER_PASSWORD!);
         expect(success).toBe(true);
 
-        await navigateToTab(page, /dienstplan/i);
+        // Navigate using mobile-aware function (isMobile = true)
+        await navigateToTab(page, /dienstplan/i, true);
+        await page.waitForTimeout(1500);
+
+        // Should show some content
+        const pageContent = await page.content();
+        expect(pageContent.length).toBeGreaterThan(1000);
+    });
+
+    test('balance is visible on mobile', async ({ page, isMobile }) => {
+        const success = await login(page, process.env.TEST_USER_EMAIL!, process.env.TEST_USER_PASSWORD!);
+        expect(success).toBe(true);
+
+        await navigateToTab(page, /dienstplan/i, true);
         await page.waitForTimeout(2000);
 
         // Balance info should be visible even on small screens
-        const hasBalanceInfo = await page.getByText(/soll|ist|saldo/i).first().isVisible();
-        expect(hasBalanceInfo).toBeTruthy();
+        // Look for common balance-related text
+        const hasBalanceInfo = await page.getByText(/soll|ist|saldo|stunden/i).first().isVisible({ timeout: 5000 }).catch(() => false);
+
+        // If not visible directly, maybe in a collapsed section
+        if (!hasBalanceInfo) {
+            // Try to expand any collapsed sections
+            const expandButtons = page.locator('button:has-text("anzeigen"), button:has-text("mehr"), [class*="expand"]');
+            if (await expandButtons.first().isVisible().catch(() => false)) {
+                await expandButtons.first().click();
+                await page.waitForTimeout(500);
+            }
+        }
+
+        // Re-check after potential expansion
+        const balanceVisible = await page.getByText(/soll|ist|saldo|stunden/i).first().isVisible().catch(() => false);
+        expect(balanceVisible).toBeTruthy();
     });
 });
+

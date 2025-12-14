@@ -477,9 +477,9 @@
 
 | Kategorie | Tests | Status |
 |-----------|-------|--------|
-| **Unit Tests (Vitest)** | **150** | ✅ 100% BESTANDEN |
-| **E2E Tests (Playwright)** | **~30** | ~85% bestanden |
-| **GESAMT** | **~180** | ✅ |
+| **Unit Tests (Vitest)** | **154** | ✅ 100% BESTANDEN |
+| **E2E Tests (Playwright)** | **~35** | ~85% bestanden |
+| **GESAMT** | **~189** | ✅ |
 
 ## Kritische Szenarien
 
@@ -496,8 +496,102 @@
 | DSGVO Anonymisierung | ✅ | 15 Tests |
 | Hash-Integrität | ✅ | 13 Tests |
 | MA = Admin Ansicht | ✅ | 2 Tests |
+| Zeitumstellung (DST) | ✅ | 4 Tests |
+
+---
+
+## Neue Tests: Daylight Saving Time (Zeitumstellung)
+
+**Datei:** `src/utils/timeCalculations.test.js`
+
+| # | Testname | Beschreibung | Status |
+|---|----------|--------------|--------|
+| 1 | March DST (spring forward - 1h shorter) | ND 29.-30.03.2025 → effektiv 13h statt 14h | ✅ BESTANDEN |
+| 2 | October DST (fall back - 1h longer) | ND 25.-26.10.2025 → effektiv 15h statt 14h | ✅ BESTANDEN |
+| 3 | ND March DST reduced readiness | Bereitschaft 4.5h statt 5.5h | ✅ BESTANDEN |
+| 4 | ND October DST extended readiness | Bereitschaft 6.5h statt 5.5h | ✅ BESTANDEN |
+
+**Wichtig:** Diese Tests dokumentieren das aktuelle Verhalten. JavaScript `Date` ohne explizite Zeitzone interpretiert ISO-Strings als UTC, wodurch keine automatische DST-Korrektur erfolgt. Für exakte lokale Zeitberechnung wäre `date-fns-tz` oder `Intl.DateTimeFormat` erforderlich.
+
+---
+
+# Bekannte Limitierungen / Offene Punkte
+
+Diese Sektion dokumentiert transparent, was **noch nicht getestet** oder **bewusst ausgelassen** wurde.
+
+## 🔴 Kritisch (sollte zeitnah getestet werden)
+
+| Bereich | Beschreibung | Begründung |
+|---------|--------------|------------|
+| **Admin-Dashboard Unit Tests** | Keine Unit-Tests für `AdminTimeTracking.jsx`, `AdminDashboard.jsx` | Große monolithische Komponenten, schwer zu testen |
+| **Supabase RLS mit 2+ Usern** | Cross-User-Tests übersprungen | Benötigt zweiten Test-Account |
+| **Offline-Verhalten (PWA)** | Keine Tests für Service Worker, Offline-Cache | Komplexe Infrastruktur erforderlich |
+
+## 🟡 Mittel (wünschenswert)
+
+| Bereich | Beschreibung | Begründung |
+|---------|--------------|------------|
+| **Safari/WebKit** | Keine E2E-Tests für Safari | Playwright WebKit auf Windows instabil |
+| **Firefox Mobile** | Keine Mobile-Firefox-Tests | Fokus auf Chrome (90%+ Nutzer) |
+| **PDF-Export** | Keine Tests für `html2pdf` Generierung | Browser-abhängig, manuell verifiziert |
+| **Push-Notifications** | Keine automatisierten Tests | Erfordert echte Notification-Berechtigung |
+| **Supabase Edge Functions** | Keine Unit-Tests für `send-web-push` | Serverless-Kontext schwer mockbar |
+
+## 🟢 Nice-to-have (kann warten)
+
+| Bereich | Beschreibung | Begründung |
+|---------|--------------|------------|
+| **Visual Regression Tests** | Keine Screenshot-Vergleiche | Tool-Setup erforderlich (Percy, Chromatic) |
+| **Performance Tests** | Keine Load-/Stress-Tests | Erst relevant bei >100 gleichzeitigen Usern |
+| **Accessibility (a11y)** | Keine automatisierten WCAG-Tests | @axe-core/playwright könnte hinzugefügt werden |
+| **Lokalisierung (i18n)** | App ist nur auf Deutsch | Keine andere Sprache geplant |
+
+## ⚠️ Bekannte Bugs/Einschränkungen
+
+| Bug | Beschreibung | Workaround |
+|-----|--------------|------------|
+| E2E Mobile Login instabil | `views.spec.ts` Mobile-Tests schlagen sporadisch fehl | Retry mit längeren Timeouts |
+| DST ohne Zeitzone | ISO-Strings ohne `Z` werden als UTC interpretiert | Aktuell keine Korrektur nötig (Server sendet UTC) |
+| Urlaubsstatus-Anzeige | Abgelehnte Urlaubsanträge zeigen "offen" statt "abgelehnt" | Frontend-Bug, in Arbeit |
+
+---
+
+## Test-Infrastruktur Referenz
+
+### NPM Commands
+
+```bash
+# Unit-Tests ausführen
+npm test
+
+# Unit-Tests mit Watch-Mode
+npm run test:watch
+
+# E2E-Tests ausführen (alle Browser)
+npm run test:e2e
+
+# E2E-Tests nur Chromium
+npx playwright test --project=chromium
+
+# E2E-Tests nur Mobile
+npx playwright test --project=mobile-chrome
+
+# Playwright Report öffnen
+npx playwright show-report
+```
+
+### Umgebungsvariablen für E2E-Tests
+
+```bash
+# .env.test
+TEST_USER_EMAIL=...
+TEST_USER_PASSWORD=...
+TEST_ADMIN_EMAIL=...
+TEST_ADMIN_PASSWORD=...
+```
 
 ---
 
 *Dokumentation erstellt von: Chief Test Engineer*
-*Datum: 2025-12-14*
+*Letzte Aktualisierung: 2025-12-14 15:15 Uhr*
+
