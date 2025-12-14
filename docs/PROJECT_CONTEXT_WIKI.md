@@ -45,12 +45,23 @@
     *   Stellt `user`, `role`, `isAdmin`, **`passwordSet`** bereit.
 *   **Haupt-Komponenten:**
     *   `src/components/Login.jsx`: Login-Screen (PW + Magic Link).
-    *   **`src/components/SetPassword.jsx`**: (NEU) Zwingt neue User beim ersten Login zum Setzen eines Passworts.
-    *   `src/components/RosterFeed.jsx`: Hauptansicht Dienstplan.
-    *   `src/components/TimeTracking.jsx`: Zeiterfassung für Mitarbeiter.
-    *   `src/components/AdminDashboard.jsx`: User-Management (ruft Edge Function).
+    *   **`src/components/SetPassword.jsx`**: Zwingt neue User beim ersten Login zum Setzen eines Passworts.
+    *   `src/components/RosterFeed.jsx`: Hauptansicht Dienstplan (~804 Zeilen).
+    *   `src/components/TimeTracking.jsx`: Zeiterfassung für Mitarbeiter (~996 Zeilen).
+    *   **`src/components/AdminDashboard.jsx`**: Tab-Container (~49 Zeilen nach Refactoring 14.12.2025).
     *   `src/components/AdminTimeTracking.jsx`: Kontrolle der Stunden durch Admins.
     *   `src/components/Profile.jsx`: User-Profil, PW-Änderung, Stats.
+
+### Admin-Komponenten (Extrahiert 14.12.2025)
+*   `src/components/admin/AdminEmployees.jsx` (490 Zeilen): Mitarbeiter-Verwaltung, Einladungen.
+*   `src/components/admin/AdminAbsences.jsx` (310 Zeilen): Urlaubsanträge genehmigen, PDF-Export.
+*   `src/components/admin/AdminSickLeaves.jsx` (72 Zeilen): Krankmeldungen anzeigen.
+*   `src/components/admin/AdminAuditLog.jsx` (120 Zeilen): Audit-Trail Ansicht.
+*   `src/components/admin/AdminRoster.jsx` (21 Zeilen): Dienstplan-Navigation.
+
+### Modal-Komponenten (Extrahiert 14.12.2025)
+*   `src/components/SickReportModal.jsx` (61 Zeilen): Krankmeldungs-Modal.
+*   `src/components/MonthSettingsModal.jsx` (92 Zeilen): Admin Monats-Einstellungen.
 
 ### State Management
 *   **React Context:** `AuthContext` für User-Session.
@@ -147,4 +158,35 @@ npx wrangler pages deploy dist --project-name=wobeapp
 *   ✅ **Funktionalität:** Core-Features & Admin-Tools abgenommen.
 
 👉 *Details siehe `docs/IT_REVIEW_SUMMARY.md`*
+
+## 13. REFACTORING (Session 14.12.2025)
+
+**Ziel:** Reduktion der Dateigröße durch Extraktion von Subkomponenten für bessere Wartbarkeit.
+
+### AdminDashboard.jsx Refactoring
+| Vorher | Nachher | Einsparung |
+|--------|---------|------------|
+| 1013 Zeilen | 49 Zeilen | **-964 Zeilen (-95%)** |
+
+**Extrahierte Komponenten:**
+*   `admin/AdminAuditLog.jsx` - Audit-Log Ansicht
+*   `admin/AdminSickLeaves.jsx` - Krankmeldungs-Übersicht
+*   `admin/AdminRoster.jsx` - Dienstplan-Tab (Placeholder)
+*   `admin/AdminEmployees.jsx` - Mitarbeiter-Verwaltung inkl. Einladungen
+*   `admin/AdminAbsences.jsx` - Urlaubsanträge + PDF-Export
+
+### RosterFeed.jsx Refactoring
+| Vorher | Nachher | Einsparung |
+|--------|---------|------------|
+| 919 Zeilen | 804 Zeilen | **-115 Zeilen (-13%)** |
+
+**Extrahierte Komponenten:**
+*   `SickReportModal.jsx` - Modal für Krankmeldungen
+*   `MonthSettingsModal.jsx` - Admin-Modal für Monats-Einstellungen
+
+### Nicht refactored (zu riskant ohne Unit-Tests)
+*   `TimeTracking.jsx` (996 Zeilen) - Monolithische Struktur, enge State-Kopplung
+*   `AdminTimeTracking.jsx` (1165 Zeilen) - Ähnliche Problematik
+
+**Empfehlung für Zukunft:** Vor Refactoring dieser Komponenten Unit-Tests schreiben.
 
