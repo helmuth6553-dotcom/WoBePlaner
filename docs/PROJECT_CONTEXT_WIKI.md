@@ -124,3 +124,27 @@ Die Anwendung ist funktional vollständig und sicherheitstechnisch gehärtet. De
     *   Dropdown-Menü zeigt jetzt Status des Monats (✅, 🟡, ⚪).
 *   ✅ **Dokumentation:**
     *   `docs/RULES_OF_TIME.md` massiv erweitert (Feiertage, Gesamtformel, Beispiele).
+
+## 11. DEPLOYMENT
+
+Der Deployment-Prozess ist via Workflow-Skript automatisiert (`.agent/workflows/deploy.md`).
+
+**Manueller Befehl (Cloudflare Pages):**
+```bash
+npx wrangler pages deploy dist --project-name=wobeapp
+```
+*Achtung: Projekt-Name ist `wobeapp`, nicht `wobeplaner`!*
+
+## 12. AUDIT & RELEASE READINESS (13.12.2025)
+
+**Gesamtstatus:** ⚠️ Teilweise bereit (Critical Findings offen)
+
+*   ❌ **Release Tag:** Fehlt (v1.0.0 noch nicht gesetzt).
+*   ❌ **SEO:** `robots.txt` fehlt, Meta-Tags unvollständig.
+*   ❌ **CI/CD:** Keine automatisierte Pipeline (GitHub Actions).
+*   ⚠️ **Tests:** E2E noch nicht im Audit-Lauf bestätigt.
+*   ✅ **Security:** RLS, Auth & Secrets sind stabil.
+*   ✅ **Funktionalität:** Core-Features & Admin-Tools abgenommen.
+
+👉 *Details siehe `docs/IT_REVIEW_SUMMARY.md`*
+

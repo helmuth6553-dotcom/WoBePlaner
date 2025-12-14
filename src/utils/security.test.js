@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import { describe, it, expect, beforeAll } from 'vitest'
 import { generateReportHash } from './security'
 

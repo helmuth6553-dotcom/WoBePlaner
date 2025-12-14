@@ -1,8 +1,8 @@
 # IT-Review Zusammenfassung - Dienstplan-App
 
-**Datum:** 2025-12-11  
-**Version:** 1.0  
-**Status:** Bereit für IT-Review
+**Datum:** 2025-12-13  
+**Version:** 1.1  
+**Status:** Audit durchgeführt (Teilweise bereit)
 
 ---
 
@@ -192,4 +192,67 @@ Um sensible Gesundheitsdaten zu schützen ("Datensparsamkeit"), wurden folgende 
 
 ---
 
-*Dieses Dokument wurde automatisch generiert und sollte vor dem IT-Review manuell geprüft werden.*
+
+---
+
+## 10. Release-Checkliste (Audit 2025-12-13)
+
+### I. Code-Qualität und Build-Prozess
+| Prüfung | Status | Bemerkung |
+|---------|--------|-----------|
+| Versionskontrolle (Git Tag) | ❌ | Release-Tag (z.B. v1.0.0) fehlt noch |
+| Code Review | ⚠️ | Peer-Review Prozess muss bestätigt werden |
+| Build-Prozess (CI) | ✅ | `npm run build` läuft fehlerfrei (Vite) |
+| Minifizierung & Bündelung | ✅ | Durch Vite Production Build abgedeckt (Chunks teils groß) |
+| Bild-Optimierung | ✅ | Vite Asset Handling aktiv |
+| Abhängigkeiten-Check | ✅ | `package.json` aktuell, `package-lock.json` vorhanden |
+| Lizenz-Check | ⚠️ | Muss manuell geprüft werden |
+
+### II. Tests und Qualitätssicherung (QA)
+| Prüfung | Status | Bemerkung |
+|---------|--------|-----------|
+| Automatisierte Tests (Unit) | ✅ | 66/66 Tests bestanden (`vitest`) |
+| E2E Tests | ⚠️ | Konfiguriert, aber im Audit nicht ausgeführt |
+| Last-/Performance-Tests | ⚠️ | Nicht durchgeführt |
+| Browser-Kompatibilität | ⚠️ | Durch Playwright abdeckbar, manuell zu bestätigen |
+| Accessibility (A11y) | ⚠️ | Basic Checks ok, Audit steht aus |
+| SEO-Check | ❌ | `robots.txt` fehlt, Meta-Tags sind generisch |
+| Funktionstests (Staging) | ✅ | Manuelle Tests der Core-Features erfolgreich |
+
+### III. Infrastruktur und Konfiguration
+| Prüfung | Status | Bemerkung |
+|---------|--------|-----------|
+| Umgebungsvariablen | ✅ | `.env` Nutzung korrekt umgesetzt |
+| Secrets Management | ✅ | Keine Secrets im Code, Nutzung der Env-Vars |
+| Debug-Modus | ✅ | Production Build entfernt Debug-Infos |
+| Caching-Strategie | ✅ | Vite File-Hashing für Cache-Busting aktiv |
+| Infrastruktur | ✅ | Cloudflare Pages + Supabase (Managed) |
+| Datenbank-Migrationen | ✅ | SQL-Files in `migrations/` vorhanden |
+
+### IV. Sicherheit
+| Prüfung | Status | Bemerkung |
+|---------|--------|-----------|
+| HTTPS/SSL | ✅ | Durch Cloudflare Pages erzwungen |
+| HTTP-Redirect | ✅ | Automatisch durch Cloudflare |
+| Sicherheits-Header | ⚠️ | Standard Cloudflare Header, keine `_headers` Config |
+| Rate Limiting | ✅ | Supabase Auth Rate Limits aktiv |
+| Input Validation | ✅ | Via React & RLS Policies gesichert |
+| Admin-Zugriff | ✅ | Durch RLS `is_admin` Policy strikt getrennt |
+
+### V. Deployment und Rollback
+| Prüfung | Status | Bemerkung |
+|---------|--------|-----------|
+| CI/CD-Pipeline | ❌ | Keine GitHub Actions/GitLab CI Config vorhanden |
+| Zero-Downtime | ✅ | Atomic Deploys via Cloudflare Pages |
+| Backups | ✅ | Supabase Point-in-Time Recovery (Managed) |
+
+### VI. Monitoring und Nachbereitung
+| Prüfung | Status | Bemerkung |
+|---------|--------|-----------|
+| Logging | ⚠️ | Nur Client-Side Console Errors (Standard) |
+| APM/Metriken | ❌ | Kein Sentry/LogRocket o.ä. integriert |
+| Cache löschen | ✅ | Automatisch bei neuem Deployment (Hash-Namen) |
+
+---
+
+*Dieses Dokument wurde automatisch generiert und aktualisiert am 13.12.2025.*

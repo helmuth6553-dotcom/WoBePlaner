@@ -153,7 +153,7 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         }
     })
 
-    const currentDiffMinutes = (actualMinutes + vacationMinutes) - targetMinutes
+
 
 
     // --- 2. Carryover (Past) ---
