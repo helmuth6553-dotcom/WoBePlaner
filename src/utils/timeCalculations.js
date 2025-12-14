@@ -24,7 +24,31 @@ export const calculateWorkHours = (startIso, endIso, type, interruptions = []) =
     const start = new Date(startIso)
     const end = new Date(endIso)
 
-    // 1. Base Duration
+    // ==========================================================================
+    // DST (DAYLIGHT SAVING TIME) HANDLING
+    // ==========================================================================
+    // JavaScript Date() parst ISO-Strings ohne Zeitzone als LOKALE Zeit.
+    // Das bedeutet: new Date('2025-03-30T02:30:00') wird auf Systemen mit 
+    // Europe/Vienna Zeitzone automatisch als ungültig erkannt (diese Zeit existiert nicht!)
+    // 
+    // Die Funktion differenceInMinutes() von date-fns rechnet mit den tatsächlichen
+    // Millisekunden zwischen den Zeitpunkten, was DST automatisch berücksichtigt:
+    // - März (Spring Forward): 02:00→03:00 = 1h weniger in der Nacht
+    // - Oktober (Fall Back): 03:00→02:00 = 1h mehr in der Nacht
+    //
+    // HINWEIS: Das Verhalten ist SYSTEMABHÄNGIG (basiert auf der lokalen Zeitzone).
+    // Auf einem Server in UTC würde keine DST-Korrektur erfolgen!
+    // Für produktionskritische Anwendungen sollte date-fns-tz verwendet werden.
+    // ==========================================================================
+
+    // Optional: Explizite DST-Offset-Prüfung für Debugging/Logging
+    const startOffset = start.getTimezoneOffset() // in Minuten (z.B. -60 für CET, -120 für CEST)
+    const endOffset = end.getTimezoneOffset()
+    const dstDifferenceMinutes = startOffset - endOffset // Positiv = Zeit "verloren", Negativ = Zeit "gewonnen"
+
+    // Für Debugging: console.log(`DST Check: Start offset ${startOffset}, End offset ${endOffset}, Diff ${dstDifferenceMinutes} min`)
+
+    // 1. Base Duration - differenceInMinutes berücksichtigt bereits DST korrekt!
     let totalMinutes = differenceInMinutes(end, start)
 
     // If not ND, simple diff

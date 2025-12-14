@@ -18,6 +18,14 @@ import { test, expect, Page } from '@playwright/test';
 
 async function login(page: Page, email: string, password: string): Promise<boolean> {
     await page.goto('/');
+
+    // Wait for splash screen to disappear (app shows splash for 2 seconds)
+    // The login form has the email input field
+    await page.waitForSelector('input[type="email"]', { timeout: 10000 });
+
+    // Small extra wait to ensure form is fully interactive
+    await page.waitForTimeout(500);
+
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill(password);
     await page.getByRole('button', { name: 'Einloggen' }).click();
@@ -25,10 +33,10 @@ async function login(page: Page, email: string, password: string): Promise<boole
     try {
         // Wait for any of these indicators that login succeeded
         // Desktop: sidebar, nav
-        // Mobile: bottom nav buttons with specific names
+        // Mobile: bottom nav buttons with specific names (BottomNav component)
         await page.waitForSelector(
-            'nav, [class*="bottom-nav"], [class*="sidebar"], button:has-text("Dienstplan"), button:has-text("Zeiten")',
-            { timeout: 15000 }
+            'button:has-text("Dienstplan"), button:has-text("Zeiten"), button:has-text("Urlaub")',
+            { timeout: 20000 }
         );
         return true;
     } catch {
@@ -36,41 +44,47 @@ async function login(page: Page, email: string, password: string): Promise<boole
     }
 }
 
+
 // Navigate to a specific tab
-// Handles both desktop sidebar and mobile bottom nav/hamburger menu
+// Handles both desktop sidebar and mobile bottom navigation
+// WICHTIG: Die App verwendet KEINE Hamburger-Menü! 
+// Mobile hat BottomNav mit immer sichtbaren Buttons: Dienstplan, Zeiten, Urlaub, Profil
 async function navigateToTab(page: Page, tabName: RegExp | string, isMobile: boolean = false) {
-    // On mobile, first try to open hamburger menu if nav is hidden
-    if (isMobile) {
-        const hamburgerSelectors = [
-            '[class*="hamburger"]',
-            '[class*="menu-toggle"]',
-            'button[aria-label*="menu"]',
-            'button[aria-label*="Menu"]',
-            '[class*="mobile-menu"]',
-        ];
+    // Wait for navigation to be available
+    await page.waitForTimeout(500);
 
-        for (const selector of hamburgerSelectors) {
-            const hamburger = page.locator(selector).first();
-            if (await hamburger.isVisible({ timeout: 1000 }).catch(() => false)) {
-                await hamburger.click();
-                await page.waitForTimeout(500);
-                break;
-            }
-        }
-    }
+    // The app uses buttons for both desktop sidebar and mobile bottom nav
+    // Tab names in the app: "Dienstplan", "Zeiten", "Urlaub", "Profil", "Admin"
 
-    // Try different selectors for navigation
+    // First try: Button with exact role and name
     const tabButton = page.getByRole('button', { name: tabName });
-    if (await tabButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await tabButton.click();
+    if (await tabButton.first().isVisible({ timeout: 3000 }).catch(() => false)) {
+        await tabButton.first().click();
         await page.waitForTimeout(1000);
         return;
     }
 
-    // Try link or other elements
-    const tabLink = page.locator(`[class*="tab"]:has-text("${tabName}")`).first();
-    if (await tabLink.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await tabLink.click();
+    // Second try: Any button containing the text (case insensitive)
+    const buttonWithText = page.locator(`button:has-text("${tabName}")`).first();
+    if (await buttonWithText.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await buttonWithText.click();
+        await page.waitForTimeout(1000);
+        return;
+    }
+
+    // Third try: Look for span with text inside button (BottomNav structure)
+    const spanInsideButton = page.locator(`button span:has-text("${tabName}")`).first();
+    if (await spanInsideButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+        // Click the parent button
+        await spanInsideButton.locator('..').click();
+        await page.waitForTimeout(1000);
+        return;
+    }
+
+    // Fallback: Try clicking any element with the tab name
+    const fallback = page.locator(`text="${tabName}"`).first();
+    if (await fallback.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await fallback.click();
         await page.waitForTimeout(1000);
     }
 }
