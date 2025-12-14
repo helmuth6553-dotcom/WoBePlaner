@@ -8,7 +8,9 @@ import SwapShiftModal from './SwapShiftModal'
 import RosterLogModal from './RosterLogModal'
 import ConfirmModal from './ConfirmModal'
 import AlertModal from './AlertModal'
-import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Eye, EyeOff, Settings } from 'lucide-react'
+import SickReportModal from './SickReportModal'
+import MonthSettingsModal from './MonthSettingsModal'
+import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Settings } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, getYear, getMonth, subDays, isSameMonth, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { useHolidays } from '../hooks/useHolidays'
@@ -16,123 +18,8 @@ import { validateShiftRules as importedValidateShiftRules } from '../utils/roste
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { calculateWorkHours } from '../utils/timeCalculations'
 
-const SickReportModal = ({ isOpen, onClose, onSubmit }) => {
-    const [start, setStart] = useState('')
-    const [end, setEnd] = useState('')
-
-    if (!isOpen) return null
-
-    return (
-        <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in duration-200">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-red-600">
-                    <Thermometer /> Krankmeldung
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                    Wähle den Zeitraum deiner Krankheit. Deine Dienste werden automatisch freigegeben und als dringend markiert.
-                </p>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Von</label>
-                        <input type="date" value={start} onChange={e => setStart(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bis (einschließlich)</label>
-                        <input type="date" value={end} onChange={e => setEnd(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none" />
-                    </div>
-                    <div className="flex gap-2 pt-2">
-                        <button onClick={onClose} className="flex-1 py-2 bg-gray-100 rounded-lg font-medium hover:bg-gray-200">Abbrechen</button>
-                        <button
-                            onClick={() => onSubmit(start, end)}
-                            disabled={!start || !end}
-                            className="flex-1 py-2 bg-red-600 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-red-700 shadow-lg shadow-red-200"
-                        >
-                            Melden
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    )
-}
-
-const MonthSettingsModal = ({ isOpen, onClose, year, month, isOpenStatus, isVisibleStatus, onUpdate }) => {
-    const [localOpen, setLocalOpen] = useState(isOpenStatus)
-    const [localVisible, setLocalVisible] = useState(isVisibleStatus)
-
-    useEffect(() => {
-        setLocalOpen(isOpenStatus)
-        setLocalVisible(isVisibleStatus)
-    }, [isOpenStatus, isVisibleStatus])
-
-    if (!isOpen) return null
-
-    const handleSave = () => {
-        onUpdate(localOpen, localVisible)
-        onClose()
-    }
-
-    return (
-        <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in duration-200">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <Settings className="text-gray-400" /> Einstellungen für {month}/{year}
-                </h3>
-
-                <div className="space-y-6">
-                    {/* Toggle Open/Closed - Whole row clickable */}
-                    <div
-                        className="flex justify-between items-center p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                        onClick={() => setLocalOpen(!localOpen)}
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg transition-colors ${localOpen ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                {localOpen ? <Unlock size={20} /> : <Lock size={20} />}
-                            </div>
-                            <div>
-                                <div className="font-bold text-sm">Eintragung {localOpen ? 'Erlaubt' : 'Gesperrt'}</div>
-                                <div className="text-xs text-gray-500 mt-0.5 max-w-[180px]">
-                                    {localOpen ? 'Mitarbeiter können sich eintragen.' : 'Keine Änderungen durch Mitarbeiter.'}
-                                </div>
-                            </div>
-                        </div>
-                        <div className={`w-12 h-7 rounded-full p-1 transition-colors ${localOpen ? 'bg-green-500' : 'bg-gray-300'}`}>
-                            <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${localOpen ? 'translate-x-5' : 'translate-x-0'}`} />
-                        </div>
-                    </div>
-
-                    {/* Toggle Visible/Hidden - Whole row clickable */}
-                    <div
-                        className="flex justify-between items-center p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                        onClick={() => setLocalVisible(!localVisible)}
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg transition-colors ${localVisible ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-500'}`}>
-                                {localVisible ? <Eye size={20} /> : <EyeOff size={20} />}
-                            </div>
-                            <div>
-                                <div className="font-bold text-sm">Dienstplan {localVisible ? 'Sichtbar' : 'Versteckt'}</div>
-                                <div className="text-xs text-gray-500 mt-0.5 max-w-[180px]">
-                                    {localVisible ? 'Mitarbeiter sehen Dienste.' : 'Plan ist nur für Admins sichtbar.'}
-                                </div>
-                            </div>
-                        </div>
-                        <div className={`w-12 h-7 rounded-full p-1 transition-colors ${localVisible ? 'bg-blue-500' : 'bg-gray-300'}`}>
-                            <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${localVisible ? 'translate-x-5' : 'translate-x-0'}`} />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex gap-2 pt-6">
-                    <button onClick={onClose} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors">Abbrechen</button>
-                    <button onClick={handleSave} className="flex-1 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-colors shadow-lg">Speichern</button>
-                </div>
-            </div>
-        </div>
-    )
-}
-
 export default function RosterFeed() {
+
     const { user, isAdmin } = useAuth()
     const [shifts, setShifts] = useState([])
     const [allAbsences, setAllAbsences] = useState([])
