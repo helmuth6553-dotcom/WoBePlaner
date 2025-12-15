@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Calendar, CheckCircle, XCircle, Download, Trash2 } from 'lucide-react'
 import { format, differenceInBusinessDays } from 'date-fns'
-import { jsPDF } from 'jspdf'
 import { supabase } from '../../supabase'
 import { logAdminAction } from '../../utils/adminAudit'
+import { generateVacationRequestPDF } from '../../utils/vacationPdfGenerator'
 
 /**
  * =========================================================================
@@ -90,226 +90,86 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
 
     const generatePDF = async (req) => {
         try {
-            // --- DATA PREPARATION ---
-            const { data: signature } = await supabase.from('signatures').select('*').eq('request_id', req.id).eq('role', 'applicant').single()
+            // Fetch signature
+            const { data: signature } = await supabase
+                .from('signatures')
+                .select('*')
+                .eq('request_id', req.id)
+                .eq('role', 'applicant')
+                .single()
 
+            // Fetch approver name
             let approverName = "System Administrator"
             if (req.approved_by) {
-                const { data: approver } = await supabase.from('profiles').select('full_name, email').eq('id', req.approved_by).single()
+                const { data: approver } = await supabase
+                    .from('profiles')
+                    .select('full_name, email')
+                    .eq('id', req.approved_by)
+                    .single()
                 if (approver) approverName = approver.full_name || approver.email
             }
 
-            const doc = new jsPDF()
-            const name = req.profiles?.full_name || req.profiles?.email
-            const startDate = new Date(req.start_date)
-            const endDate = new Date(req.end_date)
-            const durationDays = differenceInBusinessDays(endDate, startDate) + 1 // +1 for inclusive
-            const companyName = "Verein zur Förderung des DOWAS Chill Out"
-
-            // Calculations
+            // Fetch vacation account data
             let yearlyEntitlement = req.profiles?.vacation_days_per_year || 25
             if (!req.profiles?.vacation_days_per_year) {
-                const { data: profile } = await supabase.from('profiles').select('vacation_days_per_year').eq('id', req.user_id).single()
-                if (profile) yearlyEntitlement = profile.vacation_days_per_year
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('vacation_days_per_year')
+                    .eq('id', req.user_id)
+                    .single()
+                if (profile) yearlyEntitlement = profile.vacation_days_per_year || 25
             }
+
+            const startDate = new Date(req.start_date)
+            const endDate = new Date(req.end_date)
             const year = startDate.getFullYear()
-            const { data: allVacations } = await supabase.from('absences').select('start_date, end_date').eq('user_id', req.user_id).eq('status', 'genehmigt').eq('type', 'Urlaub').gte('start_date', `${year}-01-01`).lte('start_date', `${year}-12-31`)
+
+            // Calculate total used vacation days this year
+            const { data: allVacations } = await supabase
+                .from('absences')
+                .select('start_date, end_date')
+                .eq('user_id', req.user_id)
+                .eq('status', 'genehmigt')
+                .eq('type', 'Urlaub')
+                .gte('start_date', `${year}-01-01`)
+                .lte('start_date', `${year}-12-31`)
+
             let daysUsedTotal = 0
-            if (allVacations) allVacations.forEach(v => { daysUsedTotal += differenceInBusinessDays(new Date(v.end_date), new Date(v.start_date)) + 1 })
-            const remainingAfter = yearlyEntitlement - daysUsedTotal
-            const remainingBefore = remainingAfter + durationDays
+            if (allVacations) {
+                allVacations.forEach(v => {
+                    daysUsedTotal += differenceInBusinessDays(new Date(v.end_date), new Date(v.start_date)) + 1
+                })
+            }
+            const remaining = yearlyEntitlement - daysUsedTotal
 
-            // --- DESIGN CONSTANTS ---
-            const successColor = [46, 125, 50] // Professional Green
-            const errorColor = [198, 40, 40] // Professional Red
-            const accentColor = [220, 220, 225] // Light Grey for backgrounds
+            // Get facility name
+            const { data: employeeProfile } = await supabase
+                .from('profiles')
+                .select('facility, department')
+                .eq('id', req.user_id)
+                .single()
+            const facilityName = employeeProfile?.facility || employeeProfile?.department || 'Chill Out'
 
-            // --- RENDER HEADER ---
-            // Clean White Header
-            doc.setTextColor(40, 40, 45) // Dark professional text
-            doc.setFont("helvetica", "bold")
-            doc.setFontSize(16)
-            doc.text(companyName, 15, 20)
-
-            doc.setFontSize(10)
-            doc.setFont("helvetica", "normal")
-            doc.setTextColor(100, 100, 100) // Grey for metadata
-            doc.text(`REF-ID: #${req.id}`, 195, 20, { align: 'right' })
-            doc.text(`Datum: ${format(new Date(), 'dd.MM.yyyy')}`, 195, 26, { align: 'right' })
-
-            // Subtle Separator Line
-            doc.setDrawColor(220, 220, 220)
-            doc.setLineWidth(0.5)
-            doc.line(15, 35, 195, 35)
-
-            // --- TITLE & STATUS ---
-            let yPos = 60
-            doc.setTextColor(0, 0, 0)
-            doc.setFont("helvetica", "bold")
-            doc.setFontSize(22)
-            doc.text("Urlaubsantrag", 15, yPos)
-
-            // Status Badge
-            const statusText = req.status.toUpperCase()
-            doc.setFontSize(10)
-            const badgeWidth = doc.getTextWidth(statusText) + 20
-
-            if (req.status === 'genehmigt') doc.setFillColor(...successColor)
-            else if (req.status === 'abgelehnt') doc.setFillColor(...errorColor)
-            else doc.setFillColor(150, 150, 150)
-
-            doc.roundedRect(195 - badgeWidth, yPos - 8, badgeWidth, 10, 2, 2, 'F')
-            doc.setTextColor(255, 255, 255)
-            doc.text(statusText, 195 - (badgeWidth / 2), yPos - 1.5, { align: 'center' })
-
-            // --- KEY INFO BOX (Grey Background) ---
-            yPos += 15
-            doc.setFillColor(...accentColor)
-            doc.roundedRect(15, yPos, 180, 25, 2, 2, 'F')
-
-            doc.setTextColor(80, 80, 80)
-            doc.setFontSize(8)
-            doc.text("MITARBEITER", 20, yPos + 8)
-            doc.text("ZEITRAUM", 90, yPos + 8)
-            doc.text("DAUER", 160, yPos + 8)
-
-            doc.setTextColor(0, 0, 0)
-            doc.setFontSize(11)
-            doc.setFont("helvetica", "bold")
-            doc.text(name, 20, yPos + 18)
-            doc.text(`${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`, 90, yPos + 18)
-            doc.setFontSize(12)
-            doc.text(`${durationDays} Tage`, 160, yPos + 18)
-
-            // --- DETAIL SECTION ---
-            yPos += 45
-            doc.setFontSize(10)
-            doc.setTextColor(0, 0, 0)
-            doc.text("Art der Abwesenheit:", 20, yPos)
-            doc.setFont("helvetica", "normal")
-            doc.text(req.type, 70, yPos)
-
-            yPos += 8
-            doc.setFont("helvetica", "bold")
-            doc.text("Personal-ID (UUID):", 20, yPos)
-            doc.setFont("helvetica", "normal")
-            doc.setFontSize(9)
-            doc.text(req.user_id, 70, yPos)
-
-            // --- VACATION ACCOUNT TABLE ---
-            yPos += 20
-            doc.setFont("helvetica", "bold")
-            doc.setFontSize(11)
-            doc.text("URLAUBSKONTO & SALDO", 20, yPos)
-
-            yPos += 5
-            // Table Header
-            doc.setFillColor(50, 50, 60) // Dark Header
-            doc.rect(20, yPos, 170, 8, 'F')
-            doc.setTextColor(255, 255, 255)
-            doc.setFontSize(9)
-            doc.text("Jahresanspruch", 25, yPos + 5.5)
-            doc.text("Resturlaub (Vorher)", 80, yPos + 5.5)
-            doc.text("Dieser Antrag", 125, yPos + 5.5)
-            doc.text("Resturlaub (Neu)", 165, yPos + 5.5)
-
-            // Table Body
-            yPos += 8
-            doc.setDrawColor(200, 200, 200)
-            doc.rect(20, yPos, 170, 10, 'S') // Border
-            doc.setTextColor(0, 0, 0)
-            doc.setFontSize(10)
-            doc.setFont("helvetica", "normal")
-
-            doc.text(`${yearlyEntitlement} Tage`, 25, yPos + 6.5)
-            doc.text(`${remainingBefore} Tage`, 80, yPos + 6.5)
-            doc.text(`- ${durationDays} Tage`, 125, yPos + 6.5)
-
-            doc.setFont("helvetica", "bold")
-            doc.text(`${remainingAfter} Tage`, 165, yPos + 6.5)
-
-            // --- APPROVAL STAMP ---
-            yPos += 30
-            doc.setFontSize(11)
-            doc.text("ENTSCHEIDUNG", 20, yPos)
-            doc.setLineWidth(0.5)
-            doc.setDrawColor(0, 0, 0)
-            doc.line(20, yPos + 2, 190, yPos + 2)
-
-            yPos += 10
-            if (req.status === 'genehmigt') {
-                doc.setFontSize(10)
-                doc.setFont("helvetica", "normal")
-                doc.text("Der oben genannte Antrag wurde formell geprüft und genehmigt.", 20, yPos)
-
-                yPos += 10
-                doc.setFont("helvetica", "bold")
-                doc.text("Genehmigt durch:", 20, yPos)
-                doc.setFont("helvetica", "normal")
-                doc.text(approverName, 60, yPos)
-
-                if (req.approved_at) {
-                    yPos += 6
-                    doc.setFont("helvetica", "bold")
-                    doc.text("Zeitstempel:", 20, yPos)
-                    doc.setFont("helvetica", "normal")
-                    doc.text(`${format(new Date(req.approved_at), 'dd.MM.yyyy')} um ${format(new Date(req.approved_at), 'HH:mm')} Uhr`, 60, yPos)
+            // Generate PDF using utility
+            generateVacationRequestPDF({
+                request: req,
+                employeeName: req.profiles?.full_name || req.profiles?.email || 'Mitarbeiter',
+                facilityName,
+                vacationAccount: {
+                    entitlement: yearlyEntitlement,
+                    remaining: remaining
+                },
+                signature: signature || null,
+                approval: {
+                    approverName,
+                    approvedAt: req.approved_at
                 }
-            } else {
-                doc.text(`Status: ${req.status}. Antrag ist wurde nicht genehmigt oder ist noch offen.`, 20, yPos)
-            }
+            })
 
-            // --- FOOTER: DIGITAL SIGNATURE (THE "SECURE" PART) ---
-            const footerY = 240
-            doc.setFillColor(245, 247, 250) // Very light blue/grey
-            doc.rect(0, footerY, 210, 60, 'F') // Full width footer background
-
-            doc.setDrawColor(200, 200, 200)
-            doc.line(0, footerY, 210, footerY)
-
-            doc.setTextColor(60, 60, 60)
-            doc.setFontSize(9)
-            doc.setFont("helvetica", "bold")
-            doc.text("ELEKTRONISCHE SIGNATUR & VALIDIERUNG", 15, footerY + 10)
-
-            if (signature) {
-                doc.addImage("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "PNG", 180, footerY + 5, 10, 10)
-
-                doc.setFontSize(8)
-                doc.setFont("helvetica", "normal")
-                doc.text("Dieses Dokument wurde kryptographisch signiert. Änderungen am Inhalt führen zur Ungültigkeit.", 15, footerY + 16)
-
-                // Tech Details Grid
-                doc.text("Signatursteller:", 15, footerY + 24)
-                doc.setFont("helvetica", "bold")
-                doc.text(name, 50, footerY + 24)
-
-                doc.setFont("helvetica", "normal")
-                doc.text("Zeitstempel (UTC):", 15, footerY + 29)
-                doc.setFont("courier", "normal")
-                doc.text(format(new Date(signature.signed_at), 'yyyy-MM-dd HH:mm:ss'), 50, footerY + 29)
-
-                doc.setFont("helvetica", "normal")
-                doc.text("Integritäts-Hash:", 15, footerY + 34)
-                doc.setFont("courier", "normal")
-                doc.setFontSize(7)
-                doc.text(signature.hash, 50, footerY + 34)
-            } else {
-                doc.setFont("helvetica", "italic")
-                doc.setTextColor(150, 0, 0)
-                doc.text("Warnung: Keine digitale Signatur in diesem Datensatz vorhanden (Legacy).", 15, footerY + 16)
-            }
-
-            // Disclaimer very bottom
-            doc.setTextColor(150, 150, 150)
-            doc.setFont("helvetica", "normal")
-            doc.setFontSize(6)
-            doc.text(`${companyName} - Internes Dokument - Maschinell erstellt`, 105, 290, { align: 'center' })
-
-            doc.save(`Urlaubsantrag_${name.replace(/\s+/g, '_')}_${req.start_date}.pdf`)
             setDownloadedIds(prev => new Set(prev).add(req.id))
         } catch (e) {
-            console.error(e); alert("Fehler beim Erstellen des PDFs: " + e.message)
+            console.error(e)
+            alert("Fehler beim Erstellen des PDFs: " + e.message)
         }
     }
 
