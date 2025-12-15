@@ -305,9 +305,7 @@ export const generateTimeReportPDF = ({
 
         yPos += 5
 
-        // Light separator
-        doc.setDrawColor(230, 230, 230)
-        doc.line(colX.anfang, yPos - 1, pageWidth - margin, yPos - 1)
+        // No separator lines between rows - they were cutting through text
     })
 
     // Final week subtotal
@@ -387,7 +385,7 @@ export const generateTimeReportPDF = ({
     doc.text(hoursToDecimal(totalBereitschaftHours), valueX, yPos)
 
     // =========================================================================
-    // DIGITAL SIGNATURE FOOTER (Compact, Font Size 6)
+    // DIGITAL SIGNATURE FOOTER (Compact, Font Size 6) - NO HANDWRITTEN SIGNATURES
     // =========================================================================
     yPos += 10
     doc.setDrawColor(0, 0, 0)
@@ -417,7 +415,7 @@ export const generateTimeReportPDF = ({
 
     yPos += 3
 
-    // Line 2: Hash
+    // Line 2: Hash (full hash on one line)
     if (statusData?.data_hash) {
         doc.setFont("courier", "normal")
         doc.text(`Hash: ${statusData.data_hash}`, margin, yPos)
@@ -437,25 +435,11 @@ export const generateTimeReportPDF = ({
     }
 
     // =========================================================================
-    // SIGNATURE LINES
-    // =========================================================================
-    yPos += 8
-    doc.setDrawColor(0, 0, 0)
-
-    // Left: Dienstnehmer
-    doc.line(margin, yPos + 8, margin + 60, yPos + 8)
-    doc.setFontSize(6)
-    doc.text("Dienstnehmer", margin, yPos + 12)
-
-    // Right: Dienstgeber
-    doc.line(pageWidth - margin - 60, yPos + 8, pageWidth - margin, yPos + 8)
-    doc.text("Dienstgeber", pageWidth - margin - 60, yPos + 12)
-
-    // =========================================================================
-    // SAVE PDF
+    // SAVE PDF (No handwritten signature lines - fully digital)
     // =========================================================================
     const filename = `Arbeitszeit_${userName.replace(/\s+/g, '_')}_${yearMonth}.pdf`
     doc.save(filename)
 
     return filename
 }
+
