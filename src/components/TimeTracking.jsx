@@ -5,7 +5,7 @@ import { format, parseISO, startOfMonth, endOfMonth, addDays, subDays, eachDayOf
 import { de } from 'date-fns/locale'
 import { CheckCircle, Save, Calendar, Download, Sun, Thermometer, ChevronRight, ChevronLeft, Users, XCircle } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
-import { generateTimeReportPDF } from '../utils/pdfGenerator'
+import { generateTimeReportPDF } from '../utils/timeReportPdfGenerator'
 import { generateReportHash } from '../utils/security'
 
 // Helper functions at module level for stable references in hooks
@@ -631,7 +631,16 @@ export default function TimeTracking() {
 
             return null
         }).filter(Boolean)
-        generateTimeReportPDF(selectedMonth, user, entriesList, monthStatus)
+
+        // Use new DOWAS template PDF generator
+        generateTimeReportPDF({
+            yearMonth: selectedMonth,
+            user: user,
+            entries: entriesList,
+            statusData: monthStatus,
+            vacationData: null, // TODO: Add vacation data if available
+            balanceData: null  // TODO: Add balance data if available
+        })
     }
 
     const isLocked = monthStatus && (monthStatus.status === 'eingereicht' || monthStatus.status === 'genehmigt')

@@ -5,7 +5,7 @@ import { de } from 'date-fns/locale'
 import { CheckCircle, XCircle, Download, FileText, Sun, Thermometer, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert, Eye, PenTool } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
-import { generateTimeReportPDF } from '../utils/pdfGenerator'
+import { generateTimeReportPDF } from '../utils/timeReportPdfGenerator'
 import { generateReportHash } from '../utils/security'
 import { logAdminAction } from '../utils/adminAudit'
 
@@ -617,7 +617,16 @@ export default function AdminTimeTracking() {
             }
         })
         const status = official ? { ...userMonthStatus, status: 'genehmigt', approved_at: new Date().toISOString() } : userMonthStatus
-        generateTimeReportPDF(selectedMonth, user, pdfEntries, status)
+
+        // Use new DOWAS template PDF generator
+        generateTimeReportPDF({
+            yearMonth: selectedMonth,
+            user: user,
+            entries: pdfEntries,
+            statusData: status,
+            vacationData: null, // TODO: Add vacation data if available
+            balanceData: null  // TODO: Add balance data if available
+        })
     }
 
 
