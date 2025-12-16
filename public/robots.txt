@@ -1,2 +1,14 @@
+# WoBePlaner - robots.txt
+# Allow all crawlers to index the public pages
+
 User-agent: *
-Disallow: /
+Allow: /
+
+# Sitemap (uncomment when deployed)
+# Sitemap: https://wobeplaner.pages.dev/sitemap.xml
+
+# Disallow admin and API routes from indexing
+Disallow: /api/
+
+# Allow search engines to cache the site
+Crawl-delay: 1

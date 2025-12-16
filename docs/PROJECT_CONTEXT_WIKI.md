@@ -151,7 +151,7 @@ npx wrangler pages deploy dist --project-name=wobeapp
 **Gesamtstatus:** ⚠️ Teilweise bereit (Critical Findings offen)
 
 *   ❌ **Release Tag:** Fehlt (v1.0.0 noch nicht gesetzt).
-*   ❌ **SEO:** `robots.txt` fehlt, Meta-Tags unvollständig.
+*   ✅ **SEO:** `robots.txt` korrekt, Meta-Tags vollständig, Open Graph Tags vorhanden.
 *   ✅ **CI/CD:** GitHub Actions Pipeline implementiert (Lint, Build, Test, Security).
 *   ⚠️ **Tests:** E2E noch nicht im Audit-Lauf bestätigt.
 *   ✅ **Security:** RLS, Auth & Secrets sind stabil. Dependabot aktiv.

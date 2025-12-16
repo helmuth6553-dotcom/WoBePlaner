@@ -606,7 +606,7 @@ export default function AdminTimeTracking() {
         // PDF Gen needs 'shifts' object usually, we simulate it for Absences to prevent crash
         const pdfEntries = entries.map(e => {
             if (e.shifts) return e
-            // Mock shift for absence
+            // Create virtual shift object for absence entries (required by PDF generator)
             const isSick = e.absences?.type === 'Krank' || e.absences?.type === 'Krankenstand'
             return {
                 ...e,
