@@ -17,6 +17,12 @@ on:
   # Allow manual trigger
   workflow_dispatch:
 
+# Security: Explicit permissions (principle of least privilege)
+# Default to read-only, jobs request additional permissions as needed
+permissions:
+  contents: read
+  actions: read
+
 env:
   NODE_VERSION: '20'
 

@@ -8,15 +8,16 @@ on:
   # Run weekly on Sundays at 6 AM
   schedule:
     - cron: '0 6 * * 0'
-  # Allow manual trigger
+  # Allow manual trigger (no inputs for security - R-DB9E0)
   workflow_dispatch:
-    inputs:
-      url:
-        description: 'URL to audit (defaults to production)'
-        required: false
-        default: 'https://wobeplaner.pages.dev'
+
+# Security: Explicit permissions (principle of least privilege) - R-B9218
+permissions:
+  contents: read
+  actions: read
 
 env:
+  # Hardcoded URL prevents build manipulation via workflow_dispatch inputs
   PRODUCTION_URL: 'https://wobeplaner.pages.dev'
 
 jobs:
@@ -37,7 +38,7 @@ jobs:
 
       - name: Run Lighthouse audit
         run: |
-          lhci autorun --collect.url="${{ github.event.inputs.url || env.PRODUCTION_URL }}" \
+          lhci autorun --collect.url="${{ env.PRODUCTION_URL }}" \
             --collect.numberOfRuns=3 \
             --assert.preset=lighthouse:recommended \
             --upload.target=temporary-public-storage
