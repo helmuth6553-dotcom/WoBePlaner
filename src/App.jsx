@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
 import Login from './components/Login'
 import SetPassword from './components/SetPassword'
@@ -63,25 +63,26 @@ function AppContent() {
   )
 }
 
-export default function App() {
-  const [showSplash, setShowSplash] = useState(true)
+// Wrapper component that shows splash while auth is loading
+function AuthenticatedApp() {
+  const { loading } = useAuth()
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 2000)
-    return () => clearTimeout(timer)
-  }, [])
-
-  if (showSplash) {
+  // Show splash screen only while auth is loading
+  if (loading) {
     return <SplashScreen />
   }
 
+  return <AppContent />
+}
+
+export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
         <Routes>
           <Route path="/impressum" element={<Impressum />} />
           <Route path="/datenschutz" element={<Datenschutz />} />
-          <Route path="/*" element={<AppContent />} />
+          <Route path="/*" element={<AuthenticatedApp />} />
         </Routes>
       </AuthProvider>
     </ErrorBoundary>
