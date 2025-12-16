@@ -146,18 +146,21 @@ npx wrangler pages deploy dist --project-name=wobeapp
 ```
 *Achtung: Projekt-Name ist `wobeapp`, nicht `wobeplaner`!*
 
-## 12. AUDIT & RELEASE READINESS (13.12.2025)
+## 12. AUDIT & RELEASE READINESS (16.12.2025)
 
 **Gesamtstatus:** ⚠️ Teilweise bereit (Critical Findings offen)
 
 *   ❌ **Release Tag:** Fehlt (v1.0.0 noch nicht gesetzt).
 *   ❌ **SEO:** `robots.txt` fehlt, Meta-Tags unvollständig.
-*   ❌ **CI/CD:** Keine automatisierte Pipeline (GitHub Actions).
+*   ✅ **CI/CD:** GitHub Actions Pipeline implementiert (Lint, Build, Test, Security).
 *   ⚠️ **Tests:** E2E noch nicht im Audit-Lauf bestätigt.
-*   ✅ **Security:** RLS, Auth & Secrets sind stabil.
+*   ✅ **Security:** RLS, Auth & Secrets sind stabil. Dependabot aktiv.
 *   ✅ **Funktionalität:** Core-Features & Admin-Tools abgenommen.
+*   ✅ **Error-Tracking:** Sentry.io integriert (DSGVO-konform).
+*   ✅ **Performance:** Lighthouse Audit Workflow eingerichtet.
 
 👉 *Details siehe `docs/IT_REVIEW_SUMMARY.md`*
+
 
 ## 13. REFACTORING (Session 14.12.2025)
 

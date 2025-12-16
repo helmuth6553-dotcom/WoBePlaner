@@ -4,6 +4,10 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 
+// Initialize Sentry error tracking BEFORE React renders
+import { initSentry } from './lib/sentry.js'
+initSentry()
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>

@@ -2,13 +2,17 @@
  * PRODUCTION MONITORING & ERROR TRACKING
  * 
  * Utility module for production bug monitoring.
+ * Now integrated with Sentry for error tracking.
  * 
  * Features:
  * 1. Balance calculation verification
  * 2. Data consistency checks
  * 3. Error boundary integration
  * 4. Performance metrics
+ * 5. Sentry integration for production error reporting
  */
+
+import { captureError, captureMessage, startTransaction } from '../lib/sentry.js'
 
 // =============================================================================
 // BALANCE VERIFICATION UTILITIES
@@ -187,10 +191,20 @@ export function productionLog(level, category, message, data = null) {
         console.log(`[${level}] [${category}] ${message}`, data)
     }
 
-    // In production: could send to external service
-    // Examples: Sentry, LogRocket, custom API endpoint
-    if (process.env.NODE_ENV === 'production' && level === 'ERROR') {
-        // sendToErrorTracking(logEntry)
+    // In production: send to Sentry
+    if (process.env.NODE_ENV === 'production') {
+        if (level === 'ERROR') {
+            captureError(new Error(message), {
+                tags: { category },
+                extra: data,
+                level: 'error',
+            })
+        } else if (level === 'WARNING') {
+            captureMessage(message, 'warning', {
+                tags: { category },
+                extra: data,
+            })
+        }
     }
 
     return logEntry
@@ -222,11 +236,12 @@ export function endPerfTimer(name) {
     performanceMarks[name].end = performance.now()
     performanceMarks[name].duration = performanceMarks[name].end - performanceMarks[name].start
 
-    // Log if slow
+    // Log if slow - also report to Sentry
     if (performanceMarks[name].duration > 1000) {
-        productionLog('WARNING', 'PERFORMANCE', `Slow operation: ${name}`, {
-            duration: `${performanceMarks[name].duration.toFixed(2)}ms`
-        })
+        const warningMessage = `Slow operation: ${name}`
+        const perfData = { duration: `${performanceMarks[name].duration.toFixed(2)}ms` }
+
+        productionLog('WARNING', 'PERFORMANCE', warningMessage, perfData)
     }
 
     return performanceMarks[name].duration

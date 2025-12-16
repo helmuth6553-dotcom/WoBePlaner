@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from './supabase'
+import { setUserContext, clearUserContext, addBreadcrumb } from './lib/sentry.js'
 
 const AuthContext = createContext()
 
@@ -68,6 +69,11 @@ export const AuthProvider = ({ children }) => {
                     setUser(session?.user ?? null)
                     if (session?.user) {
                         await fetchRole(session.user.id)
+                        // Set Sentry user context for error tracking
+                        setUserContext(session.user)
+                        addBreadcrumb('auth', 'User logged in')
+                    } else {
+                        clearUserContext()
                     }
                 }
             } catch (error) {
@@ -86,8 +92,13 @@ export const AuthProvider = ({ children }) => {
                 setUser(session?.user ?? null)
                 if (session?.user) {
                     fetchRole(session.user.id)
+                    // Update Sentry user context
+                    setUserContext(session.user)
+                    addBreadcrumb('auth', `Auth state changed: ${_event}`)
                 } else {
                     setRole(null)
+                    clearUserContext()
+                    addBreadcrumb('auth', 'User logged out')
                 }
                 setLoading(false)
             }

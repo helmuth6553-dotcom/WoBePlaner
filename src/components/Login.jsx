@@ -95,6 +95,19 @@ export default function Login() {
                     </div>
                 </div>
             </form>
+
+            {/* Sentry Test Button - Only in Development */}
+            {import.meta.env.DEV && (
+                <button
+                    onClick={() => {
+                        throw new Error('This is your first Sentry test error!');
+                    }}
+                    className="fixed bottom-16 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition-colors shadow-lg"
+                >
+                    🧪 Test Sentry Error
+                </button>
+            )}
+
             <div className="fixed bottom-4 text-center w-full text-xs text-gray-400 space-x-4">
                 <Link to="/impressum" className="hover:text-gray-600">Impressum</Link>
                 <span>•</span>

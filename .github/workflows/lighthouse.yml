@@ -1,0 +1,103 @@
+# Lighthouse Performance Audit
+# Runs weekly to track performance metrics
+# Also runs on-demand via workflow_dispatch
+
+name: Lighthouse Audit
+
+on:
+  # Run weekly on Sundays at 6 AM
+  schedule:
+    - cron: '0 6 * * 0'
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL to audit (defaults to production)'
+        required: false
+        default: 'https://wobeplaner.pages.dev'
+
+env:
+  PRODUCTION_URL: 'https://wobeplaner.pages.dev'
+
+jobs:
+  lighthouse:
+    name: 📊 Lighthouse Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli
+
+      - name: Run Lighthouse audit
+        run: |
+          lhci autorun --collect.url="${{ github.event.inputs.url || env.PRODUCTION_URL }}" \
+            --collect.numberOfRuns=3 \
+            --assert.preset=lighthouse:recommended \
+            --upload.target=temporary-public-storage
+        continue-on-error: true
+
+      - name: Save Lighthouse results
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-results
+          path: .lighthouseci/
+          retention-days: 30
+
+  # Performance budget check
+  performance-budget:
+    name: ⚡ Performance Budget
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for analysis
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: 'https://placeholder.supabase.co'
+          VITE_SUPABASE_ANON_KEY: 'placeholder'
+
+      - name: Analyze bundle size
+        run: |
+          echo "📦 Bundle Size Analysis"
+          echo "========================"
+          du -sh dist/
+          echo ""
+          echo "📁 Individual chunks:"
+          ls -lhS dist/assets/*.js | head -10
+          echo ""
+          echo "🎨 CSS files:"
+          ls -lhS dist/assets/*.css 2>/dev/null || echo "No CSS files found"
+
+      - name: Check bundle size limits
+        run: |
+          # Check if main JS bundle exceeds 500KB (warning) or 1MB (error)
+          MAIN_SIZE=$(stat -f%z dist/assets/index-*.js 2>/dev/null || stat -c%s dist/assets/index-*.js)
+          MAIN_SIZE_KB=$((MAIN_SIZE / 1024))
+          
+          echo "Main bundle size: ${MAIN_SIZE_KB}KB"
+          
+          if [ $MAIN_SIZE_KB -gt 1024 ]; then
+            echo "❌ ERROR: Main bundle exceeds 1MB!"
+            exit 1
+          elif [ $MAIN_SIZE_KB -gt 500 ]; then
+            echo "⚠️ WARNING: Main bundle exceeds 500KB"
+          else
+            echo "✅ Bundle size is acceptable"
+          fi
