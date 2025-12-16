@@ -44,7 +44,7 @@ jobs:
         continue-on-error: true
 
       - name: Save Lighthouse results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lighthouse-results
           path: .lighthouseci/
