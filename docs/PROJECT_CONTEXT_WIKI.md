@@ -187,20 +187,31 @@ npx wrangler pages deploy dist --project-name=wobeapp
 *   `admin/AdminSickLeaves.jsx` - Krankmeldungs-Übersicht
 *   `admin/AdminRoster.jsx` - Dienstplan-Tab (Placeholder)
 *   `admin/AdminEmployees.jsx` - Mitarbeiter-Verwaltung inkl. Einladungen
-*   `admin/AdminAbsences.jsx` - Urlaubsanträge + PDF-Export
-
-### RosterFeed.jsx Refactoring
-| Vorher | Nachher | Einsparung |
-|--------|---------|------------|
-| 919 Zeilen | 804 Zeilen | **-115 Zeilen (-13%)** |
-
-**Extrahierte Komponenten:**
-*   `SickReportModal.jsx` - Modal für Krankmeldungen
-*   `MonthSettingsModal.jsx` - Admin-Modal für Monats-Einstellungen
-
 ### Nicht refactored (zu riskant ohne Unit-Tests)
 *   `TimeTracking.jsx` (996 Zeilen) - Monolithische Struktur, enge State-Kopplung
 *   `AdminTimeTracking.jsx` (1165 Zeilen) - Ähnliche Problematik
 
-**Empfehlung für Zukunft:** Vor Refactoring dieser Komponenten Unit-Tests schreiben.
+**Empfehlung für Zukunft:** Vor Refactoring dieser Komponenten Unit-Tests schreiben (Done: 196 Tests vorhanden).
+
+
+## 14. ROADMAP 2.0: MULTI-TENANCY & DB-SCHICHTPLAN (Next Major Step)
+
+**Ziel:** Transformation von "Single-Team App" zu "Enterprise Plattform" für mehrere Teams mit unterschiedlichen Dienstmodellen.
+
+### Phase 1: Vorbereitung & Refactoring
+*   [ ] **Zerlegung der Monolithen:** `RosterFeed.jsx` und `TimeTracking.jsx` in kleine, wartbare Komponenten splitten.
+*   [ ] **Hardcoded Logic Audit:** Identifizieren aller Stellen, wo `if (type === 'TD')` im Code steht.
+*   [ ] **Test-Härtung:** Sicherstellen, dass die 196 Tests alle Business-Regeln abdecken, bevor wir die Logik austauschen.
+
+### Phase 2: Datenbank-Erweiterung
+*   [ ] **Teams Tabelle:** Einführung von `teams` und `team_id` in allen Datentabellen.
+*   [ ] **Shift Templates:** Neue Tabelle `shift_templates` (Startzeit, Endzeit, Farbe, Pause, Kürzel) pro Team.
+*   [ ] **User Zuordnung:** `profiles` erhält `team_id`.
+
+### Phase 3: RLS & Logik-Umbau
+*   [ ] **RLS Update:** Policies anpassen auf `team_id` Prüfung (Datentrennung).
+*   [ ] **Dynamische Schicht-Logik:** Frontend lädt Schicht-Typen aus DB statt aus `constants.js`.
+*   [ ] **Admin-UI:** Neuer Bereich für Team-Admins zum Erstellen/Bearbeiten von Schicht-Modellen.
+
+**Status:** Geplant. Architektur ist "Ready".
 
