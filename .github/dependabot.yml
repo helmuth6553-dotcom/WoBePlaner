@@ -40,6 +40,10 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    # Ignore major updates (can break workflows)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
       - "github-actions"
