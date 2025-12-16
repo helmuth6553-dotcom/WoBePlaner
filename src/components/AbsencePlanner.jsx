@@ -14,6 +14,8 @@ import ActionSheet from './ActionSheet'
 import ConfirmModal from './ConfirmModal'
 import AlertModal from './AlertModal'
 import SignatureModal from './SignatureModal'
+import { useToast } from './Toast'
+import { handleError, formatSupabaseError } from '../utils/errorHandler'
 
 export default function AbsencePlanner({ initialDate }) {
     const { user, isAdmin } = useAuth()
@@ -22,6 +24,7 @@ export default function AbsencePlanner({ initialDate }) {
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { } })
     const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' })
     const [signatureConfig, setSignatureConfig] = useState({ isOpen: false, payload: null })
+    const toast = useToast()
 
     // If initialDate changes (e.g. navigation from admin dashboard), update currentMonth
     useEffect(() => {
@@ -51,10 +54,18 @@ export default function AbsencePlanner({ initialDate }) {
 
     // Daten laden
     const fetchAbsences = async () => {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('absences')
             .select('*, profiles!user_id(email, full_name)')
             .neq('type', 'Krank') // Exclude Sick Leave
+
+        if (error) {
+            // Use new error handler with toast
+            const friendlyError = handleError(error, { component: 'AbsencePlanner', action: 'fetchAbsences' })
+            toast.showError(friendlyError.title, friendlyError.message)
+            return
+        }
+
         if (data) setAbsences(data)
     }
 

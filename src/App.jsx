@@ -16,6 +16,7 @@ import SplashScreen from './components/SplashScreen'
 import Impressum from './pages/Impressum'
 import Datenschutz from './pages/Datenschutz'
 import { Routes, Route } from 'react-router-dom'
+import { ToastProvider } from './components/Toast'
 
 function AppContent() {
   const { user, isAdmin, passwordSet, refreshPasswordSet } = useAuth()
@@ -78,13 +79,15 @@ function AuthenticatedApp() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <Routes>
-          <Route path="/impressum" element={<Impressum />} />
-          <Route path="/datenschutz" element={<Datenschutz />} />
-          <Route path="/*" element={<AuthenticatedApp />} />
-        </Routes>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/impressum" element={<Impressum />} />
+            <Route path="/datenschutz" element={<Datenschutz />} />
+            <Route path="/*" element={<AuthenticatedApp />} />
+          </Routes>
+        </AuthProvider>
+      </ToastProvider>
     </ErrorBoundary>
   )
 }
