@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
+import { ShiftTemplateProvider } from './contexts/ShiftTemplateContext'
 import Login from './components/Login'
 import SetPassword from './components/SetPassword'
 import RosterFeed from './components/RosterFeed'
@@ -81,11 +82,13 @@ export default function App() {
     <ErrorBoundary>
       <ToastProvider>
         <AuthProvider>
-          <Routes>
-            <Route path="/impressum" element={<Impressum />} />
-            <Route path="/datenschutz" element={<Datenschutz />} />
-            <Route path="/*" element={<AuthenticatedApp />} />
-          </Routes>
+          <ShiftTemplateProvider>
+            <Routes>
+              <Route path="/impressum" element={<Impressum />} />
+              <Route path="/datenschutz" element={<Datenschutz />} />
+              <Route path="/*" element={<AuthenticatedApp />} />
+            </Routes>
+          </ShiftTemplateProvider>
         </AuthProvider>
       </ToastProvider>
     </ErrorBoundary>

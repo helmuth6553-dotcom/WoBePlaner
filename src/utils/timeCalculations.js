@@ -6,9 +6,9 @@ import { getHolidays, isHoliday } from './holidays'
  * 
  * Objectives:
  * 1. Calculate the active working time (End - Start).
- * 2. Handle "Night Duty" (Type: ND) where specifically defined "Readiness Time" (00:30 - 06:00) 
- *    is counted as "passive" (50% value) unless interrupted.
- * 3. Handle Interruptions during Readiness:
+ * 2. Handle shifts with "Standby Time" (e.g. ND 00:30 - 06:00) 
+ *    counted as "passive" (50% value) unless interrupted.
+ * 3. Handle Interruptions during Standby:
  *    - Interruptions are "Inflated" (minimum 30 min credit)
  *    - Overlapping interruptions are "Merged"
  *    - Interruption time is deducted from passive time and credited as active (100%).
@@ -16,9 +16,10 @@ import { getHolidays, isHoliday } from './holidays'
  * @param {string} startIso - Start timestamp
  * @param {string} endIso - End timestamp
  * @param {string} type - Shift Type (e.g. 'ND', 'Tag')
- * @param {Array} interruptions - List of active work intervals during readiness
+ * @param {Array} interruptions - List of active work intervals during standby
+ * @param {Object} template - Optional shift template with standby config (from DB)
  */
-export const calculateWorkHours = (startIso, endIso, type, interruptions = []) => {
+export const calculateWorkHours = (startIso, endIso, type, interruptions = [], template = null) => {
     if (!startIso || !endIso) return 0
 
     const start = new Date(startIso)
@@ -51,20 +52,39 @@ export const calculateWorkHours = (startIso, endIso, type, interruptions = []) =
     // 1. Base Duration - differenceInMinutes berücksichtigt bereits DST korrekt!
     let totalMinutes = differenceInMinutes(end, start)
 
-    // If not ND, simple diff
-    if (type !== 'ND') {
+    // Determine if this shift has standby time
+    // Priority: 1) Template from DB, 2) Legacy hardcoded for 'ND'
+    const hasStandby = template?.has_standby ?? (type === 'ND')
+
+    if (!hasStandby) {
         return Math.round((totalMinutes / 60) * 100) / 100
     }
 
-    // 2. Define Readiness Window (00:30 - 06:00)
+    // Get standby configuration (from template or legacy defaults for ND)
+    const standbyStartHour = template?.standby_start
+        ? parseInt(template.standby_start.split(':')[0])
+        : 0
+    const standbyStartMin = template?.standby_start
+        ? parseInt(template.standby_start.split(':')[1])
+        : 30
+    const standbyEndHour = template?.standby_end
+        ? parseInt(template.standby_end.split(':')[0])
+        : 6
+    const standbyEndMin = template?.standby_end
+        ? parseInt(template.standby_end.split(':')[1])
+        : 0
+    const standbyFactor = template?.standby_factor ?? 0.5
+    const minInterruptionMinutes = template?.interruption_min_minutes ?? 30
+
+    // 2. Define Standby/Readiness Window
     let readinessStart = new Date(start)
     if (start.getHours() >= 12) {
         readinessStart = addDays(readinessStart, 1)
     }
-    readinessStart.setHours(0, 30, 0, 0)
+    readinessStart.setHours(standbyStartHour, standbyStartMin, 0, 0)
 
     let readinessEnd = new Date(readinessStart)
-    readinessEnd.setHours(6, 0, 0, 0)
+    readinessEnd.setHours(standbyEndHour, standbyEndMin, 0, 0)
 
     // 3. Calculate Overlap with Readiness (Total Readiness Time)
     const overlapStart = max([start, readinessStart])
@@ -96,8 +116,8 @@ export const calculateWorkHours = (startIso, endIso, type, interruptions = []) =
                 const duration = differenceInMinutes(iOverlapEnd, iOverlapStart)
                 deductedReadinessMinutes += duration
 
-                // Create Inflated Interval (Start -> Max(End, Start+30))
-                const inflatedEnd = max([iOverlapEnd, addMinutes(iOverlapStart, 30)])
+                // Create Inflated Interval (Start -> Max(End, Start+minInterruptionMinutes))
+                const inflatedEnd = max([iOverlapEnd, addMinutes(iOverlapStart, minInterruptionMinutes)])
                 rawIntervals.push({ start: iOverlapStart, end: inflatedEnd })
             }
         })
@@ -139,8 +159,8 @@ export const calculateWorkHours = (startIso, endIso, type, interruptions = []) =
     // Active Work outside readiness
     const activeWorkOutsideReadiness = totalMinutes - readinessMinutes
 
-    // Total = Active Outside + Interruption Credit (Active inside) + Passive Readiness (50%)
-    const totalWeightedMinutes = activeWorkOutsideReadiness + interruptionCreditMinutes + (passiveReadinessMinutes * 0.5)
+    // Total = Active Outside + Interruption Credit (Active inside) + Passive Readiness (standbyFactor)
+    const totalWeightedMinutes = activeWorkOutsideReadiness + interruptionCreditMinutes + (passiveReadinessMinutes * standbyFactor)
 
     return Math.round((totalWeightedMinutes / 60) * 100) / 100
 }
