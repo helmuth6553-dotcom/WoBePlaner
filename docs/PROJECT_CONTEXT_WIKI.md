@@ -146,13 +146,13 @@ npx wrangler pages deploy dist --project-name=wobeapp
 ```
 *Achtung: Projekt-Name ist `wobeapp`, nicht `wobeplaner`!*
 
-## 12. AUDIT & RELEASE READINESS (16.12.2025)
+## 12. AUDIT & RELEASE READINESS (17.12.2025)
 
 **Gesamtstatus:** ✅ Produktionsbereit
 
-*   ❌ **Release Tag:** Fehlt (v1.0.0 noch nicht gesetzt).
+*   ✅ **Release Tag:** `v1.0.0-stable` gesetzt (17.12.2025) - sicherer Rollback-Punkt
 *   ✅ **SEO:** `robots.txt` korrekt, Meta-Tags vollständig, Open Graph Tags vorhanden. **Lighthouse SEO: 100/100**
-*   ✅ **CI/CD:** GitHub Actions Pipeline implementiert (Lint, Build, Test, Security). **Alle Workflows grün!**
+*   ✅ **CI/CD:** GitHub Actions Pipeline grün (Lint, Build, Test, Security). 
 *   ✅ **Tests:** **196 Tests** (Unit, Component, Edge Cases, Error Scenarios) - alle bestanden.
 *   ✅ **Security:** RLS, Auth & Secrets sind stabil. Dependabot aktiv. Rafter-Findings gefixt.
 *   ✅ **Funktionalität:** Core-Features & Admin-Tools abgenommen.
@@ -160,7 +160,7 @@ npx wrangler pages deploy dist --project-name=wobeapp
 *   ✅ **Performance:** Lighthouse Audit Workflow eingerichtet. Splash Screen optimiert.
 *   ✅ **Error Handling:** Zentraler Error Handler mit Toast-Notifications implementiert.
 
-### Test Coverage (16.12.2025)
+### Test Coverage (17.12.2025)
 | Kategorie | Anzahl |
 |-----------|--------|
 | Unit Tests (Logik) | ~120 |
@@ -194,24 +194,53 @@ npx wrangler pages deploy dist --project-name=wobeapp
 **Empfehlung für Zukunft:** Vor Refactoring dieser Komponenten Unit-Tests schreiben (Done: 196 Tests vorhanden).
 
 
-## 14. ROADMAP 2.0: MULTI-TENANCY & DB-SCHICHTPLAN (Next Major Step)
+## 14. MULTI-TENANCY (Status: PAUSIERT - 17.12.2025)
 
-**Ziel:** Transformation von "Single-Team App" zu "Enterprise Plattform" für mehrere Teams mit unterschiedlichen Dienstmodellen.
+**Ursprüngliches Ziel:** Transformation zu "Enterprise Plattform" für mehrere Teams.
 
-### Phase 1: Vorbereitung & Refactoring
-*   [ ] **Zerlegung der Monolithen:** `RosterFeed.jsx` und `TimeTracking.jsx` in kleine, wartbare Komponenten splitten.
-*   [ ] **Hardcoded Logic Audit:** Identifizieren aller Stellen, wo `if (type === 'TD')` im Code steht.
-*   [ ] **Test-Härtung:** Sicherstellen, dass die 196 Tests alle Business-Regeln abdecken, bevor wir die Logik austauschen.
+### Was wurde erreicht (Grundlage für Zukunft):
+*   ✅ **Datenbank-Schema:** `teams` und `shift_templates` Tabellen erstellt
+*   ✅ **9 Schicht-Templates** in DB migriert (TD1, TD2, ND, DBD, TEAM, FORTBILDUNG, 3 Placeholder)
+*   ✅ **Bereitschaftszeit konfigurierbar:** `has_standby`, `standby_start`, `standby_end`, `standby_factor`
+*   ✅ **Feature Flag:** `VITE_FEATURE_MULTI_TENANCY` (aktuell: `false`)
+*   ✅ **ShiftTemplateContext:** Lädt Templates aus DB oder Legacy-Defaults
+*   ✅ **timeCalculations.js:** Erweitert für flexible Standby-Konfiguration
 
-### Phase 2: Datenbank-Erweiterung
-*   [ ] **Teams Tabelle:** Einführung von `teams` und `team_id` in allen Datentabellen.
-*   [ ] **Shift Templates:** Neue Tabelle `shift_templates` (Startzeit, Endzeit, Farbe, Pause, Kürzel) pro Team.
-*   [ ] **User Zuordnung:** `profiles` erhält `team_id`.
+### Warum pausiert:
+Das Sozialarbeiter-Team hat **deutlich komplexere Berechnungsregeln**:
+- Rufbereitschaft mit unterschiedlichen Faktoren (vor/nach 22:00, Werktag/Wochenende)
+- Funktionszeiten als Overlay
+- Komplett andere Arbeitszeitmodelle
 
-### Phase 3: RLS & Logik-Umbau
-*   [ ] **RLS Update:** Policies anpassen auf `team_id` Prüfung (Datentrennung).
-*   [ ] **Dynamische Schicht-Logik:** Frontend lädt Schicht-Typen aus DB statt aus `constants.js`.
-*   [ ] **Admin-UI:** Neuer Bereich für Team-Admins zum Erstellen/Bearbeiten von Schicht-Modellen.
+**Entscheidung:** Erst in 3-5 Monaten relevant. Fokus jetzt auf WoBe-Team App.
 
-**Status:** Geplant. Architektur ist "Ready".
+### Rollback-Punkt:
+- **Git Tag:** `v1.0.0-stable`
+- Feature Flag aus → App funktioniert wie bisher
+
+👉 *Details siehe `docs/ROADMAP_2.0_IMPLEMENTATION.md` und `docs/SHIFT_LOGIC_ANALYSIS.md`*
+
+
+## 15. VERBESSERUNGSVORSCHLÄGE für WoBe-Team App
+
+### Priorität 1: Usability & UX
+*   [ ] **Offline-Modus verbessern:** PWA funktioniert offline, aber ohne Feedback
+*   [ ] **Ladezeiten optimieren:** Code-Splitting für schnelleren Initial Load
+*   [ ] **Pull-to-Refresh:** Auf mobilen Geräten zum Aktualisieren
+
+### Priorität 2: Features
+*   [ ] **Schichtübernahme vereinfachen:** 1-Klick-Übernahme bei freigewordenen Schichten
+*   [ ] **Kalender-Export:** iCal/Google Calendar Integration
+*   [ ] **Monatsübersicht drucken:** PDF-Export für Büro-Aushang
+*   [ ] **Erinnerungen:** Push-Notification X Stunden vor Schichtbeginn
+
+### Priorität 3: Admin-Features
+*   [ ] **Schichtplan-Vorlage:** Wiederkehrende Muster als Template speichern
+*   [ ] **Statistik-Dashboard:** Überstunden pro Mitarbeiter, Krankheitstage, etc.
+*   [ ] **Audit-Log erweitern:** Filtermöglichkeiten, Export
+
+### Priorität 4: Wartung & Stabilität
+*   [ ] **Lint-Warnings aufräumen:** 53 Warnings eliminieren
+*   [ ] **Mehr Unit-Tests:** Besonders für TimeTracking.jsx und AdminTimeTracking.jsx
+*   [ ] **E2E-Tests erweitern:** Kritische User-Flows automatisiert testen
 
