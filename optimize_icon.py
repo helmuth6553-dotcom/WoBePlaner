@@ -24,16 +24,19 @@ def trim_and_resize(input_path, output_dir):
             # Create a square canvas based on the largest dimension of the cropped content
             # This ensures the aspect ratio is preserved
             max_dim = max(cropped.size)
-            # Add a little padding (10%) so it's not touching the very edges
-            padding = int(max_dim * 0.1)
+            # Add padding (25%) so it breathes and doesn't look squeezed
+            padding = int(max_dim * 0.25)
             canvas_size = max_dim + (padding * 2)
             
-            # Create new blank (transparent) square image
-            square_img = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+            # Create new square image with WHITE background
+            square_img = Image.new("RGBA", (canvas_size, canvas_size), (255, 255, 255, 255))
             
             # Paste cropped logo in the center
             offset = ((canvas_size - cropped.size[0]) // 2, (canvas_size - cropped.size[1]) // 2)
-            square_img.paste(cropped, offset)
+            
+            # Use alpha composite if needed, or normal paste. 
+            # Since background is white opaque, simple paste is fine if logo has transparency.
+            square_img.paste(cropped, offset, mask=cropped if cropped.mode=='RGBA' else None)
             
             print("Generating icons...")
             
