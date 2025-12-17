@@ -24,8 +24,8 @@ def trim_and_resize(input_path, output_dir):
             # Create a square canvas based on the largest dimension of the cropped content
             # This ensures the aspect ratio is preserved
             max_dim = max(cropped.size)
-            # Add padding (25%) so it breathes and doesn't look squeezed
-            padding = int(max_dim * 0.25)
+            # Add padding (10%) - User requested larger logo again (approx 25% larger than previous)
+            padding = int(max_dim * 0.10)
             canvas_size = max_dim + (padding * 2)
             
             # Create new square image with WHITE background
