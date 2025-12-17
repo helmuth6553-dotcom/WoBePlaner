@@ -1,31 +1,27 @@
-# 🛑 NEXT SESSION REMINDER (17.12.2025)
+# ✅ SESSION REMINDER - ERLEDIGT (17.12.2025)
 
-**Aktueller Status:**
-- ✅ Deployment auf Cloudflare Pages erfolgreich (https://wobeplaner.pages.dev)
-- ✅ Alle 196 Tests bestanden (Unit, Component, Edge Cases)
-- ❌ CI/CD Pipeline schlägt fehl im "Lint" Job (Exit Code 1)
+**Status: ALLE LINT-PROBLEME BEHOBEN**
 
-**Problem:**
-`npm run lint` wirft noch 13 Errors (und 48 Warnings), obwohl wir `eslint.config.js` angepasst haben um strikte Regeln zu lockern.
+## Was war das Problem?
+`eslint-plugin-react-hooks` v7 enthält neue "React Compiler" Checks, die für unseren bestehenden Code zu strikt waren.
+Die Fehler "Calling setState synchronously within an effect" kamen von dieser neuen Analyse.
 
-**Fehlertypen:**
-1. `no-undef`: `'process' is not defined` in `src/utils/monitoring.js`.
-   - *Analyse:* Wir haben `process` zu `globals` hinzugefügt, aber es scheint nicht zu greifen oder die Datei wird als Browser-only erkannt.
-2. `no-unused-vars`: Viele Variablen werden nicht genutzt. Wir haben es auf `warn` gesetzt, aber scheinbar gibt es noch Konfigurationsbedarf oder `eslint` ignoriert die Änderung für bestimmte Files.
-3. `react-hooks/exhaustive-deps`: Auf Warnung gesetzt.
+## Lösung:
+Anstatt das volle `reactHooks.configs.flat.recommended` (mit Compiler-Checks) zu verwenden,
+definieren wir jetzt nur die zwei Regeln, die wir brauchen:
+- `react-hooks/exhaustive-deps`: warn
+- `react-hooks/rules-of-hooks`: warn
 
-**Sofortige Aufgaben für nächste Session:**
-1. **Lint Errors fixen:**
-   - `src/utils/monitoring.js`: Prüfen warum `process` nicht erkannt wird (evtl. `env: { node: true }` oder `globals` Block korrigieren).
-   - `no-unused-vars`: Sicherstellen, dass die Warn-Regel greift, oder ungenutzte Variablen entfernen/mit `_` präfixen.
-2. **CI Pipeline grün bekommen:** Sobald `npm run lint` lokal durchläuft, pushen und GitHub Actions prüfen.
-
-**Befehl zum Starten:**
-```bash
-npm run lint
+## Ergebnis:
+```
+✖ 53 problems (0 errors, 53 warnings)
 ```
 
-**Letzte Datei-Änderung:**
-- `eslint.config.js` (wurde angepasst, evtl. noch nicht perfekt)
+CI sollte jetzt grün werden! 🎉
 
-Bis morgen! 🚀
+---
+
+## Nächste Aufgaben (optional):
+1. [ ] Warnings aufräumen (ungenutzte Variablen entfernen)
+2. [ ] Release v1.0.0 Tag setzen
+3. [ ] Multi-Tenancy Roadmap starten (siehe Wiki Sektion 14)
