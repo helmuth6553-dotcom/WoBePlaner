@@ -5,7 +5,6 @@ import { de } from 'date-fns/locale'
 import { CheckCircle, XCircle, Download, FileText, Sun, Thermometer, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert, Eye, PenTool } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
-import { generateTimeReportPDF } from '../utils/timeReportPdfGenerator'
 import { generateReportHash } from '../utils/security'
 import { logAdminAction } from '../utils/adminAudit'
 
@@ -601,7 +600,7 @@ export default function AdminTimeTracking() {
         }
     }
 
-    const generatePDF = (official = false) => {
+    const generatePDF = async (official = false) => {
         const user = users.find(u => u.id === selectedUserId)
         // PDF Gen needs 'shifts' object usually, we simulate it for Absences to prevent crash
         const pdfEntries = entries.map(e => {
@@ -618,7 +617,8 @@ export default function AdminTimeTracking() {
         })
         const status = official ? { ...userMonthStatus, status: 'genehmigt', approved_at: new Date().toISOString() } : userMonthStatus
 
-        // Use new DOWAS template PDF generator
+        // Lazy load PDF generator only when needed (saves ~611KB on initial load)
+        const { generateTimeReportPDF } = await import('../utils/timeReportPdfGenerator')
         generateTimeReportPDF({
             yearMonth: selectedMonth,
             user: user,

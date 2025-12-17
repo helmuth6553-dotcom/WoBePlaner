@@ -5,7 +5,6 @@ import { format, parseISO, startOfMonth, endOfMonth, addDays, subDays, eachDayOf
 import { de } from 'date-fns/locale'
 import { CheckCircle, Save, Calendar, Download, Sun, Thermometer, ChevronRight, ChevronLeft, Users, XCircle } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
-import { generateTimeReportPDF } from '../utils/timeReportPdfGenerator'
 import { generateReportHash } from '../utils/security'
 
 // Helper functions at module level for stable references in hooks
@@ -600,7 +599,7 @@ export default function TimeTracking() {
         setIsSubmitting(false)
     }
 
-    const handleDownloadPDF = () => {
+    const handleDownloadPDF = async () => {
         const entriesList = items.map(item => {
             const entry = entries[item.id]
 
@@ -632,7 +631,8 @@ export default function TimeTracking() {
             return null
         }).filter(Boolean)
 
-        // Use new DOWAS template PDF generator
+        // Lazy load PDF generator only when needed (saves ~611KB on initial load)
+        const { generateTimeReportPDF } = await import('../utils/timeReportPdfGenerator')
         generateTimeReportPDF({
             yearMonth: selectedMonth,
             user: user,
