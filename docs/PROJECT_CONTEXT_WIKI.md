@@ -206,6 +206,17 @@ npx wrangler pages deploy dist --project-name=wobeapp
 *   ✅ **ShiftTemplateContext:** Lädt Templates aus DB oder Legacy-Defaults
 *   ✅ **timeCalculations.js:** Erweitert für flexible Standby-Konfiguration
 
+### Besondere Berechnungs-Regeln
+
+**1. Schicht-Interessen ("Who can?")**
+Das System nutzt eine "Selbstorganisierte Zuweisung":
+*   **Interesse bekunden (Klick auf Dienst):** Mitarbeiter signalisiert "Ich kann".
+*   **Sofortige Berechnung:** Die Stunden des Dienstes werden dem Konto des interessierten Mitarbeiters **sofort** gutgeschrieben (Prognose).
+*   **Mehrfache Interessenten:** Wenn 3 Leute klicken, bekommen alle 3 die Stunden vorläufig gutgeschrieben.
+*   **Finalisierung:** In der Teamsitzung wird entschieden. Die 2 Personen, die den Dienst *nicht* machen, klicken erneut (Interesse entfernen) -> Stunden werden wieder abgezogen. Der finalen Person bleiben die Stunden.
+*   *Fazit:* Keine harte "Zuweisung" durch Admin nötig für die Berechnung. Admin sperrt den Monat am Ende nur, um Änderungen zu verhindern.
+
+**2. Krankmeldung (Spezialfall)**
 ### Warum pausiert:
 Das Sozialarbeiter-Team hat **deutlich komplexere Berechnungsregeln**:
 - Rufbereitschaft mit unterschiedlichen Faktoren (vor/nach 22:00, Werktag/Wochenende)
