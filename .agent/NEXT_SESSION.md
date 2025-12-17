@@ -2,79 +2,46 @@
 
 ## 📅 Letzte Session: 17.12.2025
 
-### ✅ Was erreicht wurde:
+### ✅ Erreichte Meilensteine:
 
-#### CI/CD Fixes
-- DST-Test für CI (UTC vs. Vienna Zeitzone) gefixt
-- CI Pipeline ist GRÜN (196 Tests bestanden)
+#### 1. App-Experience & Design
+- **PWA Icon perfektioniert:** Neues Skript (`optimize_icon.py`) erstellt, das automatisch Ränder entfernt und das Logo maximiert. Icon ist jetzt randlos, weiß hinterlegt und füllt den Frame perfekt aus.
+- **Ladezeit optimiert:** PDF-Generator (600KB) wird jetzt lazy geladen (erst beim Klick), was den App-Start auf Handys massiv beschleunigt.
 
-#### Performance & Features (17.12.2025)
-- **PDF Generator optimiert:** Lazy-Loading implementiert (spart 600KB beim Start)
-- **Kalender Export:** iCal (.ics) Download für Mitarbeiter
-  - Inkl. 1h Erinnerung vor Dienstbeginn
-  - Exportiert Dienste + Team-Meetings + Fortbildungen
+#### 2. Neue Features
+- **Kalender-Export (iCal):** Mitarbeiter können ihre Dienste in den privaten Kalender (iOS/Google/Outlook) exportieren.
+  - Button im "Mein Dienstplan" Header (blaues Kalender-Icon).
+  - Automatische 1h Erinnerung vor jedem Dienst.
+  - Inkludiert Dienste, Team-Meetings und Fortbildungen.
 
-#### Multi-Tenancy Grundlage (PAUSIERT)
-- **Git Tag `v1.0.0-stable`** als Rollback-Punkt
-- **Feature Flag `VITE_FEATURE_MULTI_TENANCY`** vorbereitet (aktuell: aus)
-- **Datenbank erweitert:**
-  - `teams` Tabelle erstellt
-  - `shift_templates` Tabelle mit 9 Templates
-  - Bereitschaftszeit konfigurierbar (standby_start, standby_end, standby_factor)
-- **ShiftTemplateContext** erstellt (lädt aus DB oder Legacy)
-- **timeCalculations.js** erweitert für flexible Standby-Zeiten
-
-#### Entscheidung: Multi-Tenancy pausiert
-Das Sozialarbeiter-Team (mögliche Expansion in 3-5 Monaten) hat deutlich 
-komplexere Regeln (Rufbereitschaft mit variablen Faktoren, Funktionszeiten).
-Fokus jetzt auf WoBe-Team App stabilisieren.
+#### 3. Stabilität
+- **Vollständiges Deployment:** App ist live auf Cloudflare Pages.
+- **Tests:** Alle 196 Tests bestanden (CI grün).
 
 ---
 
-## 🎯 Nächste Schritte (empfohlen)
+## 🎯 Nächste Schritte
 
-### Priorität 1: Usability
-- [x] Pull-to-Refresh für mobile Geräte (Bereits integriert)
-- [ ] Offline-Modus Feedback verbessern
-- [x] Ladezeiten optimieren (PDF Generator Code-Splitting)
+### Priorität 1: Usability & Offline
+- [ ] **Offline-Modus Feedback:** Bessere UI-Anzeige, wenn der User offline ist (z.B. grauer Balken oder "Toast" Nachricht), damit niemand denkt, die App wäre kaputt.
+- [ ] **1-Klick Schichtübernahme:** "Sofort Übernehmen" Button für offene Dienste (ohne Tausch-Anfrage), wenn der Dienst niemandem gehört.
 
-### Priorität 2: Features für User
-- [x] Kalender-Export (iCal/Google Calendar)
-- [ ] Push-Notifications vor Schichtbeginn (Native App Feature)
-- [ ] 1-Klick Schichtübernahme
+### Priorität 2: Admin Features
+- [ ] **Statistik-Dashboard:** Einfache Übersicht über Überstunden/Krankheitstage pro Jahr.
+- [ ] **Schichtplan-Vorlagen:** Ganze Wochen als "Standard" speichern und laden.
 
-### Priorität 3: Admin-Features
-- [ ] Schichtplan-Vorlage (wiederkehrende Muster)
-- [ ] Statistik-Dashboard (Überstunden, Krankheitstage)
-
-### Priorität 4: Wartung
-- [ ] 53 Lint-Warnings aufräumen
-- [ ] Mehr Unit-Tests für TimeTracking.jsx
+### Priorität 3: Wartung
+- [ ] **Lint Warnings:** 53 Warnungen im Code aufräumen.
+- [ ] **Multi-Tenancy (Pausiert):** Weiterhin auf Eis gelegt, Fokus bleibt auf WoBe App.
 
 ---
 
-## 📁 Wichtige Dateien
+## 📁 Wichtige Scripts & Tools
 
-| Datei | Beschreibung |
-|-------|--------------|
-| `docs/PROJECT_CONTEXT_WIKI.md` | Haupt-Dokumentation (aktualisiert!) |
-| `docs/ROADMAP_2.0_IMPLEMENTATION.md` | Multi-Tenancy Plan (pausiert) |
-| `docs/SHIFT_LOGIC_ANALYSIS.md` | Analyse der Schicht-Logik |
-| `docs/SUPABASE_BACKUP_GUIDE.md` | Backup-Anleitung |
-| `src/contexts/ShiftTemplateContext.jsx` | Schicht-Templates Context (neu) |
-| `src/utils/featureFlags.js` | Feature Flags (neu) |
-
----
-
-## 🔒 Sicherheitsnetze (falls etwas schiefgeht)
-
-```bash
-# Zurück zum stabilen Stand:
-git checkout v1.0.0-stable
-
-# Oder: Feature Flag ausschalten in .env:
-VITE_FEATURE_MULTI_TENANCY=false
-```
+| Skript | Beschreibung |
+|--------|--------------|
+| `python optimize_icon.py` | Generiert perfekte PWA Icons aus `public/logo2.png` (Auto-Crop + Padding) |
+| `src/utils/calendarExport.js` | Logic für iCal (.ics) Generierung |
 
 ---
 
@@ -83,8 +50,6 @@ VITE_FEATURE_MULTI_TENANCY=false
 | Metrik | Wert |
 |--------|------|
 | Tests | 196 bestanden ✅ |
-| CI | Grün ✅ |
-| Lint Errors | 0 |
-| Lint Warnings | 53 (akzeptabel) |
-| Release Tag | v1.0.0-stable |
-| Multi-Tenancy | Pausiert (Feature Flag aus) |
+| Deployment | Active (Cloudflare) 🚀 |
+| PWA Icon | Optimized (White BG, Frame-filling) |
+| Version | 1.3.0 (Kalender + Lazy PDF) |
