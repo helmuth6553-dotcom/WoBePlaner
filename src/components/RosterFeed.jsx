@@ -10,7 +10,7 @@ import ConfirmModal from './ConfirmModal'
 import AlertModal from './AlertModal'
 import SickReportModal from './SickReportModal'
 import MonthSettingsModal from './MonthSettingsModal'
-import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Settings } from 'lucide-react'
+import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Settings, Calendar } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, getYear, getMonth, subDays, isSameMonth, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { useHolidays } from '../hooks/useHolidays'
@@ -19,6 +19,7 @@ import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { calculateWorkHours } from '../utils/timeCalculations'
 import { getDefaultTimes } from '../utils/shiftDefaults'
 import PullToRefresh from './PullToRefresh'
+import { downloadICalFile } from '../utils/calendarExport'
 
 export default function RosterFeed() {
 
@@ -510,6 +511,40 @@ export default function RosterFeed() {
         setIsBalanceExpanded(!isBalanceExpanded)
     }
 
+    // Handler for calendar export
+    const handleCalendarExport = () => {
+        // Get all shifts where user is assigned or has interest (for current month view)
+        const myShiftsForMonth = shifts.filter(shift => {
+            const isMyInterest = shift.interests?.some(i => i.user_id === user.id)
+            const isMyAssignment = shift.assigned_to === user.id
+            const isTeamShift = shift.type === 'TEAM'
+            return isMyInterest || isMyAssignment || isTeamShift
+        })
+
+        if (myShiftsForMonth.length === 0) {
+            setAlertConfig({
+                isOpen: true,
+                title: 'Keine Dienste',
+                message: 'Du hast in diesem Monat keine Dienste zum Exportieren.',
+                type: 'info'
+            })
+            return
+        }
+
+        const monthName = format(currentDate, 'MMMM-yyyy', { locale: de })
+        const userName = allProfiles.find(p => p.id === user.id)?.display_name ||
+            allProfiles.find(p => p.id === user.id)?.full_name || ''
+
+        downloadICalFile(myShiftsForMonth, `dienste-${monthName}`, userName)
+
+        setAlertConfig({
+            isOpen: true,
+            title: 'Kalender exportiert',
+            message: `${myShiftsForMonth.length} Dienst${myShiftsForMonth.length > 1 ? 'e' : ''} für ${format(currentDate, 'MMMM yyyy', { locale: de })} exportiert. Öffne die .ics Datei um sie zu deinem Kalender hinzuzufügen.`,
+            type: 'success'
+        })
+    }
+
     let balance = null
     try {
         balance = calculateGenericBalance(myProfile, allMyShifts, allMyAbsences, allMyTimeEntries, currentDate, allMyCorrections)
@@ -535,6 +570,16 @@ export default function RosterFeed() {
                         </div>
 
                         <div className="flex gap-2 items-center">
+                            {!isAdmin && (
+                                <button
+                                    onClick={handleCalendarExport}
+                                    className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-100"
+                                    title="Dienste in Kalender exportieren"
+                                >
+                                    <Calendar size={20} />
+                                </button>
+                            )}
+
                             {!isAdmin && (
                                 <button
                                     onClick={() => setIsSickModalOpen(true)}
