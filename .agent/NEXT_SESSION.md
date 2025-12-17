@@ -8,6 +8,12 @@
 - DST-Test für CI (UTC vs. Vienna Zeitzone) gefixt
 - CI Pipeline ist GRÜN (196 Tests bestanden)
 
+#### Performance & Features (17.12.2025)
+- **PDF Generator optimiert:** Lazy-Loading implementiert (spart 600KB beim Start)
+- **Kalender Export:** iCal (.ics) Download für Mitarbeiter
+  - Inkl. 1h Erinnerung vor Dienstbeginn
+  - Exportiert Dienste + Team-Meetings + Fortbildungen
+
 #### Multi-Tenancy Grundlage (PAUSIERT)
 - **Git Tag `v1.0.0-stable`** als Rollback-Punkt
 - **Feature Flag `VITE_FEATURE_MULTI_TENANCY`** vorbereitet (aktuell: aus)
@@ -28,13 +34,13 @@ Fokus jetzt auf WoBe-Team App stabilisieren.
 ## 🎯 Nächste Schritte (empfohlen)
 
 ### Priorität 1: Usability
-- [ ] Pull-to-Refresh für mobile Geräte
+- [x] Pull-to-Refresh für mobile Geräte (Bereits integriert)
 - [ ] Offline-Modus Feedback verbessern
-- [ ] Ladezeiten optimieren (Code-Splitting)
+- [x] Ladezeiten optimieren (PDF Generator Code-Splitting)
 
 ### Priorität 2: Features für User
-- [ ] Kalender-Export (iCal/Google Calendar)
-- [ ] Push-Notifications vor Schichtbeginn
+- [x] Kalender-Export (iCal/Google Calendar)
+- [ ] Push-Notifications vor Schichtbeginn (Native App Feature)
 - [ ] 1-Klick Schichtübernahme
 
 ### Priorität 3: Admin-Features
