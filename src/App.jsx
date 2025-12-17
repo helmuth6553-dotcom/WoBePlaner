@@ -1,23 +1,35 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
 import { ShiftTemplateProvider } from './contexts/ShiftTemplateContext'
 import Login from './components/Login'
 import SetPassword from './components/SetPassword'
 import RosterFeed from './components/RosterFeed'
-import AbsencePlanner from './components/AbsencePlanner'
-import Profile from './components/Profile'
-import AdminDashboard from './components/AdminDashboard'
 import BottomNav from './components/BottomNav'
 import Sidebar from './components/Sidebar'
 import TeamPanel from './components/TeamPanel'
 import ErrorBoundary from './components/ErrorBoundary'
-import TimeTracking from './components/TimeTracking'
-import AdminTimeTracking from './components/AdminTimeTracking'
 import SplashScreen from './components/SplashScreen'
 import Impressum from './pages/Impressum'
 import Datenschutz from './pages/Datenschutz'
 import { Routes, Route } from 'react-router-dom'
 import { ToastProvider } from './components/Toast'
+
+// Lazy load heavy components for better initial load time
+const AbsencePlanner = lazy(() => import('./components/AbsencePlanner'))
+const Profile = lazy(() => import('./components/Profile'))
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'))
+const TimeTracking = lazy(() => import('./components/TimeTracking'))
+const AdminTimeTracking = lazy(() => import('./components/AdminTimeTracking'))
+
+// Loading fallback for lazy components
+const LazyLoadFallback = () => (
+  <div className="flex items-center justify-center h-full min-h-[200px]">
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <span className="text-sm text-gray-500">Lade...</span>
+    </div>
+  </div>
+)
 
 function AppContent() {
   const { user, isAdmin, passwordSet, refreshPasswordSet } = useAuth()
@@ -44,13 +56,29 @@ function AppContent() {
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-white">
 
-        {/* Scrollable Content Area */}
+        {/* Scrollable Content Area - Lazy components wrapped in Suspense */}
         <div className="flex-1 overflow-y-auto scrollbar-hide pb-20 md:pb-0">
           {activeTab === 'roster' && <RosterFeed />}
-          {activeTab === 'times' && (isAdmin ? <AdminTimeTracking /> : <TimeTracking />)}
-          {activeTab === 'absences' && <AbsencePlanner initialDate={calendarDate} />}
-          {activeTab === 'profile' && <Profile />}
-          {activeTab === 'admin' && isAdmin && <AdminDashboard onNavigateToCalendar={handleNavigateToCalendar} />}
+          {activeTab === 'times' && (
+            <Suspense fallback={<LazyLoadFallback />}>
+              {isAdmin ? <AdminTimeTracking /> : <TimeTracking />}
+            </Suspense>
+          )}
+          {activeTab === 'absences' && (
+            <Suspense fallback={<LazyLoadFallback />}>
+              <AbsencePlanner initialDate={calendarDate} />
+            </Suspense>
+          )}
+          {activeTab === 'profile' && (
+            <Suspense fallback={<LazyLoadFallback />}>
+              <Profile />
+            </Suspense>
+          )}
+          {activeTab === 'admin' && isAdmin && (
+            <Suspense fallback={<LazyLoadFallback />}>
+              <AdminDashboard onNavigateToCalendar={handleNavigateToCalendar} />
+            </Suspense>
+          )}
         </div>
 
         {/* Bottom Nav (Mobile Only) */}
