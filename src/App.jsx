@@ -13,6 +13,7 @@ import Impressum from './pages/Impressum'
 import Datenschutz from './pages/Datenschutz'
 import { Routes, Route } from 'react-router-dom'
 import { ToastProvider } from './components/Toast'
+import OfflineIndicator from './components/OfflineIndicator'
 
 // Lazy load heavy components for better initial load time
 const AbsencePlanner = lazy(() => import('./components/AbsencePlanner'))
@@ -50,6 +51,9 @@ function AppContent() {
 
   return (
     <div className="min-h-screen flex bg-gray-50">
+      {/* Offline Status Banner */}
+      <OfflineIndicator />
+
       {/* Desktop Sidebar (Hidden on Mobile) */}
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} />
 
