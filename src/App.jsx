@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
 import { ShiftTemplateProvider } from './contexts/ShiftTemplateContext'
 import Login from './components/Login'
@@ -14,6 +14,7 @@ import Datenschutz from './pages/Datenschutz'
 import { Routes, Route } from 'react-router-dom'
 import { ToastProvider } from './components/Toast'
 import OfflineIndicator from './components/OfflineIndicator'
+import { supabase } from './supabase'
 
 // Lazy load heavy components for better initial load time
 const AbsencePlanner = lazy(() => import('./components/AbsencePlanner'))
@@ -32,6 +33,51 @@ function AppContent() {
   const { user, isAdmin, passwordSet, refreshPasswordSet } = useAuth()
   const [activeTab, setActiveTab] = useState('roster')
   const [calendarDate, setCalendarDate] = useState(null)
+  const [badges, setBadges] = useState({})
+
+  // Fetch badge counts for navigation
+  useEffect(() => {
+    if (!user || !isAdmin) {
+      setBadges({})
+      return
+    }
+
+    const fetchBadgeCounts = async () => {
+      try {
+        // Count pending absence requests
+        const { count: pendingAbsences } = await supabase
+          .from('absences')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'beantragt')
+
+        // Count urgent shifts (shifts with urgent_since set)
+        const { count: urgentShifts } = await supabase
+          .from('shifts')
+          .select('*', { count: 'exact', head: true })
+          .not('urgent_since', 'is', null)
+
+        const adminCount = (pendingAbsences || 0) + (urgentShifts || 0)
+
+        setBadges({
+          admin: adminCount > 0 ? { count: adminCount } : null,
+          roster: urgentShifts > 0 ? { dot: true } : null
+        })
+      } catch (err) {
+        console.error('Failed to fetch badge counts:', err)
+      }
+    }
+
+    fetchBadgeCounts()
+
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel('badge-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, fetchBadgeCounts)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, fetchBadgeCounts)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user, isAdmin])
 
   const handleNavigateToCalendar = (date) => {
     setCalendarDate(new Date(date))
@@ -51,7 +97,7 @@ function AppContent() {
       <OfflineIndicator />
 
       {/* Desktop Sidebar (Hidden on Mobile) */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} badges={badges} />
 
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-white">
@@ -83,7 +129,7 @@ function AppContent() {
 
         {/* Bottom Nav (Mobile Only) */}
         <div className="md:hidden fixed bottom-0 left-0 right-0">
-          <BottomNav activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} />
+          <BottomNav activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} badges={badges} />
         </div>
       </div>
 
