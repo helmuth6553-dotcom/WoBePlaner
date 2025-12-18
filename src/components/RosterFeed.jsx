@@ -190,6 +190,7 @@ export default function RosterFeed() {
             supabase.removeChannel(channel)
             clearInterval(pollInterval)
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentDate, user])
 
     const shiftsByDate = useMemo(() => {

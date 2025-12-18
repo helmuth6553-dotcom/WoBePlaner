@@ -7,13 +7,11 @@
  * Run with: npx vitest run src/utils/__tests__/edgeCases.test.js
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
     eachDayOfInterval,
     parseISO,
     isWeekend,
-    addDays,
-    subDays,
     startOfMonth,
     endOfMonth,
     format,
@@ -22,7 +20,7 @@ import {
 } from 'date-fns'
 
 // Import the actual holiday function
-import { getHolidays, isHoliday } from '../holidays'
+import { getHolidays } from '../holidays'
 
 // Mock balance calculation helper
 const calculateVacationDays = (startDate, endDate, getHolidayFn) => {
@@ -386,7 +384,7 @@ describe('Edge Case Tests', () => {
             const workingDays = eachDayOfInterval({ start: startDate, end: monthEnd })
                 .filter(d => !isWeekend(d)).length
 
-            const totalWorkingDaysInMonth = eachDayOfInterval({
+            const _totalWorkingDaysInMonth = eachDayOfInterval({
                 start: startOfMonth(month),
                 end: monthEnd
             }).filter(d => !isWeekend(d)).length
@@ -415,7 +413,7 @@ describe('Edge Case Tests', () => {
     describe('Shift Type Edge Cases', () => {
 
         it('should handle TEAM shift applying to all employees', () => {
-            const teamShift = {
+            const _teamShift = {
                 type: 'TEAM',
                 start_time: '2025-01-15T09:00:00',
                 end_time: '2025-01-15T12:00:00'

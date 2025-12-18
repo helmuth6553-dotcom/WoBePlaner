@@ -18,7 +18,7 @@ import { generateVacationRequestPDF } from '../../utils/vacationPdfGenerator'
 export default function AdminAbsences({ onNavigateToCalendar }) {
     const [requests, setRequests] = useState([])
     const [archive, setArchive] = useState([])
-    const [downloadedIds, setDownloadedIds] = useState(new Set())
+    const [_downloadedIds, setDownloadedIds] = useState(new Set())
 
     const fetchRequests = async () => {
         const { data: pending } = await supabase.from('absences').select('*, profiles!user_id(full_name, email)').eq('status', 'beantragt').neq('type', 'Krank').order('start_date')
@@ -121,7 +121,7 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
             }
 
             const startDate = new Date(req.start_date)
-            const endDate = new Date(req.end_date)
+            const _endDate = new Date(req.end_date)
             const year = startDate.getFullYear()
 
             // Calculate total used vacation days this year

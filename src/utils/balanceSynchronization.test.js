@@ -11,9 +11,8 @@
  * - Nach Änderungen (Urlaub, Krank, Tausch, Korrektur) sofort synchron
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { calculateGenericBalance } from './balanceHelpers'
-import { calculateWorkHours, calculateDailyAbsenceHours } from './timeCalculations'
 
 // =============================================================================
 // SCENARIO: URLAUBSANTRAG GENEHMIGT → SALDO-AUSWIRKUNG
@@ -117,7 +116,7 @@ describe('Krankmeldung - Einspringen Flow', () => {
         const currentDate = new Date('2024-01-15T18:00:00')
 
         // Kranker hatte eine 8h Schicht geplant
-        const plannedShift = {
+        const _plannedShift = {
             id: 'shift-1',
             start_time: '2024-01-15T08:00:00',
             end_time: '2024-01-15T16:00:00',
@@ -404,7 +403,7 @@ describe('Nachtdienst - Monatswechsel', () => {
 
         // Test für Februar-Saldo - ND sollte dort NICHT nochmal erscheinen
         const februaryDate = new Date('2024-02-01T12:00:00')
-        const februaryBalance = calculateGenericBalance(
+        const _februaryBalance = calculateGenericBalance(
             profile,
             [shift], // Gleicher Shift
             [],

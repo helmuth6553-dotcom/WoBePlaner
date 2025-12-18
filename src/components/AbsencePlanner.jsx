@@ -15,7 +15,7 @@ import ConfirmModal from './ConfirmModal'
 import AlertModal from './AlertModal'
 import SignatureModal from './SignatureModal'
 import { useToast } from './Toast'
-import { handleError, formatSupabaseError } from '../utils/errorHandler'
+import { handleError } from '../utils/errorHandler'
 
 export default function AbsencePlanner({ initialDate }) {
     const { user, isAdmin } = useAuth()
@@ -78,6 +78,7 @@ export default function AbsencePlanner({ initialDate }) {
             .subscribe()
 
         return () => { supabase.removeChannel(channel) }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // Stats Calculation (Simplified for Mobile)
@@ -106,6 +107,7 @@ export default function AbsencePlanner({ initialDate }) {
             setMyStats({ entitlement, requested, approved, remaining: entitlement - approved - requested })
         }
         fetchMyStats()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, absences])
 
     // Kalender Grid

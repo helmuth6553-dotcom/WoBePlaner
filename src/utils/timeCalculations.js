@@ -45,9 +45,9 @@ export const calculateWorkHours = (startIso, endIso, type, interruptions = [], t
     // Optional: Explizite DST-Offset-Prüfung für Debugging/Logging
     const startOffset = start.getTimezoneOffset() // in Minuten (z.B. -60 für CET, -120 für CEST)
     const endOffset = end.getTimezoneOffset()
-    const dstDifferenceMinutes = startOffset - endOffset // Positiv = Zeit "verloren", Negativ = Zeit "gewonnen"
+    const _dstDifferenceMinutes = startOffset - endOffset // Positiv = Zeit "verloren", Negativ = Zeit "gewonnen"
 
-    // Für Debugging: console.log(`DST Check: Start offset ${startOffset}, End offset ${endOffset}, Diff ${dstDifferenceMinutes} min`)
+    // Für Debugging: console.log(`DST Check: Start offset ${startOffset}, End offset ${endOffset}, Diff ${_dstDifferenceMinutes} min`)
 
     // 1. Base Duration - differenceInMinutes berücksichtigt bereits DST korrekt!
     let totalMinutes = differenceInMinutes(end, start)

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabase'
-import { format, startOfMonth, endOfMonth, parseISO, subMonths, addMonths, startOfYear, endOfYear } from 'date-fns'
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, endOfYear } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, Thermometer, Clock, TrendingUp, ArrowLeftRight, Target, Scale, ChevronDown, ChevronUp, Plane, Calendar, User, Moon, CalendarDays, Coffee, AlertTriangle, Timer, GraduationCap, Hourglass, Maximize, Tent } from 'lucide-react'
 import { calculateWorkHours } from '../../utils/timeCalculations'
@@ -30,6 +30,7 @@ export default function AdminOverview() {
 
     useEffect(() => {
         fetchStats()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedMonth, viewMode])
 
     const fetchStats = async () => {
@@ -149,7 +150,7 @@ export default function AdminOverview() {
             entries?.forEach(entry => {
                 if (entry.shifts && entry.calculated_hours) {
                     const type = entry.shifts.type?.toUpperCase()
-                    if (shiftHours.hasOwnProperty(type)) {
+                    if (Object.hasOwn(shiftHours, type)) {
                         shiftHours[type] += Number(entry.calculated_hours) || 0
                     }
                 }
@@ -165,7 +166,7 @@ export default function AdminOverview() {
                     if (abs.planned_shifts_snapshot && abs.planned_shifts_snapshot.length > 0) {
                         abs.planned_shifts_snapshot.forEach(shift => {
                             const type = shift.type?.toUpperCase()
-                            if (sickHours.hasOwnProperty(type)) {
+                            if (Object.hasOwn(sickHours, type)) {
                                 const hours = calculateWorkHours(shift.start_time, shift.end_time, shift.type)
                                 sickHours[type] += hours
                             }

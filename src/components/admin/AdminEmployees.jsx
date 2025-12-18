@@ -106,7 +106,7 @@ export default function AdminEmployees() {
             setAdminPassword('')
             handleInvite()
 
-        } catch (err) {
+        } catch {
             setPasswordError('Fehler bei der Verifizierung')
         }
     }
@@ -122,7 +122,7 @@ export default function AdminEmployees() {
 
         try {
             // Try the secure Edge Function first
-            const { data: sessionData } = await supabase.auth.getSession()
+            const { data: _sessionData } = await supabase.auth.getSession()
 
             const response = await supabase.functions.invoke('create-user', {
                 body: {
@@ -230,7 +230,7 @@ export default function AdminEmployees() {
         if (error) {
             alert('Fehler: ' + error.message)
         } else {
-            const { data: { user } } = await supabase.auth.getUser()
+            const { data: { user: _user } } = await supabase.auth.getUser()
             await logAdminAction(
                 'reactivate_user',
                 userId,

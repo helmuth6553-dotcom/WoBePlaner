@@ -65,6 +65,7 @@ export default function TimeTracking() {
     useEffect(() => {
         if (isAdmin) return // Admins don't need personal time tracking data
         if (user && selectedMonth) fetchData()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, selectedMonth, isAdmin])
 
     // Init Modal - must be before any conditional returns

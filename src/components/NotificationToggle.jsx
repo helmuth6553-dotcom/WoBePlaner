@@ -96,7 +96,7 @@ export default function NotificationToggle() {
         }
     };
 
-    const unsubscribeFromPush = async () => {
+    const _unsubscribeFromPush = async () => {
         // Logic to unsubscribe if needed
         // For now we assume users just want to enable it.
         // Real unsubscription involves removing from DB and PushManager.

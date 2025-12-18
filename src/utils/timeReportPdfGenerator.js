@@ -15,7 +15,7 @@
  */
 
 import { jsPDF } from 'jspdf'
-import { format, parseISO, startOfWeek, getISOWeek, getDay } from 'date-fns'
+import { format, parseISO, getISOWeek } from 'date-fns'
 import { de } from 'date-fns/locale'
 
 /**
@@ -218,7 +218,7 @@ export const generateTimeReportPDF = ({
     let totalBereitschaftHours = 0
     let workDays = new Set()
 
-    sortedEntries.forEach((entry, index) => {
+    sortedEntries.forEach((entry, _index) => {
         // Page break check
         if (yPos > pageHeight - 50) {
             doc.addPage()

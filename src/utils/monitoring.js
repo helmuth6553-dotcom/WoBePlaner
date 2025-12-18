@@ -12,7 +12,7 @@
  * 5. Sentry integration for production error reporting
  */
 
-import { captureError, captureMessage, startTransaction } from '../lib/sentry.js'
+import { captureError, captureMessage } from '../lib/sentry.js'
 
 // =============================================================================
 // BALANCE VERIFICATION UTILITIES

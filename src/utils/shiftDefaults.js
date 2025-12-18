@@ -1,4 +1,4 @@
-import { format, addDays, isWeekend } from 'date-fns'
+import { format, isWeekend } from 'date-fns'
 import { isHoliday } from './holidays'
 
 // Helper to create a Local Date Object representing the time, 
@@ -28,7 +28,7 @@ export const getDefaultTimes = (dateStr, type, holidays = []) => {
 
     // Check if Holiday (using the util if holidays array provided, else false)
     const isHol = isHoliday(date, holidays)
-    const isWe = isWeekend(date) // Sat, Sun
+    const _isWe = isWeekend(date) // Sat, Sun (unused, but kept for future use)
 
     let start = null
     let end = null

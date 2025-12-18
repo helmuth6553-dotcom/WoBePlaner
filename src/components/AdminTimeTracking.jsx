@@ -64,6 +64,7 @@ export default function AdminTimeTracking() {
     useEffect(() => {
         if (selectedUserId && selectedMonth) fetchData()
         else { setEntries([]); setUserMonthStatus(null); setVerificationStatus('none') }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedUserId, selectedMonth])
 
     const fetchData = async () => {

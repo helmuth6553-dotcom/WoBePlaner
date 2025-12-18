@@ -14,7 +14,7 @@
 
 import { jsPDF } from 'jspdf'
 import { format, differenceInBusinessDays, isSameDay } from 'date-fns'
-import { getHolidays, isHoliday } from './holidays'
+import { getHolidays } from './holidays'
 
 /**
  * Calculate the first working day after a given date
@@ -69,7 +69,7 @@ export const generateVacationRequestPDF = ({
 
     // Page settings
     const pageWidth = 210
-    const pageHeight = 297
+    const _pageHeight = 297 // Kept for potential future page-break logic
     const margin = 15
     let yPos = 15
 

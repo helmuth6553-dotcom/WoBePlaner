@@ -69,7 +69,7 @@ export default function SetPassword({ user, onPasswordSet }) {
     // Progress indicator
     const ProgressDots = ({ current }) => (
         <div className="flex justify-center gap-2 mb-8">
-            {['welcome', 'privacy', 'password'].map((s, i) => (
+            {['welcome', 'privacy', 'password'].map((s, _i) => (
                 <div
                     key={s}
                     className={`w-2 h-2 rounded-full transition-all ${s === current ? 'w-6 bg-black' : 'bg-gray-200'

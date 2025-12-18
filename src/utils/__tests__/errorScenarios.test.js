@@ -8,7 +8,7 @@
  * Run with: npx vitest run src/utils/__tests__/errorScenarios.test.js
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 // Mock Supabase client
 const mockSupabaseError = {
@@ -117,9 +117,9 @@ describe('Error Scenario Tests', () => {
 
         it('should handle negative hour calculations', () => {
             // Edge case: More interruptions than work time
-            const workStart = new Date('2025-01-15T08:00:00')
-            const workEnd = new Date('2025-01-15T12:00:00')
-            const interruptions = [
+            const _workStart = new Date('2025-01-15T08:00:00')
+            const _workEnd = new Date('2025-01-15T12:00:00')
+            const _interruptions = [
                 { start: new Date('2025-01-15T08:00:00'), end: new Date('2025-01-15T13:00:00') }
             ]
 

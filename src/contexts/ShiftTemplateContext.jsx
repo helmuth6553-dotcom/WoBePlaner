@@ -159,7 +159,7 @@ export function ShiftTemplateProvider({ children }) {
 
         const date = new Date(dateStr)
         const dayName = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
-        const dayOfWeek = date.getDay() // 0=Sunday, 6=Saturday
+        const _dayOfWeek = date.getDay() // 0=Sunday, 6=Saturday
 
         // Check for holiday
         const isHoliday = holidays.some(h => {

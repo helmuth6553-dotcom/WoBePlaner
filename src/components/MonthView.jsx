@@ -151,7 +151,7 @@ export default function MonthView({ shiftsByDate, userId, isAdmin, onToggleInter
                     // Privacy Logic: Only show "Krank" to Admin or the user themselves
                     const isMe = abs.user_id === userId
                     const canSeeDetails = isAdmin || isMe
-                    const typeDisplay = canSeeDetails ? (abs.type || 'Abwesend') : 'Abwesend'
+                    const _typeDisplay = canSeeDetails ? (abs.type || 'Abwesend') : 'Abwesend'
 
                     // Visuals: Sick is red, Vacation/Other is orange. 
                     // For privacy, "Abwesend" (hidden sick) should look like Vacation (neutral orange) to outsiders?
