@@ -22,15 +22,11 @@ const AdminDashboard = lazy(() => import('./components/AdminDashboard'))
 const TimeTracking = lazy(() => import('./components/TimeTracking'))
 const AdminTimeTracking = lazy(() => import('./components/AdminTimeTracking'))
 
-// Loading fallback for lazy components
-const LazyLoadFallback = () => (
-  <div className="flex items-center justify-center h-full min-h-[200px]">
-    <div className="flex flex-col items-center gap-3">
-      <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      <span className="text-sm text-gray-500">Lade...</span>
-    </div>
-  </div>
-)
+// Loading fallbacks for lazy components - using skeleton loading
+import { RosterFeedSkeleton, TimeTrackingSkeleton, ProfileSkeleton, PageSkeleton } from './components/Skeleton'
+
+// Generic fallback (used when context unknown)
+const LazyLoadFallback = () => <PageSkeleton />
 
 function AppContent() {
   const { user, isAdmin, passwordSet, refreshPasswordSet } = useAuth()
@@ -64,7 +60,7 @@ function AppContent() {
         <div className="flex-1 overflow-y-auto scrollbar-hide pb-20 md:pb-0">
           {activeTab === 'roster' && <RosterFeed />}
           {activeTab === 'times' && (
-            <Suspense fallback={<LazyLoadFallback />}>
+            <Suspense fallback={<TimeTrackingSkeleton />}>
               {isAdmin ? <AdminTimeTracking /> : <TimeTracking />}
             </Suspense>
           )}
@@ -74,7 +70,7 @@ function AppContent() {
             </Suspense>
           )}
           {activeTab === 'profile' && (
-            <Suspense fallback={<LazyLoadFallback />}>
+            <Suspense fallback={<ProfileSkeleton />}>
               <Profile />
             </Suspense>
           )}
