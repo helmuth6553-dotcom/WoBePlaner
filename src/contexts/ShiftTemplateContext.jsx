@@ -1,28 +1,27 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-import { supabase } from '../supabase'
-import { FEATURE_MULTI_TENANCY } from '../utils/featureFlags'
+import { createContext, useContext, useMemo } from 'react'
 
 /**
  * ShiftTemplateContext
  * 
- * Provides shift templates from the database to all components.
- * When FEATURE_MULTI_TENANCY is false, returns legacy hardcoded templates.
+ * Provides shift templates to all components.
+ * Templates are defined locally (no DB dependency for single-team mode).
+ * 
+ * NOTE: Multi-Tenancy was paused (Dec 2025). If needed in the future,
+ * this can be extended to load templates from Supabase shift_templates table.
  * 
  * Usage:
- *   const { templates, getTemplate, loading } = useShiftTemplates()
+ *   const { templates, getTemplate } = useShiftTemplates()
  *   const ndTemplate = getTemplate('ND')
  */
 
 const ShiftTemplateContext = createContext({
     templates: [],
-    loading: true,
-    error: null,
     getTemplate: () => null,
     getDefaultTimes: () => ({ start: null, end: null }),
 })
 
-// Legacy templates for fallback (matches shiftDefaults.js)
-const LEGACY_TEMPLATES = [
+// Shift Templates for WoBe-Team (Single Source of Truth)
+const SHIFT_TEMPLATES = [
     {
         code: 'TD1',
         name: 'Tagdienst 1',
@@ -97,56 +96,12 @@ const LEGACY_TEMPLATES = [
 ]
 
 export function ShiftTemplateProvider({ children }) {
-    const [templates, setTemplates] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
-
-    useEffect(() => {
-        const loadTemplates = async () => {
-            // If feature flag is off, use legacy templates
-            if (!FEATURE_MULTI_TENANCY) {
-                setTemplates(LEGACY_TEMPLATES)
-                setLoading(false)
-                return
-            }
-
-            try {
-                const { data, error: fetchError } = await supabase
-                    .from('shift_templates')
-                    .select('*')
-                    .eq('is_active', true)
-                    .order('sort_order')
-
-                if (fetchError) throw fetchError
-
-                // Parse weekday_rules if it's a string
-                const parsed = (data || []).map(t => ({
-                    ...t,
-                    weekday_rules: typeof t.weekday_rules === 'string'
-                        ? JSON.parse(t.weekday_rules)
-                        : (t.weekday_rules || {}),
-                }))
-
-                setTemplates(parsed)
-            } catch (err) {
-                console.error('Failed to load shift templates:', err)
-                setError(err)
-                // Fallback to legacy on error
-                setTemplates(LEGACY_TEMPLATES)
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        loadTemplates()
-    }, [])
-
     /**
      * Get a template by its code
      */
     const getTemplate = (code) => {
         if (!code) return null
-        return templates.find(t => t.code?.toUpperCase() === code.toUpperCase()) || null
+        return SHIFT_TEMPLATES.find(t => t.code?.toUpperCase() === code.toUpperCase()) || null
     }
 
     /**
@@ -159,7 +114,6 @@ export function ShiftTemplateProvider({ children }) {
 
         const date = new Date(dateStr)
         const dayName = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
-        const _dayOfWeek = date.getDay() // 0=Sunday, 6=Saturday
 
         // Check for holiday
         const isHoliday = holidays.some(h => {
@@ -202,13 +156,12 @@ export function ShiftTemplateProvider({ children }) {
         return { start, end }
     }
 
-    const value = {
-        templates,
-        loading,
-        error,
+    // Memoize the value to prevent unnecessary re-renders
+    const value = useMemo(() => ({
+        templates: SHIFT_TEMPLATES,
         getTemplate,
         getDefaultTimes,
-    }
+    }), [])
 
     return (
         <ShiftTemplateContext.Provider value={value}>

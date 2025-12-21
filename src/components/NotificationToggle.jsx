@@ -55,18 +55,18 @@ export default function NotificationToggle() {
                 throw new Error('Service Worker not supported');
             }
 
-            console.log('Registering service worker...');
+
             // VitePWA plugin creates 'sw.js' or similar, usually standard registration is handled by the plugin.
             // We just wait for ready.
             const registration = await navigator.serviceWorker.ready;
 
-            console.log('Subscribing to push...');
+
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
             });
 
-            console.log('Saving subscription to Supabase...');
+
             // Send to Supabase
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Not logged in');

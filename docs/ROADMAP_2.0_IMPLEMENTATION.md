@@ -1,5 +1,16 @@
 # 🚀 ROADMAP 2.0: Multi-Tenancy & DB-gesteuerte Schichtplanung
 
+> [!CAUTION]
+> **STATUS: ARCHIVIERT (21.12.2025)**
+> 
+> Diese Roadmap wurde pausiert. Einige Vorbereitungsarbeiten (DB-Tabellen `teams`, `shift_templates`) 
+> wurden durchgeführt, aber das Feature wurde nicht fertiggestellt. 
+> 
+> **Code-Bereinigung durchgeführt:**
+> - `featureFlags.js` entfernt
+> - `ShiftTemplateContext.jsx` vereinfacht (lädt nur lokale Templates)
+> - Multi-Tenancy kann bei Bedarf reaktiviert werden (siehe Supabase für DB-Schema)
+
 ## Executive Summary
 **Ziel:** Transformation der WoBePlaner-App von einer Single-Team-Lösung zu einer Enterprise-Plattform, 
 die mehrere Teams mit unterschiedlichen Dienstmodellen unterstützt.
@@ -7,6 +18,7 @@ die mehrere Teams mit unterschiedlichen Dienstmodellen unterstützt.
 **Geschätzter Aufwand:** 3-4 Wochen (bei 2-3h/Tag)
 **Risikostufe:** Hoch (Architekturumbau)
 **Voraussetzung:** ✅ 196 Tests vorhanden (Sicherheitsnetz)
+
 
 ---
 

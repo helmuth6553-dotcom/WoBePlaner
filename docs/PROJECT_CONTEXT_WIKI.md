@@ -194,29 +194,22 @@ npx wrangler pages deploy dist --project-name=wobeapp
 **Empfehlung für Zukunft:** Vor Refactoring dieser Komponenten Unit-Tests schreiben (Done: 196 Tests vorhanden).
 
 
-## 14. MULTI-TENANCY (Status: PAUSIERT - 17.12.2025)
+## 14. MULTI-TENANCY (Status: ARCHIVIERT - 21.12.2025)
+
+> [!CAUTION]
+> Dieses Feature wurde pausiert und der Frontend-Code bereinigt.
 
 **Ursprüngliches Ziel:** Transformation zu "Enterprise Plattform" für mehrere Teams.
 
-### Was wurde erreicht (Grundlage für Zukunft):
-*   ✅ **Datenbank-Schema:** `teams` und `shift_templates` Tabellen erstellt
-*   ✅ **9 Schicht-Templates** in DB migriert (TD1, TD2, ND, DBD, TEAM, FORTBILDUNG, 3 Placeholder)
-*   ✅ **Bereitschaftszeit konfigurierbar:** `has_standby`, `standby_start`, `standby_end`, `standby_factor`
-*   ✅ **Feature Flag:** `VITE_FEATURE_MULTI_TENANCY` (aktuell: `false`)
-*   ✅ **ShiftTemplateContext:** Lädt Templates aus DB oder Legacy-Defaults
-*   ✅ **timeCalculations.js:** Erweitert für flexible Standby-Konfiguration
+### Was noch in der DB existiert:
+*   `teams` Tabelle (kann später reaktiviert werden)
+*   `shift_templates` Tabelle (mit 9 Templates für WoBe-Team)
 
-### Besondere Berechnungs-Regeln
+### Was bereinigt wurde (21.12.2025):
+*   ❌ `featureFlags.js` **entfernt** (nicht mehr benötigt)
+*   ✅ `ShiftTemplateContext.jsx` **vereinfacht** (nur lokale Templates, keine DB-Abfrage)
+*   ✅ Debug-Logs entfernt aus `AdminTimeTracking.jsx` und `NotificationToggle.jsx`
 
-**1. Schicht-Interessen ("Who can?")**
-Das System nutzt eine "Selbstorganisierte Zuweisung":
-*   **Interesse bekunden (Klick auf Dienst):** Mitarbeiter signalisiert "Ich kann".
-*   **Sofortige Berechnung:** Die Stunden des Dienstes werden dem Konto des interessierten Mitarbeiters **sofort** gutgeschrieben (Prognose).
-*   **Mehrfache Interessenten:** Wenn 3 Leute klicken, bekommen alle 3 die Stunden vorläufig gutgeschrieben.
-*   **Finalisierung:** In der Teamsitzung wird entschieden. Die 2 Personen, die den Dienst *nicht* machen, klicken erneut (Interesse entfernen) -> Stunden werden wieder abgezogen. Der finalen Person bleiben die Stunden.
-*   *Fazit:* Keine harte "Zuweisung" durch Admin nötig für die Berechnung. Admin sperrt den Monat am Ende nur, um Änderungen zu verhindern.
-
-**2. Krankmeldung (Spezialfall)**
 ### Warum pausiert:
 Das Sozialarbeiter-Team hat **deutlich komplexere Berechnungsregeln**:
 - Rufbereitschaft mit unterschiedlichen Faktoren (vor/nach 22:00, Werktag/Wochenende)
@@ -227,9 +220,10 @@ Das Sozialarbeiter-Team hat **deutlich komplexere Berechnungsregeln**:
 
 ### Rollback-Punkt:
 - **Git Tag:** `v1.0.0-stable`
-- Feature Flag aus → App funktioniert wie bisher
+- Schichtdefinitionen sind jetzt in `ShiftTemplateContext.jsx` (Single Source of Truth)
 
-👉 *Details siehe `docs/ROADMAP_2.0_IMPLEMENTATION.md` und `docs/SHIFT_LOGIC_ANALYSIS.md`*
+👉 *Details siehe `docs/ROADMAP_2.0_IMPLEMENTATION.md` (ARCHIVIERT) und `docs/SHIFT_LOGIC_ANALYSIS.md`*
+
 
 
 ## 15. VERBESSERUNGSVORSCHLÄGE für WoBe-Team App

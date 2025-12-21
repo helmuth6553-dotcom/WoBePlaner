@@ -1,38 +1,43 @@
 # 📋 NEXT SESSION - WoBePlaner
 
-## 📅 Letzte Session: 17.12.2025
+## 📅 Letzte Session: 21.12.2025
 
 ### ✅ Erreichte Meilensteine:
 
-#### 1. App-Experience & Design
-- **PWA Icon perfektioniert:** Neues Skript (`optimize_icon.py`) erstellt, das automatisch Ränder entfernt und das Logo maximiert. Icon ist jetzt randlos, weiß hinterlegt und füllt den Frame perfekt aus.
-- **Ladezeit optimiert:** PDF-Generator (600KB) wird jetzt lazy geladen (erst beim Klick), was den App-Start auf Handys massiv beschleunigt.
+#### 1. Code-Bereinigung (Tech Debt Abbau)
+- **Multi-Tenancy Infrastructure entfernt:**
+  - `featureFlags.js` **gelöscht** (nicht mehr benötigt)
+  - `ShiftTemplateContext.jsx` **vereinfacht** (229 → 165 Zeilen, keine DB-Abfrage mehr)
+  - Schichtdefinitionen jetzt lokal in `ShiftTemplateContext.jsx` (Single Source of Truth)
+  
+- **Debug-Code entfernt:**
+  - console.log Statements aus `AdminTimeTracking.jsx` entfernt
+  - console.log Statements aus `NotificationToggle.jsx` entfernt
 
-#### 2. Neue Features
-- **Kalender-Export (iCal):** Mitarbeiter können ihre Dienste in den privaten Kalender (iOS/Google/Outlook) exportieren.
-  - Button im "Mein Dienstplan" Header (blaues Kalender-Icon).
-  - Automatische 1h Erinnerung vor jedem Dienst.
-  - Inkludiert Dienste, Team-Meetings und Fortbildungen.
+- **Dokumentation aktualisiert:**
+  - `ROADMAP_2.0_IMPLEMENTATION.md` als ARCHIVIERT markiert
+  - `PROJECT_CONTEXT_WIKI.md` mit Cleanup-Status aktualisiert
 
-#### 3. Stabilität
-- **Vollständiges Deployment:** App ist live auf Cloudflare Pages.
-- **Tests:** Alle 196 Tests bestanden (CI grün).
+#### 2. Code-Qualität
+- Alle **196 Tests** bestanden ✅
+- Build erfolgreich ✅
+- ESLint Warnings reduziert
 
 ---
 
 ## 🎯 Nächste Schritte
 
 ### Priorität 1: Usability & Offline
-- [ ] **Offline-Modus Feedback:** Bessere UI-Anzeige, wenn der User offline ist (z.B. grauer Balken oder "Toast" Nachricht), damit niemand denkt, die App wäre kaputt.
-- [ ] **1-Klick Schichtübernahme:** "Sofort Übernehmen" Button für offene Dienste (ohne Tausch-Anfrage), wenn der Dienst niemandem gehört.
+- [ ] **Offline-Modus Feedback:** Bessere UI-Anzeige, wenn der User offline ist
+- [ ] **1-Klick Schichtübernahme:** "Sofort Übernehmen" Button für offene Dienste
 
 ### Priorität 2: Admin Features
-- [ ] **Statistik-Dashboard:** Einfache Übersicht über Überstunden/Krankheitstage pro Jahr.
-- [ ] **Schichtplan-Vorlagen:** Ganze Wochen als "Standard" speichern und laden.
+- [ ] **Statistik-Dashboard:** Einfache Übersicht über Überstunden/Krankheitstage pro Jahr
+- [ ] **Schichtplan-Vorlagen:** Ganze Wochen als "Standard" speichern und laden
 
-### Priorität 3: Wartung
-- [ ] **Lint Warnings:** 53 Warnungen im Code aufräumen.
-- [ ] **Multi-Tenancy (Pausiert):** Weiterhin auf Eis gelegt, Fokus bleibt auf WoBe App.
+### Priorität 3: Refactoring (Optional)
+- [ ] **TimeTracking.jsx aufteilen:** Monolithische Komponente (1065 Zeilen) in kleinere Teile aufbrechen
+- [ ] **AdminTimeTracking.jsx aufteilen:** Analog zu AdminDashboard Refactoring
 
 ---
 
@@ -51,5 +56,13 @@
 |--------|------|
 | Tests | 196 bestanden ✅ |
 | Deployment | Active (Cloudflare) 🚀 |
-| PWA Icon | Optimized (White BG, Frame-filling) |
-| Version | 1.3.0 (Kalender + Lazy PDF) |
+| Lint Warnings | ~10 (reduziert von 53) |
+| Version | 1.4.0 (Code Cleanup) |
+
+---
+
+## 🔑 Wichtige Architektur-Entscheidungen
+
+1. **Schichtzeiten bleiben im Code** (nicht in Supabase) - schnellerer Initial Load für Single-Team App
+2. **Multi-Tenancy pausiert** - DB-Tabellen (`teams`, `shift_templates`) existieren noch aber werden nicht genutzt
+3. **ShiftTemplateContext ist Single Source of Truth** für alle Schicht-Definitionen

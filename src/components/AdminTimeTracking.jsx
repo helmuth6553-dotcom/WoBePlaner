@@ -660,20 +660,14 @@ export default function AdminTimeTracking() {
             note: i.note
         }))
 
-        console.log('[AdminTimeTracking] Saving entry:', editingEntry.id, {
-            actual_start: startIso,
-            actual_end: endIso,
-            interruptions: finalInts,
-            calculated_hours: calculatedHours,
-            admin_note: formData.adminNote
-        })
+
 
         const { error, data } = await supabase.from('time_entries').update({
             actual_start: startIso, actual_end: endIso, interruptions: finalInts,
             calculated_hours: calculatedHours, status: 'approved', admin_note: formData.adminNote
         }).eq('id', editingEntry.id).select()
 
-        console.log('[AdminTimeTracking] Save result:', { error, data })
+
 
         if (error) alert(error.message); else { setEditingEntry(null); fetchData() }
     }
