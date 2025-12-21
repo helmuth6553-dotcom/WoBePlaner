@@ -20,6 +20,7 @@ import { calculateWorkHours } from '../utils/timeCalculations'
 import { getDefaultTimes } from '../utils/shiftDefaults'
 import PullToRefresh from './PullToRefresh'
 import { downloadICalFile } from '../utils/calendarExport'
+import { logAdminAction } from '../utils/adminAudit'
 
 export default function RosterFeed() {
 
@@ -774,6 +775,10 @@ export default function RosterFeed() {
                                                         if (error) {
                                                             setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
                                                         } else {
+                                                            // Audit Log
+                                                            await logAdminAction('shift_updated', null, 'shift', shiftId, {
+                                                                changes: updatePayload
+                                                            })
                                                             setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst aktualisiert', type: 'success' })
                                                             fetchData()
                                                         }
@@ -782,10 +787,14 @@ export default function RosterFeed() {
                                                         if (!isAdmin) return
                                                         if (!window.confirm("Möchtest du diesen Dienst wirklich löschen?")) return
                                                         await supabase.from('shift_interests').delete().eq('shift_id', shiftId)
-                                                        const { error } = await supabase.from('shifts').delete().eq('id', shiftId).select()
+                                                        const { data: deletedShift, error } = await supabase.from('shifts').delete().eq('id', shiftId).select()
                                                         if (error) {
                                                             setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
                                                         } else {
+                                                            // Audit Log
+                                                            await logAdminAction('shift_deleted', null, 'shift', shiftId, {
+                                                                deleted: deletedShift?.[0] || { id: shiftId }
+                                                            })
                                                             setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst gelöscht', type: 'success' })
                                                             fetchData()
                                                         }
@@ -803,15 +812,22 @@ export default function RosterFeed() {
                                                             return
                                                         }
 
-                                                        const { error } = await supabase.from('shifts').insert({
+                                                        const { data: newShift, error } = await supabase.from('shifts').insert({
                                                             start_time: start.toISOString(),
                                                             end_time: end.toISOString(),
                                                             type: type
-                                                        })
+                                                        }).select()
 
                                                         if (error) {
                                                             setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
                                                         } else {
+                                                            // Audit Log
+                                                            await logAdminAction('shift_created', null, 'shift', newShift?.[0]?.id, {
+                                                                date: dateStr,
+                                                                type: type,
+                                                                start_time: start.toISOString(),
+                                                                end_time: end.toISOString()
+                                                            })
                                                             setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst erstellt', type: 'success' })
                                                             fetchData()
                                                         }

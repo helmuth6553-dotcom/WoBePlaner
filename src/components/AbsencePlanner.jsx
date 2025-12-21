@@ -135,15 +135,41 @@ export default function AbsencePlanner({ initialDate }) {
     }
 
     // Start Signature Flow
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!selectionStart) return
-        const start = format(selectionStart, 'yyyy-MM-dd')
-        const end = selectionEnd ? format(selectionEnd, 'yyyy-MM-dd') : start
+        const start = selectionStart
+        const end = selectionEnd || selectionStart
 
+        // Check vacation limit (max 3 employees per day)
+        const MAX_VACATION_PER_DAY = 3
+        const days = eachDayOfInterval({ start, end })
+        const workDays = days.filter(d => !isWeekend(d) && !getHoliday(d))
+
+        for (const day of workDays) {
+            const dayStr = format(day, 'yyyy-MM-dd')
+            const count = absences.filter(a =>
+                a.type === 'Urlaub' &&
+                (a.status === 'genehmigt' || a.status === 'beantragt') &&
+                a.user_id !== user.id && // Don't count own requests
+                dayStr >= a.start_date && dayStr <= a.end_date
+            ).length
+
+            if (count >= MAX_VACATION_PER_DAY) {
+                setAlertConfig({
+                    isOpen: true,
+                    title: 'Urlaubslimit erreicht',
+                    message: `Am ${format(day, 'dd.MM.yyyy')} haben bereits ${count} Mitarbeiter Urlaub. Maximal ${MAX_VACATION_PER_DAY} gleichzeitig erlaubt.`,
+                    type: 'error'
+                })
+                return
+            }
+        }
+
+        // All checks passed - proceed with signature
         const payload = {
             user_id: user.id,
-            start_date: start,
-            end_date: end,
+            start_date: format(start, 'yyyy-MM-dd'),
+            end_date: format(end, 'yyyy-MM-dd'),
             type: 'Urlaub',
             status: 'beantragt'
         }
@@ -186,6 +212,20 @@ export default function AbsencePlanner({ initialDate }) {
         setSelectionEnd(null)
         setSignatureConfig({ isOpen: false, payload: null })
         setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Antrag erfolgreich signiert und eingereicht.', type: 'info' })
+
+        // Notify admins about the new vacation request
+        try {
+            await supabase.functions.invoke('notify-admin-vacation', {
+                body: {
+                    userName: user.full_name || user.email,
+                    startDate: payload.start_date,
+                    endDate: payload.end_date
+                }
+            })
+        } catch (notifyError) {
+            console.log('Admin notification skipped:', notifyError)
+            // Don't fail the request if notification fails
+        }
     }
 
     const handleDelete = (id) => {

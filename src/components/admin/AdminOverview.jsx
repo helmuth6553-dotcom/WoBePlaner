@@ -207,11 +207,17 @@ export default function AdminOverview() {
 
             // === NEW METRICS ===
 
-            // 1. Interruptions count (from time entries)
-            let totalInterruptions = 0
+            // 1. Interruptions (count and hours from time entries)
+            let totalInterruptionCount = 0
+            let totalInterruptionHours = 0
             entries?.forEach(entry => {
                 if (entry.interruptions && Array.isArray(entry.interruptions)) {
-                    totalInterruptions += entry.interruptions.length
+                    totalInterruptionCount += entry.interruptions.length
+                    entry.interruptions.forEach(interr => {
+                        if (interr.duration) {
+                            totalInterruptionHours += Number(interr.duration) / 60 // minutes to hours
+                        }
+                    })
                 }
             })
 
@@ -315,16 +321,11 @@ export default function AdminOverview() {
                 puffer: Math.round(puffer),
                 employeeCount: employees.length,
                 // New metrics
-                totalInterruptions,
-                nightShiftCount: nightShifts.length,
-                weekendShiftCount: weekendShifts.length,
-                dbdCount: dbdShifts.length,
+                totalInterruptionCount,
+                totalInterruptionHours: Math.round(totalInterruptionHours * 10) / 10,
                 sickByDayOfWeek,
-                avgSickDuration,
-                sickDuringTeamMeeting,
                 avgFlexResponseHours,
-                unfilledShiftCount: unfilledShifts.length,
-                upcomingVacations: upcomingVacations || []
+                unfilledShiftCount: unfilledShifts.length
             })
 
             // Calculate per-employee stats for employee view
@@ -785,42 +786,13 @@ export default function AdminOverview() {
                                         </div>
                                         <div className="text-2xl font-bold text-red-700">{stats.sickCount}</div>
                                     </div>
-                                </div>
-                            </div>
-
-                            {/* Schichtverteilung */}
-                            <div>
-                                <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                    <Moon size={18} /> Schichtverteilung
-                                </h3>
-                                <div className="grid grid-cols-4 gap-3">
-                                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 text-center">
-                                        <div className="flex items-center justify-center gap-2 mb-1">
-                                            <Moon size={16} className="text-indigo-600" />
-                                            <span className="text-xs text-indigo-600 font-bold">Nachtd.</span>
-                                        </div>
-                                        <div className="text-2xl font-bold text-indigo-700">{stats.nightShiftCount}</div>
-                                    </div>
-                                    <div className="bg-cyan-50 p-4 rounded-xl border border-cyan-200 text-center">
-                                        <div className="flex items-center justify-center gap-2 mb-1">
-                                            <CalendarDays size={16} className="text-cyan-600" />
-                                            <span className="text-xs text-cyan-600 font-bold">Wochene.</span>
-                                        </div>
-                                        <div className="text-2xl font-bold text-cyan-700">{stats.weekendShiftCount}</div>
-                                    </div>
-                                    <div className="bg-pink-50 p-4 rounded-xl border border-pink-200 text-center">
-                                        <div className="flex items-center justify-center gap-2 mb-1">
-                                            <Clock size={16} className="text-pink-600" />
-                                            <span className="text-xs text-pink-600 font-bold">DBD</span>
-                                        </div>
-                                        <div className="text-2xl font-bold text-pink-700">{stats.dbdCount}</div>
-                                    </div>
                                     <div className="bg-teal-50 p-4 rounded-xl border border-teal-200 text-center">
                                         <div className="flex items-center justify-center gap-2 mb-1">
                                             <Coffee size={16} className="text-teal-600" />
                                             <span className="text-xs text-teal-600 font-bold">Unterb.</span>
                                         </div>
-                                        <div className="text-2xl font-bold text-teal-700">{stats.totalInterruptions}</div>
+                                        <div className="text-2xl font-bold text-teal-700">{stats.totalInterruptionCount}</div>
+                                        <div className="text-xs text-teal-500">{stats.totalInterruptionHours}h</div>
                                     </div>
                                 </div>
                             </div>
@@ -830,20 +802,6 @@ export default function AdminOverview() {
                                 <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
                                     <Thermometer size={18} /> Krankmuster
                                 </h3>
-                                <div className="grid grid-cols-3 gap-3 mb-3">
-                                    <div className="bg-orange-50 p-4 rounded-xl border border-orange-200">
-                                        <div className="text-xs text-orange-600 font-bold mb-1">Ø Dauer</div>
-                                        <div className="text-2xl font-bold text-orange-700">{stats.avgSickDuration} <span className="text-sm">Tage</span></div>
-                                    </div>
-                                    <div className="bg-rose-50 p-4 rounded-xl border border-rose-200">
-                                        <div className="text-xs text-rose-600 font-bold mb-1">Krankmeldungen</div>
-                                        <div className="text-2xl font-bold text-rose-700">{stats.sickCount}</div>
-                                    </div>
-                                    <div className={`p-4 rounded-xl border ${stats.sickDuringTeamMeeting > 0 ? 'bg-yellow-50 border-yellow-300' : 'bg-gray-50 border-gray-200'}`}>
-                                        <div className={`text-xs font-bold mb-1 ${stats.sickDuringTeamMeeting > 0 ? 'text-yellow-700' : 'text-gray-500'}`}>Bei Teamsitzung</div>
-                                        <div className={`text-2xl font-bold ${stats.sickDuringTeamMeeting > 0 ? 'text-yellow-700' : 'text-gray-400'}`}>{stats.sickDuringTeamMeeting || 0}</div>
-                                    </div>
-                                </div>
                                 <div className="bg-white p-4 rounded-xl border border-gray-100">
                                     <div className="text-xs text-gray-500 font-bold mb-2">Krankmeldungen nach Wochentag</div>
                                     <div className="grid grid-cols-7 gap-1 text-center">
@@ -886,174 +844,155 @@ export default function AdminOverview() {
                                 </div>
                             </div>
 
-                            {/* Ausblick: Kommende Urlaube */}
-                            {stats.upcomingVacations?.length > 0 && (
-                                <div>
-                                    <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                        <Plane size={18} /> Kommende Urlaube (14 Tage)
-                                    </h3>
-                                    <div className="space-y-2">
-                                        {stats.upcomingVacations.map(vac => (
-                                            <div key={vac.id} className="bg-orange-50 p-3 rounded-xl border border-orange-100 flex justify-between items-center">
-                                                <div>
-                                                    <div className="font-semibold text-gray-800">
-                                                        {vac.profiles?.display_name || vac.profiles?.full_name || 'Unbekannt'}
-                                                    </div>
-                                                    <div className="text-xs text-orange-600">
-                                                        {format(new Date(vac.start_date), 'dd.MM.')} - {format(new Date(vac.end_date), 'dd.MM.yyyy')}
-                                                    </div>
-                                                </div>
-                                                <Plane size={20} className="text-orange-400" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+
                         </>
-                    )}
+                    )
+                    }
 
                     {/* Employee View - List of all employees */}
-                    {viewMode === 'employee' && employeeStats.length > 0 && (
-                        <div>
-                            <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                <User size={18} /> Mitarbeiter Details
-                            </h3>
-                            <div className="space-y-3">
-                                {employeeStats.map(emp => (
-                                    <div key={emp.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                                        <div
-                                            className="flex justify-between items-start mb-3 cursor-pointer"
-                                            onClick={() => toggleEmployeeExpansion(emp.id)}
-                                        >
-                                            <div>
-                                                <div className="font-bold text-gray-800 flex items-center gap-2">
-                                                    {emp.name}
-                                                    {expandedEmployeeIds.includes(emp.id) ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    {
+                        viewMode === 'employee' && employeeStats.length > 0 && (
+                            <div>
+                                <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                    <User size={18} /> Mitarbeiter Details
+                                </h3>
+                                <div className="space-y-3">
+                                    {employeeStats.map(emp => (
+                                        <div key={emp.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                                            <div
+                                                className="flex justify-between items-start mb-3 cursor-pointer"
+                                                onClick={() => toggleEmployeeExpansion(emp.id)}
+                                            >
+                                                <div>
+                                                    <div className="font-bold text-gray-800 flex items-center gap-2">
+                                                        {emp.name}
+                                                        {expandedEmployeeIds.includes(emp.id) ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                                                    </div>
+                                                    <div className="text-xs text-gray-400">{emp.weeklyHours}h/Woche</div>
                                                 </div>
-                                                <div className="text-xs text-gray-400">{emp.weeklyHours}h/Woche</div>
-                                            </div>
-                                            <div className={`px-3 py-1 rounded-lg text-sm font-bold ${emp.puffer >= 0
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : 'bg-rose-100 text-rose-700'
-                                                }`}>
-                                                {emp.puffer > 0 ? '+' : ''}{emp.puffer}h
-                                            </div>
-                                        </div>
-
-                                        {/* Hours Row - Always Visible */}
-                                        <div
-                                            className="grid grid-cols-5 gap-2 text-center text-xs mb-3 cursor-pointer"
-                                            onClick={() => toggleEmployeeExpansion(emp.id)}
-                                        >
-                                            <div className="bg-gray-50 p-2 rounded-lg">
-                                                <div className="text-gray-400 font-medium">Soll</div>
-                                                <div className="font-bold text-gray-700">{emp.sollHours}h</div>
-                                            </div>
-                                            <div className="bg-gray-50 p-2 rounded-lg">
-                                                <div className="text-blue-400 font-medium">Arbeit</div>
-                                                <div className="font-bold text-blue-700">{emp.workedHours}h</div>
-                                            </div>
-                                            <div className="bg-gray-50 p-2 rounded-lg">
-                                                <div className="text-orange-400 font-medium">Urlaub</div>
-                                                <div className="font-bold text-orange-700">{emp.vacationHours}h</div>
-                                            </div>
-                                            <div className="bg-gray-50 p-2 rounded-lg">
-                                                <div className="text-red-400 font-medium">Krank</div>
-                                                <div className="font-bold text-red-700">{emp.sickHours}h</div>
-                                            </div>
-                                            <div className="bg-gray-50 p-2 rounded-lg">
-                                                <div className="text-purple-400 font-medium">Ist</div>
-                                                <div className="font-bold text-purple-700">{emp.istHours}h</div>
-                                            </div>
-                                        </div>
-
-                                        {expandedEmployeeIds.includes(emp.id) && (
-                                            <div className="pt-2 border-t border-gray-100 mt-2">
-                                                {/* Counts Row */}
-                                                <div className="grid grid-cols-3 gap-2 text-center text-xs mb-3">
-                                                    <div className="bg-gray-50 p-2 rounded-lg flex items-center justify-center gap-1.5">
-                                                        <TrendingUp size={12} className="text-amber-500" />
-                                                        <span className="text-amber-600 font-medium">Flex:</span>
-                                                        <span className="font-bold text-amber-700">{emp.flexCount}</span>
-                                                    </div>
-                                                    <div className="bg-gray-50 p-2 rounded-lg flex items-center justify-center gap-1.5">
-                                                        <ArrowLeftRight size={12} className="text-purple-500" />
-                                                        <span className="text-purple-600 font-medium">Tausch:</span>
-                                                        <span className="font-bold text-purple-700">{emp.swapCount}</span>
-                                                    </div>
-                                                    <div className="bg-gray-50 p-2 rounded-lg flex items-center justify-center gap-1.5">
-                                                        <Thermometer size={12} className="text-red-500" />
-                                                        <span className="text-red-600 font-medium">Krank:</span>
-                                                        <span className="font-bold text-red-700">{emp.sickCount}x</span>
-                                                    </div>
+                                                <div className={`px-3 py-1 rounded-lg text-sm font-bold ${emp.puffer >= 0
+                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                    : 'bg-rose-100 text-rose-700'
+                                                    }`}>
+                                                    {emp.puffer > 0 ? '+' : ''}{emp.puffer}h
                                                 </div>
+                                            </div>
 
-                                                {/* New metrics row */}
-                                                <div className="grid grid-cols-5 gap-2 text-center text-xs">
-                                                    <div className="bg-gray-50 p-2 rounded-lg">
-                                                        <Moon size={12} className="mx-auto text-indigo-500 mb-0.5" />
-                                                        <div className="text-indigo-400 font-medium">Nacht</div>
-                                                        <div className="font-bold text-indigo-700">{emp.nightShiftCount}</div>
-                                                    </div>
-                                                    <div className="bg-gray-50 p-2 rounded-lg">
-                                                        <CalendarDays size={12} className="mx-auto text-cyan-500 mb-0.5" />
-                                                        <div className="text-cyan-400 font-medium">WE</div>
-                                                        <div className="font-bold text-cyan-700">{emp.weekendShiftCount}</div>
-                                                    </div>
-                                                    <div className="bg-gray-50 p-2 rounded-lg">
-                                                        <Clock size={12} className="mx-auto text-pink-500 mb-0.5" />
-                                                        <div className="text-pink-400 font-medium">DBD</div>
-                                                        <div className="font-bold text-pink-700">{emp.dbdCount}</div>
-                                                    </div>
-                                                    <div className="bg-gray-50 p-2 rounded-lg">
-                                                        <Coffee size={12} className="mx-auto text-teal-500 mb-0.5" />
-                                                        <div className="text-teal-400 font-medium">Unterb.</div>
-                                                        <div className="font-bold text-teal-700">{emp.interruptionCount}</div>
-                                                    </div>
-                                                    <div className="bg-gray-50 p-2 rounded-lg">
-                                                        <GraduationCap size={12} className="mx-auto text-emerald-500 mb-0.5" />
-                                                        <div className="text-emerald-400 font-medium">Fortb.</div>
-                                                        <div className="font-bold text-emerald-700">{emp.trainingHours}h</div>
-                                                    </div>
+                                            {/* Hours Row - Always Visible */}
+                                            <div
+                                                className="grid grid-cols-5 gap-2 text-center text-xs mb-3 cursor-pointer"
+                                                onClick={() => toggleEmployeeExpansion(emp.id)}
+                                            >
+                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                    <div className="text-gray-400 font-medium">Soll</div>
+                                                    <div className="font-bold text-gray-700">{emp.sollHours}h</div>
                                                 </div>
+                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                    <div className="text-blue-400 font-medium">Arbeit</div>
+                                                    <div className="font-bold text-blue-700">{emp.workedHours}h</div>
+                                                </div>
+                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                    <div className="text-orange-400 font-medium">Urlaub</div>
+                                                    <div className="font-bold text-orange-700">{emp.vacationHours}h</div>
+                                                </div>
+                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                    <div className="text-red-400 font-medium">Krank</div>
+                                                    <div className="font-bold text-red-700">{emp.sickHours}h</div>
+                                                </div>
+                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                    <div className="text-purple-400 font-medium">Ist</div>
+                                                    <div className="font-bold text-purple-700">{emp.istHours}h</div>
+                                                </div>
+                                            </div>
 
-                                                {/* Vacation Details - Only if vacation exists */}
-                                                {emp.vacationHours > 0 && (
-                                                    <div className="mt-3">
-                                                        <div className="text-xs text-gray-400 font-bold mb-1 ml-1">Urlaub Details</div>
-                                                        <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                                                            <div className="bg-gray-50 p-2 rounded-lg">
-                                                                <Tent size={12} className="mx-auto text-orange-500 mb-0.5" />
-                                                                <div className="text-orange-400 font-medium">Tage</div>
-                                                                <div className="font-bold text-orange-700">{emp.vacationDaysNet}</div>
-                                                            </div>
-                                                            <div className="bg-gray-50 p-2 rounded-lg">
-                                                                <Hourglass size={12} className="mx-auto text-orange-500 mb-0.5" />
-                                                                <div className="text-orange-400 font-medium">Vorlauf</div>
-                                                                <div className="font-bold text-orange-700">{emp.avgLeadTime}d</div>
-                                                            </div>
-                                                            <div className="bg-gray-50 p-2 rounded-lg">
-                                                                <Maximize size={12} className="mx-auto text-orange-500 mb-0.5" />
-                                                                <div className="text-orange-400 font-medium">Block</div>
-                                                                <div className="font-bold text-orange-700">{emp.longestVacationBlock}d</div>
-                                                            </div>
-                                                            <div className="bg-gray-50 p-2 rounded-lg">
-                                                                <CalendarDays size={12} className="mx-auto text-orange-500 mb-0.5" />
-                                                                <div className="text-orange-400 font-medium">Brücken</div>
-                                                                <div className="font-bold text-orange-700">{emp.bridgeDayRatio}%</div>
-                                                            </div>
+                                            {expandedEmployeeIds.includes(emp.id) && (
+                                                <div className="pt-2 border-t border-gray-100 mt-2">
+                                                    {/* Counts Row */}
+                                                    <div className="grid grid-cols-3 gap-2 text-center text-xs mb-3">
+                                                        <div className="bg-gray-50 p-2 rounded-lg flex items-center justify-center gap-1.5">
+                                                            <TrendingUp size={12} className="text-amber-500" />
+                                                            <span className="text-amber-600 font-medium">Flex:</span>
+                                                            <span className="font-bold text-amber-700">{emp.flexCount}</span>
+                                                        </div>
+                                                        <div className="bg-gray-50 p-2 rounded-lg flex items-center justify-center gap-1.5">
+                                                            <ArrowLeftRight size={12} className="text-purple-500" />
+                                                            <span className="text-purple-600 font-medium">Tausch:</span>
+                                                            <span className="font-bold text-purple-700">{emp.swapCount}</span>
+                                                        </div>
+                                                        <div className="bg-gray-50 p-2 rounded-lg flex items-center justify-center gap-1.5">
+                                                            <Thermometer size={12} className="text-red-500" />
+                                                            <span className="text-red-600 font-medium">Krank:</span>
+                                                            <span className="font-bold text-red-700">{emp.sickCount}x</span>
                                                         </div>
                                                     </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+
+                                                    {/* New metrics row */}
+                                                    <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                                                        <div className="bg-gray-50 p-2 rounded-lg">
+                                                            <Moon size={12} className="mx-auto text-indigo-500 mb-0.5" />
+                                                            <div className="text-indigo-400 font-medium">Nacht</div>
+                                                            <div className="font-bold text-indigo-700">{emp.nightShiftCount}</div>
+                                                        </div>
+                                                        <div className="bg-gray-50 p-2 rounded-lg">
+                                                            <CalendarDays size={12} className="mx-auto text-cyan-500 mb-0.5" />
+                                                            <div className="text-cyan-400 font-medium">WE</div>
+                                                            <div className="font-bold text-cyan-700">{emp.weekendShiftCount}</div>
+                                                        </div>
+                                                        <div className="bg-gray-50 p-2 rounded-lg">
+                                                            <Clock size={12} className="mx-auto text-pink-500 mb-0.5" />
+                                                            <div className="text-pink-400 font-medium">DBD</div>
+                                                            <div className="font-bold text-pink-700">{emp.dbdCount}</div>
+                                                        </div>
+                                                        <div className="bg-gray-50 p-2 rounded-lg">
+                                                            <Coffee size={12} className="mx-auto text-teal-500 mb-0.5" />
+                                                            <div className="text-teal-400 font-medium">Unterb.</div>
+                                                            <div className="font-bold text-teal-700">{emp.interruptionCount}</div>
+                                                        </div>
+                                                        <div className="bg-gray-50 p-2 rounded-lg">
+                                                            <GraduationCap size={12} className="mx-auto text-emerald-500 mb-0.5" />
+                                                            <div className="text-emerald-400 font-medium">Fortb.</div>
+                                                            <div className="font-bold text-emerald-700">{emp.trainingHours}h</div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Vacation Details - Only if vacation exists */}
+                                                    {emp.vacationHours > 0 && (
+                                                        <div className="mt-3">
+                                                            <div className="text-xs text-gray-400 font-bold mb-1 ml-1">Urlaub Details</div>
+                                                            <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                                    <Tent size={12} className="mx-auto text-orange-500 mb-0.5" />
+                                                                    <div className="text-orange-400 font-medium">Tage</div>
+                                                                    <div className="font-bold text-orange-700">{emp.vacationDaysNet}</div>
+                                                                </div>
+                                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                                    <Hourglass size={12} className="mx-auto text-orange-500 mb-0.5" />
+                                                                    <div className="text-orange-400 font-medium">Vorlauf</div>
+                                                                    <div className="font-bold text-orange-700">{emp.avgLeadTime}d</div>
+                                                                </div>
+                                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                                    <Maximize size={12} className="mx-auto text-orange-500 mb-0.5" />
+                                                                    <div className="text-orange-400 font-medium">Block</div>
+                                                                    <div className="font-bold text-orange-700">{emp.longestVacationBlock}d</div>
+                                                                </div>
+                                                                <div className="bg-gray-50 p-2 rounded-lg">
+                                                                    <CalendarDays size={12} className="mx-auto text-orange-500 mb-0.5" />
+                                                                    <div className="text-orange-400 font-medium">Brücken</div>
+                                                                    <div className="font-bold text-orange-700">{emp.bridgeDayRatio}%</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
-                </div>
+                        )
+                    }
+                </div >
             )}
-        </div>
+        </div >
     )
 }
