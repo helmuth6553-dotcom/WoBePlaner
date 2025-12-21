@@ -230,22 +230,24 @@ Das Sozialarbeiter-Team hat **deutlich komplexere Berechnungsregeln**:
 
 ### Priorität 1: Usability & UX
 *   [ ] **Offline-Modus verbessern:** PWA funktioniert offline, aber ohne Feedback
-*   [ ] **Ladezeiten optimieren:** Code-Splitting für schnelleren Initial Load
-*   [ ] **Pull-to-Refresh:** Auf mobilen Geräten zum Aktualisieren
+*   [x] **Ladezeiten optimieren:** ~~Code-Splitting~~ Lazy Loading für PDF-Generator ✅
+*   [x] **Pull-to-Refresh:** `PullToRefresh.jsx` implementiert, in RosterFeed integriert ✅
 
 ### Priorität 2: Features
 *   [ ] **Schichtübernahme vereinfachen:** 1-Klick-Übernahme bei freigewordenen Schichten
-*   [ ] **Kalender-Export:** iCal/Google Calendar Integration
-*   [ ] **Monatsübersicht drucken:** PDF-Export für Büro-Aushang
-*   [ ] **Erinnerungen:** Push-Notification X Stunden vor Schichtbeginn
+*   [x] **Kalender-Export:** iCal Export in `calendarExport.js` implementiert ✅
+*   [x] **Monatsübersicht drucken:** PDF-Export via `timeReportPdfGenerator.js` ✅
+*   [ ] **Erinnerungen:** Push-Notification X Stunden vor Schichtbeginn (nur Krankmeldungen aktiv)
 
 ### Priorität 3: Admin-Features
 *   [ ] **Schichtplan-Vorlage:** Wiederkehrende Muster als Template speichern
-*   [ ] **Statistik-Dashboard:** Überstunden pro Mitarbeiter, Krankheitstage, etc.
+*   [ ] **Statistik-Dashboard:** Basis-Stats in AdminOverview, aber nicht vollständig
 *   [ ] **Audit-Log erweitern:** Filtermöglichkeiten, Export
 
 ### Priorität 4: Wartung & Stabilität
-*   [ ] **Lint-Warnings aufräumen:** 53 Warnings eliminieren
-*   [ ] **Mehr Unit-Tests:** Besonders für TimeTracking.jsx und AdminTimeTracking.jsx
-*   [ ] **E2E-Tests erweitern:** Kritische User-Flows automatisiert testen
+*   [x] **Lint-Warnings aufräumen:** Von 53 auf ~10 reduziert ✅
+*   [x] **Mehr Unit-Tests:** 196 Tests vorhanden ✅
+*   [ ] **E2E-Tests erweitern:** Playwright Setup existiert, wenige Tests
+
+**Stand: 21.12.2025** – 6 von 14 Features erledigt
 
