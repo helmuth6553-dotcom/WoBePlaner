@@ -146,12 +146,21 @@ export default function NotificationToggle() {
                 throw new Error('Service Worker not supported');
             }
 
-            const registration = await navigator.serviceWorker.ready;
+            // Add timeout to prevent infinite hanging
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Service Worker Timeout - bitte Seite neu laden')), 10000)
+            );
+
+            const registration = await Promise.race([
+                navigator.serviceWorker.ready,
+                timeoutPromise
+            ]);
 
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
             });
+
 
             // Send to Supabase
             const { data: { user } } = await supabase.auth.getUser();
@@ -244,8 +253,8 @@ export default function NotificationToggle() {
                                 key={type.key}
                                 onClick={() => togglePreference(type.key)}
                                 className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isEnabled
-                                        ? colorClasses[type.color]
-                                        : 'bg-gray-50 text-gray-400 border-gray-200'
+                                    ? colorClasses[type.color]
+                                    : 'bg-gray-50 text-gray-400 border-gray-200'
                                     }`}
                             >
                                 <div className={`p-2 rounded-full ${isEnabled ? 'bg-white' : 'bg-gray-100'}`}>
