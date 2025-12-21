@@ -16,8 +16,8 @@ SELECT cron.schedule(
     '*/5 * * * *',  -- Every 5 minutes
     $$
     SELECT net.http_post(
-        url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/notify-shift-reminder',
-        headers := '{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
+        url := 'https://snxhcaruybvfyvcxtnrw.supabase.co/functions/v1/notify-shift-reminder',
+        headers := '{"Content-Type": "application/json", "Authorization": "Bearer PASTE_YOUR_SERVICE_ROLE_KEY_HERE"}'::jsonb,
         body := '{}'::jsonb
     ) as request_id;
     $$
@@ -30,8 +30,8 @@ SELECT cron.schedule(
     '0 15 L * *',  -- 15:00 on last day of month (L = last day)
     $$
     SELECT net.http_post(
-        url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/notify-monthly-closing',
-        headers := '{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
+        url := 'https://snxhcaruybvfyvcxtnrw.supabase.co/functions/v1/notify-monthly-closing',
+        headers := '{"Content-Type": "application/json", "Authorization": "Bearer PASTE_YOUR_SERVICE_ROLE_KEY_HERE"}'::jsonb,
         body := '{}'::jsonb
     ) as request_id;
     $$

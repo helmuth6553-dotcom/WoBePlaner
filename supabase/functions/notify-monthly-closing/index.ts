@@ -17,17 +17,32 @@ serve(async (req) => {
     try {
         console.log("Monthly Closing Reminder - Starting...")
 
+        // Get current date info
+        const now = new Date()
+        const year = now.getFullYear()
+        const month = now.getMonth() + 1 // 1-12
+        const today = now.getDate()
+
+        // Check if today is actually the last day of the month
+        // (Cron runs on 28-31, but we only want to send on the actual last day)
+        const lastDayOfMonth = new Date(year, now.getMonth() + 1, 0).getDate()
+
+        if (today !== lastDayOfMonth) {
+            console.log(`Today (${today}) is not the last day of month (${lastDayOfMonth}). Skipping.`)
+            return new Response(JSON.stringify({ message: 'Not last day' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            })
+        }
+
+        console.log(`Today is the last day of ${year}-${month}. Proceeding...`)
+
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        // Get current month/year
-        const now = new Date()
-        const year = now.getFullYear()
-        const month = now.getMonth() + 1 // 1-12
-
         console.log(`Checking for month: ${year}-${month}`)
+
 
         // 1. Get all active non-admin employees
         const { data: employees, error: empError } = await supabaseClient
