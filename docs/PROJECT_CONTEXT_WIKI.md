@@ -240,7 +240,7 @@ Das Sozialarbeiter-Team hat **deutlich komplexere Berechnungsregeln**:
 *   [ ] **Erinnerungen:** Push-Notification X Stunden vor Schichtbeginn (nur Krankmeldungen aktiv)
 
 ### Priorität 3: Admin-Features
-*   [ ] **Schichtplan-Vorlage:** Wiederkehrende Muster als Template speichern
+*   [x] **~~Schichtplan-Vorlage:~~** Nicht nötig - Schichten werden automatisch in Supabase generiert ✅
 *   [ ] **Statistik-Dashboard:** Basis-Stats in AdminOverview, aber nicht vollständig
 *   [ ] **Audit-Log erweitern:** Filtermöglichkeiten, Export
 
@@ -249,5 +249,6 @@ Das Sozialarbeiter-Team hat **deutlich komplexere Berechnungsregeln**:
 *   [x] **Mehr Unit-Tests:** 196 Tests vorhanden ✅
 *   [ ] **E2E-Tests erweitern:** Playwright Setup existiert, wenige Tests
 
-**Stand: 21.12.2025** – 6 von 14 Features erledigt
+**Stand: 21.12.2025** – 7 von 14 Features erledigt (1 als "nicht nötig" gestrichen)
+
 

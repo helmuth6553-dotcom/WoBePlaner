@@ -149,8 +149,23 @@ serve(async (req) => {
             console.error("DB Error fetching subs:", subError)
         }
 
-        const subscriptions = allSubscriptions?.filter(sub => !excludedUserIds.has(sub.user_id)) || []
+        // Filter out excluded users (sick/absent)
+        const eligibleSubscriptions = allSubscriptions?.filter(sub => !excludedUserIds.has(sub.user_id)) || []
 
+        // 2b. NEW: Check notification preferences - only include users with sick_alert enabled
+        const eligibleUserIds = eligibleSubscriptions.map(s => s.user_id)
+        const { data: disabledPrefs } = await supabaseClient
+            .from('notification_preferences')
+            .select('user_id')
+            .in('user_id', eligibleUserIds)
+            .eq('sick_alert', false)
+
+        const usersWithSickAlertDisabled = new Set(disabledPrefs?.map(p => p.user_id) || [])
+
+        // Final filter: exclude users who disabled sick_alert (default is true if no preference record)
+        const subscriptions = eligibleSubscriptions.filter(sub => !usersWithSickAlertDisabled.has(sub.user_id))
+
+        console.log(`After preference filter: ${subscriptions.length} subscriptions (${usersWithSickAlertDisabled.size} disabled sick_alert)`)
 
         if (!subscriptions?.length) {
             console.log("No subscriptions found to notify.")
@@ -158,6 +173,7 @@ serve(async (req) => {
         }
 
         console.log(`Found ${subscriptions.length} subscriptions. Preparing to send...`)
+
 
         const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
         if (!vapidPrivateKey) {
