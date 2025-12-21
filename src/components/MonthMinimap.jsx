@@ -5,20 +5,19 @@ export default function MonthMinimap({ shifts, currentDate, userId }) {
     const [progress, setProgress] = useState(0)
 
     useEffect(() => {
-        const container = document.querySelector('.overflow-y-auto')
-        if (!container) return
-
+        // Use window scroll since there's no container with overflow-y-auto
         const handleScroll = () => {
-            const totalHeight = container.scrollHeight - container.clientHeight
-            const p = totalHeight > 0 ? (container.scrollTop / totalHeight) * 100 : 0
+            const totalHeight = document.documentElement.scrollHeight - window.innerHeight
+            const p = totalHeight > 0 ? (window.scrollY / totalHeight) * 100 : 0
             setProgress(Math.min(100, Math.max(0, p)))
         }
 
-        container.addEventListener('scroll', handleScroll)
+        window.addEventListener('scroll', handleScroll)
         handleScroll()
 
-        return () => container.removeEventListener('scroll', handleScroll)
+        return () => window.removeEventListener('scroll', handleScroll)
     }, [])
+
 
     const daysInMonth = getDaysInMonth(currentDate)
 
