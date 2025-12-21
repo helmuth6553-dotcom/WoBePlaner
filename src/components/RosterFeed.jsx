@@ -190,7 +190,6 @@ export default function RosterFeed() {
             supabase.removeChannel(channel)
             clearInterval(pollInterval)
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentDate, user])
 
     const shiftsByDate = useMemo(() => {
@@ -554,331 +553,336 @@ export default function RosterFeed() {
     }
 
     return (
-        <PullToRefresh onRefresh={fetchData}>
-            <div className="pb-20">
-                <div className="sticky top-0 bg-white z-10 border-b shadow-sm">
-                    <div className="p-4 flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-                                <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronLeft size={20} /></button>
-                                <span className="px-3 font-bold text-sm min-w-[100px] text-center capitalize">{format(currentDate, 'MMMM yyyy', { locale: de })}</span>
-                                <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronRight size={20} /></button>
-                            </div>
-                            <div className="flex bg-gray-100 rounded-lg p-1 hidden sm:flex">
-                                <button onClick={() => setViewMode('cards')} className={`p-1.5 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={16} /></button>
-                                <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={16} /></button>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2 items-center">
-                            {!isAdmin && (
-                                <button
-                                    onClick={handleCalendarExport}
-                                    className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-100"
-                                    title="Dienste in Kalender exportieren"
-                                >
-                                    <Calendar size={20} />
-                                </button>
-                            )}
-
-                            {!isAdmin && (
-                                <button
-                                    onClick={() => setIsSickModalOpen(true)}
-                                    className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors border border-red-100"
-                                    title="Krankmelden"
-                                >
-                                    <Thermometer size={20} />
-                                </button>
-                            )}
-
-                            {!isAdmin && (
-                                <div
-                                    className={`p-2 rounded-full border transition-colors ${isMonthOpen ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}
-                                    title={isMonthOpen ? "Dienstplan offen" : "Dienstplan geschlossen"}
-                                >
-                                    {isMonthOpen ? <Unlock size={20} /> : <Lock size={20} />}
+        <>
+            <PullToRefresh onRefresh={fetchData}>
+                <div className="min-h-full pb-20">
+                    <div className="sticky top-0 bg-white z-10 border-b shadow-sm">
+                        <div className="p-4 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                                    <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronLeft size={20} /></button>
+                                    <span className="px-3 font-bold text-sm min-w-[100px] text-center capitalize">{format(currentDate, 'MMMM yyyy', { locale: de })}</span>
+                                    <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronRight size={20} /></button>
                                 </div>
-                            )}
+                                <div className="flex bg-gray-100 rounded-lg p-1 hidden sm:flex">
+                                    <button onClick={() => setViewMode('cards')} className={`p-1.5 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={16} /></button>
+                                    <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={16} /></button>
+                                </div>
+                            </div>
 
-                            {isAdmin && (
-                                <>
-                                    {!isMonthOpen && (
-                                        <button
-                                            onClick={() => setIsLogModalOpen(true)}
-                                            className="p-2 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors border border-gray-200"
-                                            title="Änderungsprotokoll"
-                                        >
-                                            <FileText size={20} />
-                                        </button>
-                                    )}
+                            <div className="flex gap-2 items-center">
+                                {!isAdmin && (
                                     <button
-                                        onClick={() => setIsSettingsModalOpen(true)}
-                                        className={`p-2 rounded-full border transition-colors ${isMonthVisible && isMonthOpen
-                                            ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
-                                            : isMonthVisible && !isMonthOpen
-                                                ? 'bg-yellow-50 text-yellow-600 border-yellow-200 hover:bg-yellow-100'
-                                                : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-                                            }`}
-                                        title={
-                                            isMonthVisible && isMonthOpen
-                                                ? "Freigegeben (Sichtbar & Offen)"
-                                                : isMonthVisible && !isMonthOpen
-                                                    ? "Gesperrt (Sichtbar, nur Lesen)"
-                                                    : "Versteckt (Nicht sichtbar)"
-                                        }
+                                        onClick={handleCalendarExport}
+                                        className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-100"
+                                        title="Dienste in Kalender exportieren"
                                     >
-                                        <Settings size={20} />
+                                        <Calendar size={20} />
                                     </button>
-                                </>
-                            )}
-                        </div>
-                    </div >
+                                )}
 
-                    <div className="sm:hidden px-4 pb-2 flex justify-center">
-                        <div className="flex bg-gray-100 rounded-lg p-1 w-full max-w-[200px]">
-                            <button onClick={() => setViewMode('cards')} className={`flex-1 p-1.5 rounded-md transition-all text-center text-xs font-bold ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}>Karten</button>
-                            <button onClick={() => setViewMode('table')} className={`flex-1 p-1.5 rounded-md transition-all text-center text-xs font-bold ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}>Tabelle</button>
-                        </div>
-                    </div>
+                                {!isAdmin && (
+                                    <button
+                                        onClick={() => setIsSickModalOpen(true)}
+                                        className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors border border-red-100"
+                                        title="Krankmelden"
+                                    >
+                                        <Thermometer size={20} />
+                                    </button>
+                                )}
 
-                    {balance && viewMode === 'cards' && !isAdmin && (
-                        <div className="px-4 pb-2 max-w-md mx-auto">
-                            <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
-                                <div className="flex justify-between items-center mb-2 cursor-pointer" onClick={toggleBalanceExpand}>
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mein Stundenkonto</h3>
-                                        {isBalanceExpanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
-                                    </div>
-                                    <span className="text-[10px] text-gray-400">{format(currentDate, 'MMMM', { locale: de })}</span>
-                                </div>
-
-                                <div className="grid grid-cols-4 gap-2 text-center">
-                                    <div className="bg-gray-50 rounded-lg p-1.5">
-                                        <div className="text-[9px] text-gray-400 uppercase font-bold">Soll</div>
-                                        <div className="font-bold text-sm text-gray-700">{balance.target}h</div>
-                                    </div>
-                                    <div className="bg-blue-50 rounded-lg p-1.5">
-                                        <div className="text-[9px] text-blue-400 uppercase font-bold">Ist</div>
-                                        <div className="font-bold text-sm text-blue-700">{balance.actual + balance.vacation}h</div>
-                                    </div>
-                                    <div className={`rounded-lg p-1.5 ${balance.carryover >= 0 ? 'bg-gray-50' : 'bg-red-50'}`}>
-                                        <div className={`text-[9px] uppercase font-bold ${balance.carryover >= 0 ? 'text-gray-400' : 'text-red-600'}`}>Übertrag</div>
-                                        <div className={`font-bold text-sm ${balance.carryover >= 0 ? 'text-gray-700' : 'text-red-700'}`}>
-                                            {balance.carryover > 0 ? '+' : ''}{balance.carryover}h
-                                        </div>
-                                    </div>
-                                    <div className={`rounded-lg p-1.5 ${balance.total >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                                        <div className={`text-[9px] uppercase font-bold ${balance.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>Gesamt</div>
-                                        <div className={`font-bold text-sm ${balance.total >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                            {balance.total > 0 ? '+' : ''}{balance.total}h
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {isBalanceExpanded && (
-                                    <div className="mt-4 pt-4 border-t border-gray-100">
-                                        <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">Kollegen Übersicht</h4>
-                                        <div className="space-y-2">
-                                            {allProfiles.filter(p => p.id !== user.id && p.role !== 'admin').map(profile => {
-                                                // Personal shifts from interests/assignments
-                                                const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
-                                                // Add TEAM shifts for this user (they apply to everyone)
-                                                const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
-                                                // Merge personal + team, avoiding duplicates
-                                                const userShifts = [...personalShifts]
-                                                teamShiftsForUser.forEach(ts => {
-                                                    if (!userShifts.some(s => s.id === ts.id)) {
-                                                        userShifts.push(ts)
-                                                    }
-                                                })
-                                                const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
-                                                const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
-                                                const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
-                                                const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
-
-                                                if (!b) return null
-
-                                                return (
-                                                    <div key={profile.id} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded-lg">
-                                                        <span className="font-medium text-gray-700">{profile.display_name || profile.full_name || profile.email}</span>
-                                                        <div className="flex gap-3">
-                                                            <span className="text-gray-500">Soll: {b.target}h</span>
-                                                            <span className={`font-bold ${b.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                                {b.total > 0 ? '+' : ''}{b.total}h
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
+                                {!isAdmin && (
+                                    <div
+                                        className={`p-2 rounded-full border transition-colors ${isMonthOpen ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}
+                                        title={isMonthOpen ? "Dienstplan offen" : "Dienstplan geschlossen"}
+                                    >
+                                        {isMonthOpen ? <Unlock size={20} /> : <Lock size={20} />}
                                     </div>
                                 )}
+
+                                {isAdmin && (
+                                    <>
+                                        {!isMonthOpen && (
+                                            <button
+                                                onClick={() => setIsLogModalOpen(true)}
+                                                className="p-2 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors border border-gray-200"
+                                                title="Änderungsprotokoll"
+                                            >
+                                                <FileText size={20} />
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setIsSettingsModalOpen(true)}
+                                            className={`p-2 rounded-full border transition-colors ${isMonthVisible && isMonthOpen
+                                                ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
+                                                : isMonthVisible && !isMonthOpen
+                                                    ? 'bg-yellow-50 text-yellow-600 border-yellow-200 hover:bg-yellow-100'
+                                                    : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                                                }`}
+                                            title={
+                                                isMonthVisible && isMonthOpen
+                                                    ? "Freigegeben (Sichtbar & Offen)"
+                                                    : isMonthVisible && !isMonthOpen
+                                                        ? "Gesperrt (Sichtbar, nur Lesen)"
+                                                        : "Versteckt (Nicht sichtbar)"
+                                            }
+                                        >
+                                            <Settings size={20} />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div >
+
+                        <div className="sm:hidden px-4 pb-2 flex justify-center">
+                            <div className="flex bg-gray-100 rounded-lg p-1 w-full max-w-[200px]">
+                                <button onClick={() => setViewMode('cards')} className={`flex-1 p-1.5 rounded-md transition-all text-center text-xs font-bold ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}>Karten</button>
+                                <button onClick={() => setViewMode('table')} className={`flex-1 p-1.5 rounded-md transition-all text-center text-xs font-bold ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}>Tabelle</button>
                             </div>
                         </div>
-                    )}
-                </div>
 
-                <div className={viewMode === 'table' ? 'p-4' : 'p-4 max-w-md mx-auto'}>
-                    {!isAdmin && isMonthVisible === false ? (
-                        <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200 mt-4">
-                            <Lock className="mx-auto text-gray-300 mb-4" size={48} />
-                            <h3 className="text-lg font-bold text-gray-500">Dienstplan noch nicht veröffentlicht</h3>
-                            <p className="text-sm text-gray-400 max-w-xs mx-auto mt-2">
-                                Der Dienstplan für {format(currentDate, 'MMMM yyyy', { locale: de })} wird derzeit erstellt und ist noch nicht sichtbar.
-                            </p>
-                        </div>
-                    ) : (
-                        <>
-                            {viewMode === 'table' ? (
-                                <MonthView
-                                    shiftsByDate={visibleShiftsByDate}
-                                    userId={user.id}
-                                    isAdmin={isAdmin}
-                                    onToggleInterest={toggleInterest}
-                                    getAbsencesForDate={getAbsencesForDate}
-                                />
-                            ) : (
-                                <>
-                                    <MonthMinimap shifts={shifts} currentDate={currentDate} userId={user.id} />
-                                    {Object.keys(visibleShiftsByDate).length === 0 && (
-                                        <div className="text-center mt-10">
-                                            <p className="text-gray-400 mb-4">Keine Dienste für {format(currentDate, 'MMMM', { locale: de })} gefunden.</p>
+                        {balance && viewMode === 'cards' && !isAdmin && (
+                            <div className="px-4 pb-2 max-w-md mx-auto">
+                                <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
+                                    <div className="flex justify-between items-center mb-2 cursor-pointer" onClick={toggleBalanceExpand}>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mein Stundenkonto</h3>
+                                            {isBalanceExpanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+                                        </div>
+                                        <span className="text-[10px] text-gray-400">{format(currentDate, 'MMMM', { locale: de })}</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-4 gap-2 text-center">
+                                        <div className="bg-gray-50 rounded-lg p-1.5">
+                                            <div className="text-[9px] text-gray-400 uppercase font-bold">Soll</div>
+                                            <div className="font-bold text-sm text-gray-700">{balance.target}h</div>
+                                        </div>
+                                        <div className="bg-blue-50 rounded-lg p-1.5">
+                                            <div className="text-[9px] text-blue-400 uppercase font-bold">Ist</div>
+                                            <div className="font-bold text-sm text-blue-700">{balance.actual + balance.vacation}h</div>
+                                        </div>
+                                        <div className={`rounded-lg p-1.5 ${balance.carryover >= 0 ? 'bg-gray-50' : 'bg-red-50'}`}>
+                                            <div className={`text-[9px] uppercase font-bold ${balance.carryover >= 0 ? 'text-gray-400' : 'text-red-600'}`}>Übertrag</div>
+                                            <div className={`font-bold text-sm ${balance.carryover >= 0 ? 'text-gray-700' : 'text-red-700'}`}>
+                                                {balance.carryover > 0 ? '+' : ''}{balance.carryover}h
+                                            </div>
+                                        </div>
+                                        <div className={`rounded-lg p-1.5 ${balance.total >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                                            <div className={`text-[9px] uppercase font-bold ${balance.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>Gesamt</div>
+                                            <div className={`font-bold text-sm ${balance.total >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                                {balance.total > 0 ? '+' : ''}{balance.total}h
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {isBalanceExpanded && (
+                                        <div className="mt-4 pt-4 border-t border-gray-100">
+                                            <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">Kollegen Übersicht</h4>
+                                            <div className="space-y-2">
+                                                {allProfiles.filter(p => p.id !== user.id && p.role !== 'admin').map(profile => {
+                                                    // Personal shifts from interests/assignments
+                                                    const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+                                                    // Add TEAM shifts for this user (they apply to everyone)
+                                                    const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
+                                                    // Merge personal + team, avoiding duplicates
+                                                    const userShifts = [...personalShifts]
+                                                    teamShiftsForUser.forEach(ts => {
+                                                        if (!userShifts.some(s => s.id === ts.id)) {
+                                                            userShifts.push(ts)
+                                                        }
+                                                    })
+                                                    const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
+                                                    const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
+                                                    const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
+                                                    const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
+
+                                                    if (!b) return null
+
+                                                    return (
+                                                        <div key={profile.id} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded-lg">
+                                                            <span className="font-medium text-gray-700">{profile.display_name || profile.full_name || profile.email}</span>
+                                                            <div className="flex gap-3">
+                                                                <span className="text-gray-500">Soll: {b.target}h</span>
+                                                                <span className={`font-bold ${b.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                    {b.total > 0 ? '+' : ''}{b.total}h
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
                                         </div>
                                     )}
-                                    {Object.keys(visibleShiftsByDate).sort().map(dateStr => {
-                                        const myAbsence = checkMyAbsence(dateStr)
-                                        const dayAbsences = getAbsencesForDate(dateStr)
-                                        const holiday = getHoliday(new Date(dateStr))
-
-                                        return (
-                                            <DayCard
-                                                key={dateStr}
-                                                dateStr={dateStr}
-                                                shifts={visibleShiftsByDate[dateStr]}
-                                                userId={user.id}
-                                                isAdmin={isAdmin}
-                                                onToggleInterest={toggleInterest}
-                                                onUpdateShift={async (shiftId, newStart, newEnd, newTitle) => {
-                                                    if (!isAdmin) return
-
-                                                    const updatePayload = {
-                                                        start_time: newStart,
-                                                        end_time: newEnd
-                                                    }
-                                                    if (newTitle !== undefined) {
-                                                        updatePayload.title = newTitle
-                                                    }
-
-                                                    const { error } = await supabase.from('shifts').update(updatePayload).eq('id', shiftId)
-
-                                                    if (error) {
-                                                        setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
-                                                    } else {
-                                                        setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst aktualisiert', type: 'success' })
-                                                        fetchData()
-                                                    }
-                                                }}
-                                                onDeleteShift={async (shiftId) => {
-                                                    if (!isAdmin) return
-                                                    if (!window.confirm("Möchtest du diesen Dienst wirklich löschen?")) return
-                                                    await supabase.from('shift_interests').delete().eq('shift_id', shiftId)
-                                                    const { error } = await supabase.from('shifts').delete().eq('id', shiftId).select()
-                                                    if (error) {
-                                                        setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
-                                                    } else {
-                                                        setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst gelöscht', type: 'success' })
-                                                        fetchData()
-                                                    }
-                                                }}
-                                                onCreateShift={async (dateStr, type) => {
-                                                    if (!isAdmin) return
-
-                                                    // Use the robust utility to get Local Date Objects for start/end
-                                                    // This handles rules for ND/TD1/TD2 etc.
-                                                    // We pass specific holidays if we had them, otherwise default check.
-                                                    const { start, end } = getDefaultTimes(dateStr, type)
-
-                                                    if (!start || !end) {
-                                                        setAlertConfig({ isOpen: true, title: 'Fehler', message: 'Konnte Zeiten nicht berechnen.', type: 'error' })
-                                                        return
-                                                    }
-
-                                                    const { error } = await supabase.from('shifts').insert({
-                                                        start_time: start.toISOString(),
-                                                        end_time: end.toISOString(),
-                                                        type: type
-                                                    })
-
-                                                    if (error) {
-                                                        setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
-                                                    } else {
-                                                        setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst erstellt', type: 'success' })
-                                                        fetchData()
-                                                    }
-                                                }}
-                                                absenceReason={myAbsence}
-                                                absences={dayAbsences}
-                                                holiday={holiday}
-                                                allProfiles={allProfiles}
-                                            />
-                                        )
-                                    })}
-                                </>
-                            )}
-                            {shifts.length === 0 && Object.keys(visibleShiftsByDate).length === 0 && (
-                                <div className="text-center mt-20">
-                                    {/* Empty state already handled above mostly, but redundant check ok */}
                                 </div>
-                            )}
-                        </>
-                    )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className={viewMode === 'table' ? 'p-4' : 'p-4 max-w-md mx-auto'}>
+                        {!isAdmin && isMonthVisible === false ? (
+                            <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200 mt-4">
+                                <Lock className="mx-auto text-gray-300 mb-4" size={48} />
+                                <h3 className="text-lg font-bold text-gray-500">Dienstplan noch nicht veröffentlicht</h3>
+                                <p className="text-sm text-gray-400 max-w-xs mx-auto mt-2">
+                                    Der Dienstplan für {format(currentDate, 'MMMM yyyy', { locale: de })} wird derzeit erstellt und ist noch nicht sichtbar.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                {viewMode === 'table' ? (
+                                    <MonthView
+                                        shiftsByDate={visibleShiftsByDate}
+                                        userId={user.id}
+                                        isAdmin={isAdmin}
+                                        onToggleInterest={toggleInterest}
+                                        getAbsencesForDate={getAbsencesForDate}
+                                    />
+                                ) : (
+                                    <>
+                                        <MonthMinimap shifts={shifts} currentDate={currentDate} userId={user.id} absences={allAbsences} />
+                                        {Object.keys(visibleShiftsByDate).length === 0 && (
+                                            <div className="text-center mt-10">
+                                                <p className="text-gray-400 mb-4">Keine Dienste für {format(currentDate, 'MMMM', { locale: de })} gefunden.</p>
+                                            </div>
+                                        )}
+                                        {Object.keys(visibleShiftsByDate).sort().map(dateStr => {
+                                            const myAbsence = checkMyAbsence(dateStr)
+                                            const dayAbsences = getAbsencesForDate(dateStr)
+                                            const holiday = getHoliday(new Date(dateStr))
+
+                                            return (
+                                                <DayCard
+                                                    key={dateStr}
+                                                    dateStr={dateStr}
+                                                    shifts={visibleShiftsByDate[dateStr]}
+                                                    userId={user.id}
+                                                    isAdmin={isAdmin}
+                                                    onToggleInterest={toggleInterest}
+                                                    onUpdateShift={async (shiftId, newStart, newEnd, newTitle) => {
+                                                        if (!isAdmin) return
+
+                                                        const updatePayload = {
+                                                            start_time: newStart,
+                                                            end_time: newEnd
+                                                        }
+                                                        if (newTitle !== undefined) {
+                                                            updatePayload.title = newTitle
+                                                        }
+
+                                                        const { error } = await supabase.from('shifts').update(updatePayload).eq('id', shiftId)
+
+                                                        if (error) {
+                                                            setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
+                                                        } else {
+                                                            setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst aktualisiert', type: 'success' })
+                                                            fetchData()
+                                                        }
+                                                    }}
+                                                    onDeleteShift={async (shiftId) => {
+                                                        if (!isAdmin) return
+                                                        if (!window.confirm("Möchtest du diesen Dienst wirklich löschen?")) return
+                                                        await supabase.from('shift_interests').delete().eq('shift_id', shiftId)
+                                                        const { error } = await supabase.from('shifts').delete().eq('id', shiftId).select()
+                                                        if (error) {
+                                                            setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
+                                                        } else {
+                                                            setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst gelöscht', type: 'success' })
+                                                            fetchData()
+                                                        }
+                                                    }}
+                                                    onCreateShift={async (dateStr, type) => {
+                                                        if (!isAdmin) return
+
+                                                        // Use the robust utility to get Local Date Objects for start/end
+                                                        // This handles rules for ND/TD1/TD2 etc.
+                                                        // We pass specific holidays if we had them, otherwise default check.
+                                                        const { start, end } = getDefaultTimes(dateStr, type)
+
+                                                        if (!start || !end) {
+                                                            setAlertConfig({ isOpen: true, title: 'Fehler', message: 'Konnte Zeiten nicht berechnen.', type: 'error' })
+                                                            return
+                                                        }
+
+                                                        const { error } = await supabase.from('shifts').insert({
+                                                            start_time: start.toISOString(),
+                                                            end_time: end.toISOString(),
+                                                            type: type
+                                                        })
+
+                                                        if (error) {
+                                                            setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
+                                                        } else {
+                                                            setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst erstellt', type: 'success' })
+                                                            fetchData()
+                                                        }
+                                                    }}
+                                                    absenceReason={myAbsence}
+                                                    absences={dayAbsences}
+                                                    holiday={holiday}
+                                                    allProfiles={allProfiles}
+                                                />
+                                            )
+                                        })}
+                                    </>
+                                )}
+                                {shifts.length === 0 && Object.keys(visibleShiftsByDate).length === 0 && (
+                                    <div className="text-center mt-20">
+                                        {/* Empty state already handled above mostly, but redundant check ok */}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
                 </div>
+            </PullToRefresh>
 
-                <MonthSettingsModal
-                    isOpen={isSettingsModalOpen}
-                    onClose={() => setIsSettingsModalOpen(false)}
-                    year={getYear(currentDate)}
-                    month={getMonth(currentDate) + 1}
-                    isOpenStatus={isMonthOpen}
-                    isVisibleStatus={isMonthVisible}
-                    onUpdate={updateMonthSettings}
-                />
+            {/* Modals rendered outside PullToRefresh to avoid CSS transform breaking fixed positioning */}
+            <MonthSettingsModal
+                isOpen={isSettingsModalOpen}
+                onClose={() => setIsSettingsModalOpen(false)}
+                year={getYear(currentDate)}
+                month={getMonth(currentDate) + 1}
+                isOpenStatus={isMonthOpen}
+                isVisibleStatus={isMonthVisible}
+                onUpdate={updateMonthSettings}
+            />
 
-                <SickReportModal
-                    isOpen={isSickModalOpen}
-                    onClose={() => setIsSickModalOpen(false)}
-                    onSubmit={handleSickReport}
-                />
+            <SickReportModal
+                isOpen={isSickModalOpen}
+                onClose={() => setIsSickModalOpen(false)}
+                onSubmit={handleSickReport}
+            />
 
-                <SwapShiftModal
-                    isOpen={isSwapModalOpen}
-                    onClose={() => setIsSwapModalOpen(false)}
-                    shift={targetSwapShift}
-                    onSwap={handleSwapRequest}
-                    currentUser={user}
-                />
+            <SwapShiftModal
+                isOpen={isSwapModalOpen}
+                onClose={() => setIsSwapModalOpen(false)}
+                shift={targetSwapShift}
+                onSwap={handleSwapRequest}
+                currentUser={user}
+            />
 
-                <RosterLogModal
-                    isOpen={isLogModalOpen}
-                    onClose={() => setIsLogModalOpen(false)}
-                />
-                <ConfirmModal
-                    isOpen={confirmConfig.isOpen}
-                    onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
-                    onConfirm={confirmConfig.onConfirm}
-                    title={confirmConfig.title}
-                    message={confirmConfig.message}
-                    isDestructive={confirmConfig.isDestructive}
-                    confirmText={confirmConfig.confirmText}
-                />
-                <AlertModal
-                    isOpen={alertConfig.isOpen}
-                    onClose={() => setAlertConfig({ ...alertConfig, isOpen: false })}
-                    title={alertConfig.title}
-                    message={alertConfig.message}
-                    type={alertConfig.type}
-                />
-            </div>
-        </PullToRefresh>
+            <RosterLogModal
+                isOpen={isLogModalOpen}
+                onClose={() => setIsLogModalOpen(false)}
+            />
+
+            <ConfirmModal
+                isOpen={confirmConfig.isOpen}
+                onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+                onConfirm={confirmConfig.onConfirm}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                isDestructive={confirmConfig.isDestructive}
+                confirmText={confirmConfig.confirmText}
+            />
+
+            <AlertModal
+                isOpen={alertConfig.isOpen}
+                onClose={() => setAlertConfig({ ...alertConfig, isOpen: false })}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+            />
+        </>
     )
 }

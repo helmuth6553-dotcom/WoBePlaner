@@ -79,11 +79,14 @@ export default function PullToRefresh({ children, onRefresh, threshold = 80 }) {
     return (
         <div
             ref={containerRef}
-            className="relative h-full overflow-y-auto"
+            id="roster-scroll-container"
+            className="relative h-full overflow-y-auto scrollbar-hide"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
+
+
             {/* Pull Indicator */}
             {showIndicator && (
                 <div
@@ -114,12 +117,16 @@ export default function PullToRefresh({ children, onRefresh, threshold = 80 }) {
                 </div>
             )}
 
-            {/* Content - shifts down during pull */}
+            {/* Content - only apply transform during pull/refresh, otherwise no wrapper style to avoid stacking context issues */}
             <div
-                style={{
-                    transform: `translateY(${isRefreshing ? 60 : pullDistance}px)`,
-                    transition: isPulling ? 'none' : 'transform 0.2s ease-out'
-                }}
+                style={
+                    (isPulling || isRefreshing || pullDistance > 0)
+                        ? {
+                            transform: `translateY(${isRefreshing ? 60 : pullDistance}px)`,
+                            transition: isPulling ? 'none' : 'transform 0.2s ease-out'
+                        }
+                        : undefined
+                }
             >
                 {children}
             </div>

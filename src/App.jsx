@@ -103,7 +103,9 @@ function AppContent() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-white">
 
         {/* Scrollable Content Area - Lazy components wrapped in Suspense */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide pb-20 md:pb-0">
+        {/* Disable App-level scroll for roster tab because RosterFeed uses PullToRefresh which has its own scroll container */}
+        <div className={`flex-1 ${activeTab === 'roster' ? 'overflow-hidden' : 'overflow-y-auto'} scrollbar-hide pb-20 md:pb-0`}>
+
           {activeTab === 'roster' && <RosterFeed />}
           {activeTab === 'times' && (
             <Suspense fallback={<TimeTrackingSkeleton />}>
