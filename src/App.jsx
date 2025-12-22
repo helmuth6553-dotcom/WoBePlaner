@@ -21,7 +21,11 @@ const AbsencePlanner = lazy(() => import('./components/AbsencePlanner'))
 const Profile = lazy(() => import('./components/Profile'))
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'))
 const TimeTracking = lazy(() => import('./components/TimeTracking'))
+const TimeTrackingV2 = lazy(() => import('./components/TimeTrackingV2'))
 const AdminTimeTracking = lazy(() => import('./components/AdminTimeTracking'))
+
+// Feature Flag: Set to true to test the new TimeTrackingV2 component
+const USE_NEW_TIME_TRACKING = false
 
 // Loading fallbacks for lazy components - using skeleton loading
 import { RosterFeedSkeleton, TimeTrackingSkeleton, ProfileSkeleton, PageSkeleton } from './components/Skeleton'
@@ -109,7 +113,7 @@ function AppContent() {
           {activeTab === 'roster' && <RosterFeed />}
           {activeTab === 'times' && (
             <Suspense fallback={<TimeTrackingSkeleton />}>
-              {isAdmin ? <AdminTimeTracking /> : <TimeTracking />}
+              {isAdmin ? <AdminTimeTracking /> : (USE_NEW_TIME_TRACKING ? <TimeTrackingV2 /> : <TimeTracking />)}
             </Suspense>
           )}
           {activeTab === 'absences' && (

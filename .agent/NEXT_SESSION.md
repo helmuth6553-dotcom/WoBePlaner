@@ -2,51 +2,56 @@
 
 ## 📅 Letzte Session: 21.12.2025
 
-### ✅ Erreichte Meilensteine:
+### ✅ Session-Highlights:
 
-#### 1. Code-Bereinigung (Tech Debt Abbau)
-- **Multi-Tenancy Infrastructure entfernt:**
-  - `featureFlags.js` **gelöscht** (nicht mehr benötigt)
-  - `ShiftTemplateContext.jsx` **vereinfacht** (229 → 165 Zeilen, keine DB-Abfrage mehr)
-  - Schichtdefinitionen jetzt lokal in `ShiftTemplateContext.jsx` (Single Source of Truth)
-  
-- **Debug-Code entfernt:**
-  - console.log Statements aus `AdminTimeTracking.jsx` entfernt
-  - console.log Statements aus `NotificationToggle.jsx` entfernt
+#### 1. Admin-Features (4 neue Features)
+- **Max 3 Urlaub/Tag:** Validierung verhindert mehr als 3 gleichzeitige Urlaube
+- **Audit-Log:** Shift-Operationen (create/update/delete) werden jetzt geloggt
+- **Jahres-Urlaubskalender:** Neue Komponente mit 12-Monats-Übersicht
+- **Push bei Urlaubsantrag:** Admin-Benachrichtigung via Edge Function
 
-- **Dokumentation aktualisiert:**
-  - `ROADMAP_2.0_IMPLEMENTATION.md` als ARCHIVIERT markiert
-  - `PROJECT_CONTEXT_WIKI.md` mit Cleanup-Status aktualisiert
+#### 2. Datenbank-Cleanup
+- **6 Tabellen gelöscht:** 5 Backup-Tabellen + `shift_templates`
+- **6 RLS Policies optimiert:** Performance-Verbesserung
+- **15 Tabellen verbleiben:** Schlanke, saubere DB (~3.8 MB)
 
-#### 2. Code-Qualität
-- Alle **196 Tests** bestanden ✅
-- Build erfolgreich ✅
-- ESLint Warnings reduziert
+#### 3. Neue Dateien
+- `src/components/admin/AdminVacationCalendar.jsx` - 12-Monate Übersicht
+- `src/components/admin/AdminVacationStats.jsx` - Urlaubsstatistiken
+- `supabase/functions/notify-admin-vacation/index.ts` - Push Edge Function
 
 ---
 
 ## 🎯 Nächste Schritte
 
-### Priorität 1: Usability & Offline
-- [ ] **Offline-Modus Feedback:** Bessere UI-Anzeige, wenn der User offline ist
-- [ ] **1-Klick Schichtübernahme:** "Sofort Übernehmen" Button für offene Dienste
+### Priorität 1: Offene Warnungen
+- [ ] **Multiple Permissive Policies:** ~20 Warnungen in `absences` und `time_entries`
+  - Policies zusammenführen (User + Admin in einer Policy)
+  - Niedriger Aufwand, aber erfordert sorgfältiges Testen
 
-### Priorität 2: Admin Features
-- [ ] **Statistik-Dashboard:** Einfache Übersicht über Überstunden/Krankheitstage pro Jahr
-- [ ] **Schichtplan-Vorlagen:** Ganze Wochen als "Standard" speichern und laden
+### Priorität 2: Usability
+- [ ] **Offline-Modus Feedback:** Bessere UI wenn User offline ist
+- [ ] **1-Klick Schichtübernahme:** "Sofort Übernehmen" Button
 
-### Priorität 3: Refactoring (Optional)
-- [ ] **TimeTracking.jsx aufteilen:** Monolithische Komponente (1065 Zeilen) in kleinere Teile aufbrechen
-- [ ] **AdminTimeTracking.jsx aufteilen:** Analog zu AdminDashboard Refactoring
+### Priorität 3: Admin Features
+- [ ] **Statistik-Dashboard erweitern:** Jahres-Übersicht Überstunden/Krankheitstage
+- [ ] **Audit-Log Filter:** Filtermöglichkeiten und Export
+
+### Priorität 4: Refactoring (Optional)
+- [ ] **TimeTracking.jsx aufteilen:** ~1000 Zeilen in kleinere Teile
+- [ ] **E2E-Tests erweitern:** Playwright Tests ausbauen
 
 ---
 
-## 📁 Wichtige Scripts & Tools
+## 📁 Wichtige Dateien dieser Session
 
-| Skript | Beschreibung |
-|--------|--------------|
-| `python optimize_icon.py` | Generiert perfekte PWA Icons aus `public/logo2.png` (Auto-Crop + Padding) |
-| `src/utils/calendarExport.js` | Logic für iCal (.ics) Generierung |
+| Datei | Änderung |
+|-------|----------|
+| `AbsencePlanner.jsx` | Max 3 Urlaub Validierung |
+| `RosterFeed.jsx` | Audit-Logging für Shifts |
+| `AdminDashboard.jsx` | Neuer "Kalender" Tab |
+| `AdminVacationCalendar.jsx` | **NEU** - Jahres-Übersicht |
+| `notify-admin-vacation/index.ts` | **NEU** - Edge Function |
 
 ---
 
@@ -56,13 +61,43 @@
 |--------|------|
 | Tests | 196 bestanden ✅ |
 | Deployment | Active (Cloudflare) 🚀 |
-| Lint Warnings | ~10 (reduziert von 53) |
-| Version | 1.4.0 (Code Cleanup) |
+| Edge Functions | 5 deployed |
+| DB Tabellen | 15 (bereinigt) |
+| Version | 1.5.0 (Admin Features) |
 
 ---
 
-## 🔑 Wichtige Architektur-Entscheidungen
+## 🔑 Edge Functions
 
-1. **Schichtzeiten bleiben im Code** (nicht in Supabase) - schnellerer Initial Load für Single-Team App
-2. **Multi-Tenancy pausiert** - DB-Tabellen (`teams`, `shift_templates`) existieren noch aber werden nicht genutzt
-3. **ShiftTemplateContext ist Single Source of Truth** für alle Schicht-Definitionen
+| Funktion | Trigger | Beschreibung |
+|----------|---------|--------------|
+| `notify-sickness` | Cron/Manuell | Push bei Krankmeldung |
+| `notify-shift-reminder` | Cron | Schicht-Erinnerung |
+| `notify-monthly-closing` | Cron | Monatsabschluss-Erinnerung |
+| `notify-admin-vacation` | **NEU** Manuell | Push an Admin bei Urlaubsantrag |
+| `create-user` | Manuell | User erstellen |
+
+---
+
+## 🗄️ Datenbank-Schema (15 Tabellen)
+
+### Core Tables
+- `profiles` - Benutzer (112 kB)
+- `shifts` - Dienste (2.5 MB)
+- `time_entries` - Zeiterfassung (192 kB)
+- `absences` - Urlaub/Krankheit (160 kB)
+
+### Support Tables
+- `monthly_reports` - Monatsberichte
+- `shift_interests` - Dienst-Interesse
+- `shift_logs` - Flex-Logs
+- `roster_months` - Monatsstatus
+- `admin_actions` - Audit-Log
+- `signatures` - FES-Signaturen
+- `balance_corrections` - Admin-Korrekturen
+
+### Infrastructure
+- `push_subscriptions` - Push-Token
+- `notification_preferences` - Push-Einstellungen
+- `invitations` - MA-Einladungen
+- `teams` - Multi-Tenancy (reserviert)

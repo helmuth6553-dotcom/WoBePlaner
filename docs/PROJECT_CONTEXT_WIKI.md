@@ -252,3 +252,52 @@ Das Sozialarbeiter-Team hat **deutlich komplexere Berechnungsregeln**:
 **Stand: 21.12.2025** – 7 von 14 Features erledigt (1 als "nicht nötig" gestrichen)
 
 
+## 16. SESSION 21.12.2025 - ADMIN FEATURES & DB CLEANUP
+
+### Neue Admin-Features
+
+| Feature | Status | Beschreibung |
+|---------|--------|--------------|
+| **Max 3 Urlaub/Tag** | ✅ | Validierung in `AbsencePlanner.jsx` - verhindert mehr als 3 gleichzeitige Urlaube |
+| **Audit-Log Erweiterung** | ✅ | Shift-Operationen werden jetzt geloggt (create/update/delete) in `RosterFeed.jsx` |
+| **Jahres-Urlaubskalender** | ✅ | Neue Komponente `AdminVacationCalendar.jsx` - 12-Monate Übersicht |
+| **Push bei Urlaubsantrag** | ✅ | Edge Function `notify-admin-vacation` - benachrichtigt Admins bei neuen Anträgen |
+
+### Neue Komponenten
+*   `src/components/admin/AdminVacationCalendar.jsx` - Jahres-Übersicht aller Urlaube
+*   `src/components/admin/AdminVacationStats.jsx` - Urlaubsstatistiken
+*   `supabase/functions/notify-admin-vacation/index.ts` - Push Edge Function
+
+### Datenbank-Cleanup
+
+**Gelöschte Tabellen (überflüssig):**
+- `_backup_absences_20251217`
+- `_backup_monthly_reports_20251217`
+- `_backup_profiles_20251217`
+- `_backup_shifts_20251217`
+- `_backup_time_entries_20251217`
+- `shift_templates` (nicht verwendet)
+
+**RLS-Optimierung:**
+- 6 Policies für `balance_corrections` und `notification_preferences` optimiert
+- `auth.uid()` → `(SELECT auth.uid())` für bessere Performance
+
+### Aktuelle Tabellen (15)
+| Tabelle | Größe | Verwendung |
+|---------|-------|------------|
+| `shifts` | 2.5 MB | Dienste |
+| `time_entries` | 192 kB | Zeiterfassung |
+| `absences` | 160 kB | Urlaub/Krankheit |
+| `monthly_reports` | 128 kB | Monatsberichte |
+| `profiles` | 112 kB | Benutzer |
+| `shift_interests` | 120 kB | Dienst-Interesse |
+| `shift_logs` | 96 kB | Flex-Logs |
+| `roster_months` | 88 kB | Monatsstatus |
+| `admin_actions` | 80 kB | Audit-Log |
+| `signatures` | 64 kB | FES-Signaturen |
+| `notification_preferences` | 56 kB | Push-Einstellungen |
+| `balance_corrections` | 48 kB | Admin-Korrekturen |
+| `push_subscriptions` | 48 kB | Push-Token |
+| `invitations` | 32 kB | MA-Einladungen |
+| `teams` | 32 kB | Multi-Tenancy (reserviert) |
+

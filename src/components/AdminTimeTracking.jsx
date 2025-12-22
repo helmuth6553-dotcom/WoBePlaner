@@ -7,6 +7,7 @@ import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCal
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateReportHash } from '../utils/security'
 import { logAdminAction } from '../utils/adminAudit'
+import { constructIso, constructInterruptionIso, safeFormatTime, safeFormatDate } from '../utils/timeTrackingHelpers'
 
 
 export default function AdminTimeTracking() {
@@ -631,13 +632,8 @@ export default function AdminTimeTracking() {
     }
 
 
-    // --- Helpers ---
-    const safeFormatTime = (iso) => { try { return format(parseISO(iso), 'HH:mm') } catch { return '--:--' } }
-    const safeFormatDate = (iso) => { try { return format(parseISO(iso), 'dd.MM.') } catch { return '' } }
+    // --- Helpers (imported from timeTrackingHelpers.js) ---
     const safeFormatDay = (iso) => { try { return format(parseISO(iso), 'EEEE', { locale: de }) } catch { return '' } }
-
-    const constructIso = (ref, t) => { if (!ref || !t) return null; try { const [h, m] = t.split(':'); const d = new Date(ref); d.setHours(h, m, 0, 0); return d.toISOString() } catch { return null } }
-    const constructInterruptionIso = (ref, t) => { if (!ref || !t) return null; try { const [h, m] = t.split(':'); const d = new Date(ref); if (h < 12 && d.getHours() >= 12) d.setDate(d.getDate() + 1); d.setHours(h, m, 0, 0); return d.toISOString() } catch { return null } }
 
 
     // Modal Save

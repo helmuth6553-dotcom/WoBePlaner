@@ -6,29 +6,8 @@ import { de } from 'date-fns/locale'
 import { CheckCircle, Save, Calendar, Download, Sun, Thermometer, ChevronRight, ChevronLeft, Users, XCircle } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
 import { generateReportHash } from '../utils/security'
+import { constructIso, constructInterruptionIso } from '../utils/timeTrackingHelpers'
 
-// Helper functions at module level for stable references in hooks
-function constructIso(referenceIso, timeStr) {
-    if (!referenceIso || !timeStr) return null
-    try {
-        const [hours, minutes] = timeStr.split(':').map(Number)
-        const date = parseISO(referenceIso)
-        const newDate = new Date(date)
-        newDate.setHours(hours, minutes, 0, 0)
-        return newDate.toISOString()
-    } catch { return null }
-}
-
-function constructInterruptionIso(shiftStartIso, timeStr) {
-    try {
-        const [hours, minutes] = timeStr.split(':').map(Number)
-        const startDate = parseISO(shiftStartIso)
-        let targetDate = new Date(startDate)
-        if (hours < 12 && startDate.getHours() >= 12) targetDate = addDays(targetDate, 1)
-        targetDate.setHours(hours, minutes, 0, 0)
-        return targetDate.toISOString()
-    } catch { return null }
-}
 
 export default function TimeTracking() {
     const { user, isAdmin } = useAuth()
