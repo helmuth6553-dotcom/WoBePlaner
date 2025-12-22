@@ -25,7 +25,7 @@ const TimeTrackingV2 = lazy(() => import('./components/TimeTrackingV2'))
 const AdminTimeTracking = lazy(() => import('./components/AdminTimeTracking'))
 
 // Feature Flag: Set to true to test the new TimeTrackingV2 component
-const USE_NEW_TIME_TRACKING = false
+const USE_NEW_TIME_TRACKING = true
 
 // Loading fallbacks for lazy components - using skeleton loading
 import { RosterFeedSkeleton, TimeTrackingSkeleton, ProfileSkeleton, PageSkeleton } from './components/Skeleton'

@@ -3,17 +3,18 @@
  * 
  * This is the new, clean version using custom hooks.
  * Old component: TimeTracking.jsx (1044 lines)
- * New component: ~250 lines, same functionality
+ * New component: ~350 lines with full functionality
  * 
  * Switch in App.jsx:
  * const USE_NEW_TIME_TRACKING = true
  */
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useAuth } from '../AuthContext'
+import { supabase } from '../supabase'
 import { format, parseISO, areIntervalsOverlapping } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { CheckCircle, Save, Download, Sun, Thermometer, ChevronRight, ChevronLeft, Users } from 'lucide-react'
+import { CheckCircle, Save, Sun, Thermometer, ChevronRight, ChevronLeft, Users } from 'lucide-react'
 
 // Custom Hooks
 import { useShifts } from '../hooks/useShifts'
@@ -21,21 +22,26 @@ import { useAbsences } from '../hooks/useAbsences'
 import { useTimeEntries } from '../hooks/useTimeEntries'
 import { useMonthStatus } from '../hooks/useMonthStatus'
 
+// Components
+import TimeEntryModal from './TimeEntryModal'
+
 // Utils
 import { calculateWorkHours } from '../utils/timeCalculations'
-import { constructIso, constructInterruptionIso } from '../utils/timeTrackingHelpers'
 
 export default function TimeTrackingV2() {
     const { user, isAdmin } = useAuth()
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'))
     const [userProfile, setUserProfile] = useState(null)
     const [editingItem, setEditingItem] = useState(null)
+    const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false)
+    const [password, setPassword] = useState('')
+    const [submitError, setSubmitError] = useState('')
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
     // Load user profile once
     useEffect(() => {
         if (!user) return
         const loadProfile = async () => {
-            const { supabase } = await import('../supabase')
             const { data } = await supabase
                 .from('profiles')
                 .select('weekly_hours, start_date')
@@ -47,7 +53,7 @@ export default function TimeTrackingV2() {
     }, [user])
 
     // Use custom hooks for data fetching
-    const { personalShifts, teamShifts, allShifts, loading: shiftsLoading } = useShifts(
+    const { personalShifts, teamShifts, allShifts, loading: shiftsLoading, refetch: refetchShifts } = useShifts(
         user?.id,
         selectedMonth,
         { employeeStartDate: userProfile?.start_date }
@@ -60,12 +66,12 @@ export default function TimeTrackingV2() {
         userProfile
     )
 
-    const { entriesMap, loading: entriesLoading, saveEntry } = useTimeEntries(
+    const { entriesMap, loading: entriesLoading, refetch: refetchEntries } = useTimeEntries(
         user?.id,
         selectedMonth
     )
 
-    const { status: monthStatus, isLocked, submitMonth, loading: statusLoading } = useMonthStatus(
+    const { status: monthStatus, isLocked, loading: statusLoading, refetch: refetchStatus } = useMonthStatus(
         user?.id,
         selectedMonth
     )
@@ -122,6 +128,115 @@ export default function TimeTrackingV2() {
             return false
         })
     }, [items, entriesMap])
+
+    // Handle save from modal
+    const handleSaveEntry = useCallback(async (entryData) => {
+        if (!editingItem) return
+
+        const payload = {
+            user_id: user.id,
+            actual_start: entryData.actualStart,
+            actual_end: entryData.actualEnd,
+            interruptions: entryData.interruptions,
+            calculated_hours: entryData.calculatedHours,
+            status: 'submitted',
+            original_data: {
+                start: entryData.actualStart,
+                end: entryData.actualEnd,
+                interruptions: entryData.interruptions
+            }
+        }
+
+        try {
+            if (editingItem.itemType === 'shift') {
+                payload.shift_id = editingItem.id
+
+                // Check for existing entry
+                const { data: existing } = await supabase
+                    .from('time_entries')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('shift_id', editingItem.id)
+                    .maybeSingle()
+
+                if (existing) {
+                    await supabase.from('time_entries').update(payload).eq('id', existing.id)
+                } else {
+                    await supabase.from('time_entries').insert(payload)
+                }
+            } else {
+                payload.absence_id = editingItem.absence_id
+                payload.entry_date = editingItem.date
+
+                const existingEntry = entriesMap[editingItem.id]
+                if (existingEntry) {
+                    await supabase.from('time_entries').update(payload).eq('id', existingEntry.id)
+                } else {
+                    await supabase.from('time_entries').insert(payload)
+                }
+            }
+
+            setEditingItem(null)
+            refetchEntries()
+        } catch (error) {
+            console.error('Save error:', error)
+            alert('Fehler beim Speichern: ' + error.message)
+        }
+    }, [editingItem, user, entriesMap, refetchEntries])
+
+    // Handle submit month
+    const handleSubmitMonth = async () => {
+        setSubmitError('')
+        setIsSubmitting(true)
+
+        // Re-authenticate
+        const { error: authError } = await supabase.auth.signInWithPassword({
+            email: user.email,
+            password
+        })
+
+        if (authError) {
+            setSubmitError('Falsches Passwort.')
+            setIsSubmitting(false)
+            return
+        }
+
+        try {
+            const [year, month] = selectedMonth.split('-').map(Number)
+            const { generateReportHash } = await import('../utils/security')
+
+            // Build snapshot
+            const snapshot = items.map(item => {
+                const entry = entriesMap[item.id]
+                return entry || {
+                    entry_date: item.date || format(item.sortDate, 'yyyy-MM-dd'),
+                    calculated_hours: item.planned_hours || 0,
+                    shifts: { type: item.type || 'Urlaub' }
+                }
+            })
+
+            const hash = await generateReportHash(snapshot, user.id, selectedMonth)
+
+            await supabase.from('monthly_reports').insert({
+                user_id: user.id,
+                data_hash: hash,
+                hash_version: 'v1',
+                original_data_snapshot: snapshot,
+                year,
+                month,
+                status: 'eingereicht',
+                submitted_at: new Date().toISOString()
+            })
+
+            setIsSubmitModalOpen(false)
+            setPassword('')
+            refetchStatus()
+        } catch (error) {
+            setSubmitError(error.message)
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
 
     // Admin redirect
     if (isAdmin) {
@@ -214,8 +329,9 @@ export default function TimeTrackingV2() {
                         return (
                             <div
                                 key={item.id}
+                                onClick={() => !isLocked && !isAbsence && setEditingItem(item)}
                                 className={`p-4 rounded-xl border shadow-sm transition-all ${isDone ? 'bg-gray-100' : 'bg-white border-gray-200'
-                                    }`}
+                                    } ${!isLocked && !isAbsence ? 'cursor-pointer hover:shadow-md active:scale-[0.99]' : ''}`}
                             >
                                 <div className="flex justify-between items-center mb-2">
                                     <div>
@@ -257,8 +373,8 @@ export default function TimeTrackingV2() {
                                             {isDone ? 'Genehmigt' : 'Erfasst'}
                                         </div>
                                     ) : (
-                                        <div className="px-2 py-1 rounded text-xs font-bold uppercase bg-gray-100 text-gray-500">
-                                            Offen
+                                        <div className="px-2 py-1 rounded text-xs font-bold uppercase bg-gray-100 text-gray-500 flex items-center gap-1">
+                                            Offen <ChevronRight size={14} />
                                         </div>
                                     )}
                                 </div>
@@ -287,15 +403,62 @@ export default function TimeTrackingV2() {
                 </div>
             )}
 
-            {/* Submit Button (if all done and not locked) */}
+            {/* Submit Button */}
             {!isLocked && allItemsDone && items.length > 0 && (
-                <div className="fixed bottom-20 left-0 right-0 p-4 bg-white border-t">
+                <div className="fixed bottom-20 left-0 right-0 p-4 flex justify-center pointer-events-none z-[80]">
                     <button
-                        className="w-full bg-black text-white py-4 rounded-xl font-bold"
-                        onClick={() => {/* TODO: Open submit modal */ }}
+                        onClick={() => setIsSubmitModalOpen(true)}
+                        className="pointer-events-auto shadow-2xl px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 bg-black text-white hover:bg-gray-900 border-2 border-white"
                     >
-                        Monat einreichen
+                        <Save size={20} /> Monat abschließen & Signieren
                     </button>
+                </div>
+            )}
+
+            {/* Edit Modal */}
+            {editingItem && (
+                <TimeEntryModal
+                    item={editingItem}
+                    entry={entriesMap[editingItem.id]}
+                    userProfile={userProfile}
+                    onSave={handleSaveEntry}
+                    onClose={() => setEditingItem(null)}
+                />
+            )}
+
+            {/* Submit Modal */}
+            {isSubmitModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95">
+                        <h3 className="text-xl font-bold mb-4">Monat abschließen?</h3>
+                        <p className="text-gray-500 mb-6 text-sm">Bestätige die Richtigkeit deiner Angaben.</p>
+                        <div className="mb-4">
+                            <label className="block text-sm font-bold mb-1">Passwort</label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                className="w-full border-2 border-gray-200 p-3 rounded-xl"
+                                placeholder="Login Passwort"
+                            />
+                            {submitError && <p className="text-red-500 text-xs mt-2 font-bold">{submitError}</p>}
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setIsSubmitModalOpen(false)}
+                                className="flex-1 py-3 bg-gray-100 rounded-xl font-bold"
+                            >
+                                Abbrechen
+                            </button>
+                            <button
+                                onClick={handleSubmitMonth}
+                                disabled={!password || isSubmitting}
+                                className="flex-1 py-3 bg-black text-white rounded-xl font-bold disabled:opacity-50"
+                            >
+                                {isSubmitting ? '...' : 'Signieren'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
