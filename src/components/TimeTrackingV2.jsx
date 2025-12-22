@@ -264,7 +264,7 @@ export default function TimeTrackingV2() {
             {/* Month Status Banner */}
             {monthStatus && (
                 <div className={`mb-6 p-4 rounded-xl border flex flex-col gap-3 ${monthStatus.status === 'genehmigt' ? 'bg-green-50 border-green-200' :
-                        monthStatus.status === 'eingereicht' ? 'bg-blue-50 border-blue-200' : ''
+                    monthStatus.status === 'eingereicht' ? 'bg-blue-50 border-blue-200' : ''
                     }`}>
                     <div className="flex items-center gap-4">
                         <div className={`p-3 rounded-full ${monthStatus.status === 'genehmigt' ? 'bg-green-100' : 'bg-blue-100 text-blue-600'
@@ -390,6 +390,29 @@ export default function TimeTrackingV2() {
                                     <div className="text-sm text-gray-600 mt-2">
                                         <span className="font-bold">{item.planned_hours?.toFixed(2)}h</span> gutgeschrieben
                                     </div>
+                                )}
+
+                                {/* Zeit Bestätigen Button - nur für nicht-gesperrte, nicht-Abwesenheits-Einträge */}
+                                {!isLocked && !isAbsence && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            setEditingItem(item)
+                                        }}
+                                        className={`w-full mt-3 py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${isDone
+                                                ? 'bg-gray-800 text-white hover:bg-black'
+                                                : entry
+                                                    ? 'bg-gray-800 text-white hover:bg-black'
+                                                    : 'bg-[#00c2cb] text-white hover:bg-[#00b3bb] shadow-lg'
+                                            }`}
+                                    >
+                                        {isDone ? 'Bearbeiten' : (
+                                            <>
+                                                {entry ? 'Bearbeiten' : 'Zeit Bestätigen'}
+                                                <ChevronRight size={16} />
+                                            </>
+                                        )}
+                                    </button>
                                 )}
                             </div>
                         )

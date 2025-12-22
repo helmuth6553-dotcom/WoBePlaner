@@ -1,11 +1,4 @@
-/**
- * useAbsences.js - Custom Hook for fetching absences
- * 
- * Fetches approved absences for a user within a given month,
- * and expands multi-day absences into individual day items.
- */
-
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { startOfMonth, endOfMonth, format } from 'date-fns'
 import { expandAbsencesToItems } from '../utils/timeTrackingHelpers'
@@ -20,13 +13,16 @@ import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCal
  * @returns {Object} { absences, absenceItems, loading, error, refetch }
  */
 export function useAbsences(userId, selectedMonth, plannedShifts = [], userProfile = null) {
-    const [data, setData] = useState({
-        absences: [],      // Raw absences from DB
-        absenceItems: []   // Expanded into day items
-    })
+    const [absences, setAbsences] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
+    // Create a stable key from shift IDs to detect when shifts actually change
+    const shiftsKey = useMemo(() => {
+        return (plannedShifts || []).map(s => s.id).sort().join(',')
+    }, [plannedShifts])
+
+    // Fetch raw absences from DB
     const fetchAbsences = useCallback(async () => {
         if (!userId || !selectedMonth) {
             setLoading(false)
@@ -43,7 +39,7 @@ export function useAbsences(userId, selectedMonth, plannedShifts = [], userProfi
             const endStr = format(end, 'yyyy-MM-dd')
 
             // Fetch approved absences that overlap with the month
-            const { data: absences, error: absError } = await supabase
+            const { data: absData, error: absError } = await supabase
                 .from('absences')
                 .select('start_date, end_date, user_id, status, type, planned_hours, planned_shifts_snapshot, id, reason, note')
                 .eq('user_id', userId)
@@ -53,35 +49,40 @@ export function useAbsences(userId, selectedMonth, plannedShifts = [], userProfi
 
             if (absError) throw absError
 
-            // Expand absences into individual day items
-            const absenceItems = expandAbsencesToItems(
-                absences || [],
-                start,
-                end,
-                plannedShifts,
-                userProfile,
-                calculateDailyAbsenceHours,
-                calculateWorkHours
-            )
-
-            setData({
-                absences: absences || [],
-                absenceItems
-            })
+            setAbsences(absData || [])
         } catch (err) {
             console.error('useAbsences error:', err)
             setError(err)
         } finally {
             setLoading(false)
         }
-    }, [userId, selectedMonth, plannedShifts, userProfile])
+    }, [userId, selectedMonth])
 
     useEffect(() => {
         fetchAbsences()
     }, [fetchAbsences])
 
+    // Expand absences into day items - re-calculate when shifts or profile change
+    const absenceItems = useMemo(() => {
+        if (!absences || absences.length === 0) return []
+
+        const start = startOfMonth(new Date(selectedMonth + '-01'))
+        const end = endOfMonth(new Date(selectedMonth + '-01'))
+
+        return expandAbsencesToItems(
+            absences,
+            start,
+            end,
+            plannedShifts || [],
+            userProfile,
+            calculateDailyAbsenceHours,
+            calculateWorkHours
+        )
+    }, [absences, selectedMonth, plannedShifts, userProfile, shiftsKey]) // shiftsKey ensures re-render when shifts change
+
     return {
-        ...data,
+        absences,
+        absenceItems,
         loading,
         error,
         refetch: fetchAbsences

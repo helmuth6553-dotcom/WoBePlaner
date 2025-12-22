@@ -47,7 +47,11 @@
     *   `src/components/Login.jsx`: Login-Screen (PW + Magic Link).
     *   **`src/components/SetPassword.jsx`**: Zwingt neue User beim ersten Login zum Setzen eines Passworts.
     *   `src/components/RosterFeed.jsx`: Hauptansicht Dienstplan (~804 Zeilen).
-    *   `src/components/TimeTracking.jsx`: Zeiterfassung für Mitarbeiter (~996 Zeilen).
+    *   `src/components/Login.jsx`: Login-Screen (PW + Magic Link).
+    *   **`src/components/SetPassword.jsx`**: Zwingt neue User beim ersten Login zum Setzen eines Passworts.
+    *   `src/components/RosterFeed.jsx`: Hauptansicht Dienstplan (~804 Zeilen).
+    *   **`src/components/TimeTracking.jsx`**: Zeiterfassung für Mitarbeiter (AKTIV).
+    *   `src/components/TimeTrackingV2.jsx`: Refactoring-Versuch (DEAKTIVIERT via Flag in App.jsx - fehlende Team-Schichten/Abwesenheiten).
     *   **`src/components/AdminDashboard.jsx`**: Tab-Container (~49 Zeilen nach Refactoring 14.12.2025).
     *   `src/components/AdminTimeTracking.jsx`: Kontrolle der Stunden durch Admins.
     *   `src/components/Profile.jsx`: User-Profil, PW-Änderung, Stats.
