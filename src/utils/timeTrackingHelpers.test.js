@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
     constructIso,
+    constructEndIso,
     constructInterruptionIso,
     filterShiftsByStartDate,
     deduplicateEntries,
@@ -40,6 +41,86 @@ describe('constructIso', () => {
         const date = new Date(result)
         expect(date.getHours()).toBe(0)
         expect(date.getMinutes()).toBe(0)
+    })
+})
+
+// =============================================================================
+// constructEndIso - OVERNIGHT SHIFT HANDLING (Phase 1 Tests)
+// Based on SHIFT_TIMES.md: ND 19:00-08:00, DBD 20:00-00:00, etc.
+// =============================================================================
+
+describe('constructEndIso', () => {
+    it('keeps same day for day shift 08:00-16:00', () => {
+        // TD1/TD2 style day shift - end is same day
+        const ref = '2025-01-15T08:00:00'  // Local time (no Z)
+        const result = constructEndIso(ref, '08:00', '16:00')
+
+        const start = new Date(ref)
+        const end = new Date(result)
+
+        // Should be same date
+        expect(end.getDate()).toBe(start.getDate())
+        expect(end.getHours()).toBe(16)
+        expect(end.getMinutes()).toBe(0)
+    })
+
+    it('adds a day for night shift 19:00-08:00 (THE BUG FIX TEST)', () => {
+        // This is the exact scenario that caused the -10h bug!
+        // ND shift per SHIFT_TIMES.md: 19:00-08:00
+        const ref = '2025-01-15T19:00:00'  // Local time
+        const result = constructEndIso(ref, '19:00', '08:00')
+
+        const start = new Date(ref)
+        const end = new Date(result)
+
+        // End should be next day (16th, not 15th)
+        expect(end.getDate()).toBe(start.getDate() + 1)
+        expect(end.getHours()).toBe(8)
+        expect(end.getMinutes()).toBe(0)
+    })
+
+    it('adds a day for late night shift 22:00-06:00', () => {
+        const ref = '2025-01-15T22:00:00'
+        const result = constructEndIso(ref, '22:00', '06:00')
+
+        const start = new Date(ref)
+        const end = new Date(result)
+
+        expect(end.getDate()).toBe(start.getDate() + 1)
+        expect(end.getHours()).toBe(6)
+    })
+
+    it('handles DBD midnight end (20:00-00:00) correctly', () => {
+        // DBD per SHIFT_TIMES.md: 20:00-00:00
+        const ref = '2025-01-15T20:00:00'
+        const result = constructEndIso(ref, '20:00', '00:00')
+
+        const start = new Date(ref)
+        const end = new Date(result)
+
+        // Midnight (00:00) after 20:00 should be next day
+        expect(end.getDate()).toBe(start.getDate() + 1)
+        expect(end.getHours()).toBe(0)
+    })
+
+    it('keeps same day for short evening shift 23:00-23:30', () => {
+        const ref = '2025-01-15T23:00:00'
+        const result = constructEndIso(ref, '23:00', '23:30')
+
+        const start = new Date(ref)
+        const end = new Date(result)
+
+        // End is still on the same day
+        expect(end.getDate()).toBe(start.getDate())
+        expect(end.getHours()).toBe(23)
+        expect(end.getMinutes()).toBe(30)
+    })
+
+    it('returns null for null/undefined parameters', () => {
+        expect(constructEndIso(null, '08:00', '16:00')).toBeNull()
+        expect(constructEndIso('2025-01-15T08:00:00', null, '16:00')).toBeNull()
+        expect(constructEndIso('2025-01-15T08:00:00', '08:00', null)).toBeNull()
+        expect(constructEndIso(undefined, '08:00', '16:00')).toBeNull()
     })
 })
 

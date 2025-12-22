@@ -116,8 +116,12 @@ export const calculateWorkHours = (startIso, endIso, type, interruptions = [], t
                 const duration = differenceInMinutes(iOverlapEnd, iOverlapStart)
                 deductedReadinessMinutes += duration
 
-                // Create Inflated Interval (Start -> Max(End, Start+minInterruptionMinutes))
-                const inflatedEnd = max([iOverlapEnd, addMinutes(iOverlapStart, minInterruptionMinutes)])
+                // CEIL Rounding: Every "scratched" 30-min block counts as full 30 min
+                // Formula: Math.ceil(duration / 30) * 30
+                // Examples: 10min→30min, 31min→60min, 45min→60min, 61min→90min
+                // See: docs/SHIFT_TIMES.md - Unterbrechungen während Bereitschaft
+                const roundedDurationMinutes = Math.ceil(duration / minInterruptionMinutes) * minInterruptionMinutes
+                const inflatedEnd = addMinutes(iOverlapStart, roundedDurationMinutes)
                 rawIntervals.push({ start: iOverlapStart, end: inflatedEnd })
             }
         })

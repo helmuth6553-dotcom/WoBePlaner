@@ -87,7 +87,11 @@
 
 ## 5. DOKUMENTATIONS-REFERENZ
 
-*   **`docs/SECURE_ONBOARDING.md`**: **(NEU)** Dokumentiert den kompletten Invite-Flow, Edge Function Nutzung und Troubleshooting für Login-Probleme. **MUSS GELESEN WERDEN.**
+> ⚠️ **WICHTIG:** Vor dem Schreiben von Tests oder Änderungen an der Stundenberechnung MUSS die SHIFT_TIMES.md gelesen werden!
+
+*   **`docs/SHIFT_TIMES.md`**: **(KRITISCH)** Alle Schichttypen mit exakten Zeiten und Stundenberechnungen. Bereitschaftsregeln, Unterbrechungslogik, Abwesenheitsregeln.
+*   **`docs/RULES_OF_TIME.md`**: Detaillierte Berechnungslogik für Stunden und Salden.
+*   **`docs/SECURE_ONBOARDING.md`**: Dokumentiert den kompletten Invite-Flow, Edge Function Nutzung und Troubleshooting für Login-Probleme.
 *   **`docs/RLS_POLICIES.md`**: Referenz für Datenbank-Zugriffsrechte. Wichtig bei Permission-Errors.
 *   **`docs/TECHNICAL_DOCS.md`**: Generelle Architektur und Glossar.
 

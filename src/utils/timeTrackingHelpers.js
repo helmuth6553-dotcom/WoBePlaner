@@ -29,6 +29,44 @@ export function constructIso(referenceIso, timeStr) {
 }
 
 /**
+ * Constructs ISO for end time, handling overnight shifts.
+ * If end time appears to be on next day (end < start), adds a day.
+ * 
+ * Logic (per SHIFT_TIMES.md):
+ * - ND: 19:00 - 08:00 → end is next day
+ * - DBD: 20:00 - 00:00 → end is next day (midnight)
+ * - TD1/TD2: same day
+ * 
+ * @param {string} referenceIso - Reference ISO date string (shift start)
+ * @param {string} startTimeStr - Start time string in HH:mm format
+ * @param {string} endTimeStr - End time string in HH:mm format
+ * @returns {string|null} ISO timestamp or null if invalid
+ */
+export function constructEndIso(referenceIso, startTimeStr, endTimeStr) {
+    if (!referenceIso || !startTimeStr || !endTimeStr) return null
+    try {
+        const [startHours, startMinutes] = startTimeStr.split(':').map(Number)
+        const [endHours, endMinutes] = endTimeStr.split(':').map(Number)
+        const date = parseISO(referenceIso)
+        let newDate = new Date(date)
+
+        // Convert to total minutes for easier comparison
+        const startTotalMins = startHours * 60 + (startMinutes || 0)
+        const endTotalMins = endHours * 60 + endMinutes
+
+        // If end time is earlier than start time, end is on the next day
+        // Examples: 19:00-08:00, 20:00-00:00, 22:00-06:00
+        if (endTotalMins < startTotalMins) {
+            newDate = addDays(newDate, 1)
+        }
+
+        // Use the same hours/minutes as input (local time context)
+        newDate.setHours(endHours, endMinutes, 0, 0)
+        return newDate.toISOString()
+    } catch { return null }
+}
+
+/**
  * Constructs ISO for interruption, handling overnight shifts.
  * If time is before noon but shift started after noon, adds a day.
  * 

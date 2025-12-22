@@ -10,25 +10,25 @@ describe('calculateWorkHours', () => {
     })
 
     it('handles night duty (ND) readiness window logic', () => {
-        // Start 18:00, End 08:00 next day
+        // Start 19:00, End 08:00 next day (per SHIFT_TIMES.md)
         // Readiness: 00:30 - 06:00 (5.5 hours) -> Credited at 50% = 2.75h
-        // Active: 18:00-00:30 (6.5h) + 06:00-08:00 (2h) = 8.5h
-        // Total Expected: 8.5 + 2.75 = 11.25h
+        // Active: 19:00-00:30 (5.5h) + 06:00-08:00 (2h) = 7.5h
+        // Total Expected: 7.5 + 2.75 = 10.25h
 
-        const start = '2025-05-10T18:00:00'
+        const start = '2025-05-10T19:00:00'
         const end = '2025-05-11T08:00:00'
         const hours = calculateWorkHours(start, end, 'ND')
-        expect(hours).toBe(11.25)
+        expect(hours).toBe(10.25)
     })
 
     it('inflates short interruptions during readiness to 30 mins', () => {
         // Readiness window is 00:30-06:00
         // Interruption: 02:00 - 02:10 (10 mins)
-        // Inflated: 02:00 - 02:30 (30 mins)
+        // CEIL rounding: ceil(10/30)*30 = 30 mins
         // Credit: 30 mins active (0.5h)
         // Deduction from passive: 10 mins (0.166h)
 
-        const start = '2025-05-10T18:00:00'
+        const start = '2025-05-10T19:00:00'  // Correct ND start per SHIFT_TIMES.md
         const end = '2025-05-11T08:00:00'
 
         const interruptionStart = '2025-05-11T02:00:00'
@@ -38,14 +38,116 @@ describe('calculateWorkHours', () => {
             { start: interruptionStart, end: interruptionEnd }
         ])
 
-        // Base ND (without interruption): 11.25
+        // Base ND (without interruption): 10.25h
         // Change:
-        // + 30 mins active (0.5h)
-        // - 10 mins passive (10 mins * 0.5 = 5 mins = 0.0833h lost from passive)
+        // + 30 mins active (0.5h) - inflated from 10min via CEIL
+        // - 10 mins passive (10 mins * 0.5 = 0.0833h lost from passive)
         // Net Change: +0.5 - 0.0833 = +0.4166
-        // Expected: 11.25 + 0.4166 = 11.666... -> 11.67
+        // Expected: 10.25 + 0.4166 = 10.666... -> 10.67
 
-        expect(hours).toBe(11.67)
+        expect(hours).toBe(10.67)
+    })
+
+    it('rounds 45 minute interruption to 60 minutes (CEIL rule)', () => {
+        // Per SHIFT_TIMES.md: Every "scratched" 30-min block = full 30 min
+        // 45 min = 2 blocks scratched -> 60 min credited
+        // Formula: Math.ceil(45/30) * 30 = 60
+
+        const start = '2025-05-10T19:00:00'
+        const end = '2025-05-11T08:00:00'
+
+        const interruptionStart = '2025-05-11T02:00:00'
+        const interruptionEnd = '2025-05-11T02:45:00' // 45 min
+
+        const hours = calculateWorkHours(start, end, 'ND', [
+            { start: interruptionStart, end: interruptionEnd }
+        ])
+
+        // Base ND: 10.25h
+        // + 60 mins active (1.0h) - CEIL(45/30)*30 = 60min
+        // - 45 mins passive (45 * 0.5 = 0.375h lost from passive)
+        // Net Change: +1.0 - 0.375 = +0.625
+        // Expected: 10.25 + 0.625 = 10.875 -> 10.88
+
+        expect(hours).toBe(10.88)
+    })
+
+    it('calculates ND weekend shift (Fr→Sa) with extended morning = 12.25h', () => {
+        // Per SHIFT_TIMES.md: ND Fr→Sa/Sa→So ends at 10:00 instead of 08:00
+        // Active: 19:00-00:30 (5.5h) + 06:00-10:00 (4.0h) = 9.5h
+        // Passive: 00:30-06:00 (5.5h) × 0.5 = 2.75h
+        // Total: 9.5 + 2.75 = 12.25h
+
+        const start = '2025-01-10T19:00:00' // Friday 19:00
+        const end = '2025-01-11T10:00:00'   // Saturday 10:00
+
+        const hours = calculateWorkHours(start, end, 'ND', [])
+        expect(hours).toBe(12.25)
+    })
+
+    it('handles multiple interruptions with CEIL rounding each', () => {
+        // Two separate interruptions: 02:00-02:20 (20min) + 04:00-04:20 (20min)
+        // Each gets CEIL: 20min → 30min each = 60min total credited
+        // Actual deducted: 40min total
+
+        const start = '2025-05-10T19:00:00'
+        const end = '2025-05-11T08:00:00'
+
+        const hours = calculateWorkHours(start, end, 'ND', [
+            { start: '2025-05-11T02:00:00', end: '2025-05-11T02:20:00' },
+            { start: '2025-05-11T04:00:00', end: '2025-05-11T04:20:00' }
+        ])
+
+        // Base ND: 10.25h
+        // + 60 mins active (1.0h) - two 30min blocks
+        // - 40 mins passive (40 × 0.5 = 0.333h lost)
+        // Net: +1.0 - 0.333 = +0.667
+        // Expected: 10.25 + 0.667 = 10.917 → 10.92
+
+        expect(hours).toBe(10.92)
+    })
+
+    it('handles full readiness interruption (00:30-06:00) = 13h total', () => {
+        // If entire readiness is active work, no passive time
+        // Total shift: 13h, all at 100%
+
+        const start = '2025-05-10T19:00:00'
+        const end = '2025-05-11T08:00:00'
+
+        const hours = calculateWorkHours(start, end, 'ND', [
+            { start: '2025-05-11T00:30:00', end: '2025-05-11T06:00:00' }
+        ])
+
+        // Full 13h counted as active
+        expect(hours).toBe(13.0)
+    })
+
+    it('ignores interruption before readiness window (23:00-00:30)', () => {
+        // Interruption outside 00:30-06:00 window should be ignored
+        const start = '2025-05-10T19:00:00'
+        const end = '2025-05-11T08:00:00'
+
+        const hours = calculateWorkHours(start, end, 'ND', [
+            { start: '2025-05-10T23:00:00', end: '2025-05-11T00:15:00' }
+        ])
+
+        // Interruption is before readiness (00:30), so ignored
+        // Result should be base ND = 10.25h
+        expect(hours).toBe(10.25)
+    })
+
+    it('ignores interruption after readiness window (06:30-07:00)', () => {
+        // Interruption outside 00:30-06:00 window should be ignored
+        const start = '2025-05-10T19:00:00'
+        const end = '2025-05-11T08:00:00'
+
+        const hours = calculateWorkHours(start, end, 'ND', [
+            { start: '2025-05-11T06:30:00', end: '2025-05-11T07:00:00' }
+        ])
+
+        // Interruption is after readiness (06:00), so ignored
+        // Result should be base ND = 10.25h
+        expect(hours).toBe(10.25)
     })
 
     it('handles null/undefined inputs gracefully', () => {
@@ -70,31 +172,22 @@ describe('Daylight Saving Time (Zeitumstellung)', () => {
      */
 
     it('calculates correct hours for night shift during March DST (spring forward - 1h shorter)', () => {
-        // Nachtschicht 29.03.2025 18:00 bis 30.03.2025 08:00
+        // Nachtschicht 29.03.2025 19:00 bis 30.03.2025 08:00 (per SHIFT_TIMES.md)
         // In dieser Nacht wird um 02:00 auf 03:00 vorgestellt
-        // Effektive Dauer: 14h - 1h = 13h (nicht 14h!)
+        // Effektive Dauer: 13h - 1h = 12h (nicht 13h!)
 
-        // Wir testen mit ISO-Strings die vom Server kommen würden
-        // Die Zeiten sind in lokaler Zeit (Europe/Vienna)
-        // WICHTIG: JavaScript Date interpretiert ISOs ohne Zeitzone als UTC!
-        // Wir müssen lokale Zeiten simulieren
-
-        const start = '2025-03-29T18:00:00' // Samstag 18:00
+        const start = '2025-03-29T19:00:00' // Samstag 19:00 (correct ND start)
         const end = '2025-03-30T08:00:00'   // Sonntag 08:00 (nach Umstellung)
 
         const hours = calculateWorkHours(start, end, 'Tag')
 
-        // Erklärung: JavaScript Date() parst ISO-Strings ohne Zeitzone als LOKALE Zeit
-        // (nicht UTC!). Da der Test auf einem System mit Europe/Vienna Zeitzone läuft,
-        // wird DST korrekt berücksichtigt!
-        //
-        // März DST: 29.03. 18:00 bis 30.03. 08:00
-        // Uhr springt von 02:00 auf 03:00 → effektiv 13h statt 14h
+        // März DST: 29.03. 19:00 bis 30.03. 08:00
+        // Uhr springt von 02:00 auf 03:00 → effektiv 12h statt 13h
         //
         // HINWEIS: Das Verhalten kann je nach Systemzeitzone variieren!
-        // Auf Windows mit Europe/Vienna: 13h (DST berücksichtigt)
-        // Auf einem CI in UTC: 14h (keine DST)
-        expect([13, 14]).toContain(hours)
+        // Auf Windows mit Europe/Vienna: 12h (DST berücksichtigt)
+        // Auf einem CI in UTC: 13h (keine DST)
+        expect([12, 13]).toContain(hours)
     })
 
     it('calculates correct hours for night shift during October DST (fall back - 1h longer)', () => {
@@ -102,7 +195,7 @@ describe('Daylight Saving Time (Zeitumstellung)', () => {
         // In dieser Nacht wird um 03:00 auf 02:00 zurückgestellt
         // Effektive Dauer: 14h + 1h = 15h (nicht 14h!)
 
-        const start = '2025-10-25T18:00:00' // Samstag 18:00
+        const start = '2025-10-25T19:00:00' // Samstag 19:00 (correct ND start)
         const end = '2025-10-26T08:00:00'   // Sonntag 08:00 (nach Umstellung)
 
         const hours = calculateWorkHours(start, end, 'Tag')
@@ -119,22 +212,19 @@ describe('Daylight Saving Time (Zeitumstellung)', () => {
         // Bereitschaft: 00:30 - 06:00 (normalerweise 5.5h)
         // Am 30.03.2025: 02:00 springt auf 03:00, also nur 4.5h Bereitschaft
 
-        const start = '2025-03-29T18:00:00'
+        const start = '2025-03-29T19:00:00'  // Correct ND start per SHIFT_TIMES.md
         const end = '2025-03-30T08:00:00'
 
         const hours = calculateWorkHours(start, end, 'ND')
 
-        // Normale ND = 11.25h
-        // Mit DST im März: 1h weniger = 10.25h (ca.)
-        // Da die Bereitschaft betroffen ist: 
-        // Active: 8.5h - 1h = 7.5h (eine Stunde weniger aktiv)
-        // Passive: 5.5h * 0.5 = 2.75h ODER 4.5h * 0.5 = 2.25h
+        // Normale ND = 10.25h (with correct 19:00 start)
+        // Mit DST im März: 1h weniger
         // Erwartung hängt von DST-Handling ab
         //
         // HINWEIS: Verhalten systemabhängig
-        // Mit DST: 10.75h (März, 1h weniger)
-        // Ohne DST: 11.25h
-        expect([10.75, 11.25]).toContain(hours)
+        // Mit DST: ca. 9.75h (März, 1h weniger)
+        // Ohne DST: 10.25h
+        expect([9.75, 10.25]).toContain(hours)
     })
 
     it('ND shift during October DST has correctly extended readiness time', () => {
@@ -142,20 +232,20 @@ describe('Daylight Saving Time (Zeitumstellung)', () => {
         // Bereitschaft: 00:30 - 06:00 (normalerweise 5.5h)
         // Am 26.10.2025: 03:00 springt auf 02:00, also 6.5h Bereitschaft
 
-        const start = '2025-10-25T18:00:00'
+        const start = '2025-10-25T19:00:00'  // Correct ND start per SHIFT_TIMES.md
         const end = '2025-10-26T08:00:00'
 
         const hours = calculateWorkHours(start, end, 'ND')
 
-        // Normale ND = 11.25h
+        // Normale ND = 10.25h (with correct 19:00 start)
         // Mit DST im Oktober: 1h mehr
         // Davon geht 1h in die Bereitschaft (50%) = +0.5h
-        // Erwartung: 11.25 + 0.5 = 11.75h
+        // Erwartung: 10.25 + 0.5 = 10.75h
         //
         // HINWEIS: Verhalten systemabhängig
-        // Mit DST: 11.75h (Oktober, 1h mehr, davon 0.5h durch Bereitschaft)
-        // Ohne DST: 11.25h
-        expect([11.25, 11.75]).toContain(hours)
+        // Mit DST: 10.75h (Oktober, 1h mehr)
+        // Ohne DST: 10.25h
+        expect([10.25, 10.75]).toContain(hours)
     })
 })
 
@@ -366,15 +456,15 @@ describe('calculateDailyAbsenceHours', () => {
             const absence = { type: 'Krankenstand' }
             const ndShift = [{
                 id: 'nd-1',
-                start_time: '2025-01-15T18:00:00',
+                start_time: '2025-01-15T19:00:00',  // Correct ND start per SHIFT_TIMES.md
                 end_time: '2025-01-16T08:00:00',
                 type: 'ND'
             }]
 
             const hours = calculateDailyAbsenceHours(date, absence, ndShift, profile40h)
-            // ND: 14h total, Readiness 5.5h at 50% = 2.75h
-            // Active: 8.5h, Total: 11.25h
-            expect(hours).toBe(11.25)
+            // ND: 13h total, Readiness 5.5h at 50% = 2.75h
+            // Active: 7.5h, Total: 10.25h
+            expect(hours).toBe(10.25)
         })
     })
 })

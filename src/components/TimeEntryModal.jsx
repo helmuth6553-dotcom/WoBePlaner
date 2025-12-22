@@ -9,7 +9,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { XCircle } from 'lucide-react'
 import { calculateWorkHours } from '../utils/timeCalculations'
-import { constructIso, constructInterruptionIso } from '../utils/timeTrackingHelpers'
+import { constructIso, constructEndIso, constructInterruptionIso } from '../utils/timeTrackingHelpers'
 
 /**
  * @param {Object} props
@@ -88,7 +88,7 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
             : item.sortDate?.toISOString()
 
         const startIso = constructIso(baseIso, formData.actualStart)
-        const endIso = constructIso(baseIso, formData.actualEnd)
+        const endIso = constructEndIso(baseIso, formData.actualStart, formData.actualEnd)
 
         if (!startIso || !endIso) return 0
 
@@ -114,7 +114,7 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
             : item.sortDate?.toISOString()
 
         const actualStart = constructIso(baseIso, formData.actualStart)
-        const actualEnd = constructIso(baseIso, formData.actualEnd)
+        const actualEnd = constructEndIso(baseIso, formData.actualStart, formData.actualEnd)
 
         const interruptions = formData.interruptions.map(int => ({
             start: constructInterruptionIso(baseIso, int.start),
