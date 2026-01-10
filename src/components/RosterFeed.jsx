@@ -346,6 +346,25 @@ export default function RosterFeed() {
         }
     }
 
+    // Toggle FLEX status for a shift interest (admin only)
+    const toggleFlex = async (shiftId, userId, isFlexValue) => {
+        if (!isAdmin) return
+
+        const { error } = await supabase
+            .from('shift_interests')
+            .update({ is_flex: isFlexValue })
+            .eq('shift_id', shiftId)
+            .eq('user_id', userId)
+
+        if (error) {
+            console.error('Error toggling FLEX:', error)
+            setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
+        } else {
+            // Refresh data to show updated FLEX status
+            fetchData()
+        }
+    }
+
     const handleSickReport = async (startDate, endDate) => {
         setIsSickModalOpen(false)
 
@@ -759,6 +778,7 @@ export default function RosterFeed() {
                                                     userId={user.id}
                                                     isAdmin={isAdmin}
                                                     onToggleInterest={toggleInterest}
+                                                    onToggleFlex={toggleFlex}
                                                     onUpdateShift={async (shiftId, newStart, newEnd, newTitle) => {
                                                         if (!isAdmin) return
 

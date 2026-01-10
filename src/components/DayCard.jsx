@@ -30,7 +30,7 @@ const getUserColor = (name) => {
     return colors[Math.abs(hash) % colors.length]
 }
 
-export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, absenceReason, holiday, absences = [], allProfiles = [] }) {
+export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, absenceReason, holiday, absences = [], allProfiles = [] }) {
     // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [selectedShift, setSelectedShift] = useState(null)
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
@@ -198,7 +198,17 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onU
 
         // Flex Logic
         const interestNames = shift.interests?.map(i => {
-            // FLEX: Day 0 = sick report, then 3 more days (until end of Day 3)
+            // Manual FLEX override takes priority
+            if (i.is_flex === true) {
+                return {
+                    name: getDisplayName(i.profiles),
+                    isFlex: true,
+                    interestId: i.id,
+                    userId: i.user_id
+                }
+            }
+
+            // Automatic FLEX: Day 0 = sick report, then 3 more days (until end of Day 3)
             const urgentDate = new Date(shift.urgent_since)
             const interestDate = new Date(i.created_at)
             const daysDiff = Math.floor((interestDate - urgentDate) / (24 * 60 * 60 * 1000))
@@ -207,7 +217,10 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onU
 
             return {
                 name: getDisplayName(i.profiles),
-                isFlex
+                isFlex,
+                interestId: i.id,
+                userId: i.user_id,
+                isFlexManual: i.is_flex // Track if manually set
             }
         }) || []
 
@@ -376,15 +389,31 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onU
                         <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto">
                             {participants.map((u, idx) => (
                                 <div key={u.id || idx} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                    <span className="font-medium text-gray-700">{u.name}</span>
-                                    {isAdmin && !isTeam && (
-                                        <button
-                                            onClick={() => onToggleInterest(shift.id, true, u.id)}
-                                            className="text-red-500 hover:bg-red-50 p-1 rounded"
-                                        >
-                                            Entfernen
-                                        </button>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium text-gray-700">{u.name}</span>
+                                        {u.isFlex && <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold">FLEX</span>}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {isAdmin && !isTeam && onToggleFlex && (
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={u.isFlex || false}
+                                                    onChange={(e) => onToggleFlex(shift.id, u.id, e.target.checked)}
+                                                    className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                                />
+                                                <span className="text-xs text-gray-500">FLEX</span>
+                                            </label>
+                                        )}
+                                        {isAdmin && !isTeam && (
+                                            <button
+                                                onClick={() => onToggleInterest(shift.id, true, u.id)}
+                                                className="text-red-500 hover:bg-red-50 p-1 rounded text-xs"
+                                            >
+                                                Entfernen
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>
