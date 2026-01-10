@@ -4,7 +4,8 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, en
 import { de } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, Thermometer, Clock, TrendingUp, ArrowLeftRight, Target, Scale, ChevronDown, ChevronUp, Plane, Calendar, User, Moon, CalendarDays, Coffee, AlertTriangle, Timer, GraduationCap, Hourglass, Maximize, Tent } from 'lucide-react'
 import { calculateWorkHours } from '../../utils/timeCalculations'
-import { eachDayOfInterval, isWeekend, getDay, differenceInDays } from 'date-fns'
+import { getHolidays, isHoliday } from '../../utils/holidays'
+import { eachDayOfInterval, isWeekend, getDay, differenceInDays, getYear } from 'date-fns'
 
 /**
  * AdminOverview - Dashboard Statistics
@@ -137,7 +138,8 @@ export default function AdminOverview() {
             // Calculate total Soll hours for all employees
             // Soll = weekly_hours * (working days in month / 5)
             const daysInMonth = eachDayOfInterval({ start, end })
-            const workingDays = daysInMonth.filter(d => !isWeekend(d)).length
+            const holidays = getHolidays(getYear(start))
+            const workingDays = daysInMonth.filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
             const weeksInMonth = workingDays / 5
 
             let totalSollHours = 0

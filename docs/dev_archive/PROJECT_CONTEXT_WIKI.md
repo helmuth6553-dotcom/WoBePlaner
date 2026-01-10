@@ -98,9 +98,12 @@
 *   **`docs/SECURE_ONBOARDING.md`**: Dokumentiert den kompletten Invite-Flow, Edge Function Nutzung und Troubleshooting für Login-Probleme.
 *   **`docs/RLS_POLICIES.md`**: Referenz für Datenbank-Zugriffsrechte. Wichtig bei Permission-Errors.
 *   **`docs/TECHNICAL_DOCS.md`**: Generelle Architektur und Glossar.
+*   **`docs/GO_LIVE_STRATEGY.md`**: **(OPS)** Checklisten für DSGVO, Support-Templates und der Launch-Day Fahrplan.
 
 ## 6. OFFENE PUNKTE & BUGS (Current Issues)
 
+*   **Audit & Hardening:** Vor dem Public Launch muss zwingend das [`docs/RELEASE_READINESS_AUDIT.md`](RELEASE_READINESS_AUDIT.md) durchgeführt werden (Security, RLS, Integrity Checks).
+*   **QA Test Handbook:** Detaillierte Test-Cases für den Release Test sind im [`docs/LAUNCH_TEST_HANDBOOK.md`](LAUNCH_TEST_HANDBOOK.md) definiert.
 *   **PDF Design:** Das Layout der generierten PDFs (Stundennachweise) benötigt ggf. noch Feinschliff bzgl. Seitenumbrüchen und Signatur-Platzierung.
 *   **Login Redirects:** Sicherstellen, dass die `Site URL` in Supabase für Production (`https://wobeplaner.pages.dev`) und Dev korrekt gesetzt bleibt.
 
