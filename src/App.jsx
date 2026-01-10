@@ -6,7 +6,6 @@ import SetPassword from './components/SetPassword'
 import RosterFeed from './components/RosterFeed'
 import BottomNav from './components/BottomNav'
 import Sidebar from './components/Sidebar'
-import TeamPanel from './components/TeamPanel'
 import ErrorBoundary from './components/ErrorBoundary'
 import SplashScreen from './components/SplashScreen'
 import Impressum from './pages/Impressum'
@@ -138,9 +137,6 @@ function AppContent() {
           <BottomNav activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} badges={badges} />
         </div>
       </div>
-
-      {/* Team Panel (Desktop Only - only on roster view) */}
-      {activeTab === 'roster' && <TeamPanel />}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext'
 import DayCard from './DayCard'
 import MonthView from './MonthView'
 import MonthMinimap from './MonthMinimap'
+import TeamPanel from './TeamPanel'
 import SwapShiftModal from './SwapShiftModal'
 import RosterLogModal from './RosterLogModal'
 import ConfirmModal from './ConfirmModal'
@@ -572,8 +573,44 @@ export default function RosterFeed() {
         console.error("Error calculating balance:", err)
     }
 
+    // Calculate team balances for TeamPanel (same logic as mobile "Kollegen Übersicht")
+    const teamBalances = useMemo(() => {
+        if (!isAdmin) return []
+
+        const results = []
+        allProfiles.filter(p => p.role !== 'admin').forEach(profile => {
+            // Personal shifts from interests/assignments
+            const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+            // Add TEAM shifts for this user (they apply to everyone)
+            const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
+            // Merge personal + team, avoiding duplicates
+            const userShifts = [...personalShifts]
+            teamShiftsForUser.forEach(ts => {
+                if (!userShifts.some(s => s.id === ts.id)) {
+                    userShifts.push(ts)
+                }
+            })
+            const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
+            const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
+            const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
+            const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
+
+            if (b) {
+                results.push({
+                    id: profile.id,
+                    name: profile.display_name || profile.full_name || profile.email || 'Unbekannt',
+                    target: b.target,
+                    actual: b.actual + b.vacation,
+                    carryover: b.carryover,
+                    total: b.total
+                })
+            }
+        })
+        return results
+    }, [isAdmin, allProfiles, allShiftsHistory, allTeamShiftsHistory, allAbsencesHistory, allTimeEntriesHistory, allCorrectionsHistory, currentDate])
+
     return (
-        <>
+        <div className="flex flex-1 h-full">
             <PullToRefresh onRefresh={fetchData}>
                 <div className="min-h-full pb-20">
                     <div className="sticky top-0 bg-white z-10 border-b shadow-sm">
@@ -919,6 +956,16 @@ export default function RosterFeed() {
                 message={alertConfig.message}
                 type={alertConfig.type}
             />
-        </>
+
+            {/* TeamPanel (Desktop Only - synchronized with RosterFeed data) */}
+            {isAdmin && (
+                <TeamPanel
+                    balances={teamBalances}
+                    currentDate={currentDate}
+                    onRefresh={fetchData}
+                    loading={loading}
+                />
+            )}
+        </div>
     )
 }
