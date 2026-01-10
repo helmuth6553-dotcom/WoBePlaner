@@ -342,10 +342,11 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                 isAuto: true
             }))
         } else {
-            // Normal interests
+            // Normal interests - include is_flex for FLEX toggle
             participants = shift.interests?.map(i => ({
                 id: i.user_id,
-                name: getDisplayName(i.profiles)
+                name: getDisplayName(i.profiles),
+                isFlex: i.is_flex || false
             })) || []
         }
 
@@ -399,7 +400,23 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                                                 <input
                                                     type="checkbox"
                                                     checked={u.isFlex || false}
-                                                    onChange={(e) => onToggleFlex(shift.id, u.id, e.target.checked)}
+                                                    onChange={(e) => {
+                                                        const newValue = e.target.checked
+                                                        // Optimistic UI update - immediately update local state
+                                                        setSelectedShift(prev => {
+                                                            if (!prev) return null
+                                                            return {
+                                                                ...prev,
+                                                                interests: prev.interests?.map(interest =>
+                                                                    interest.user_id === u.id
+                                                                        ? { ...interest, is_flex: newValue }
+                                                                        : interest
+                                                                )
+                                                            }
+                                                        })
+                                                        // Then call the actual API
+                                                        onToggleFlex(shift.id, u.id, newValue)
+                                                    }}
                                                     className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                                                 />
                                                 <span className="text-xs text-gray-500">FLEX</span>
