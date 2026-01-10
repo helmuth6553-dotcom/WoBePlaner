@@ -963,7 +963,6 @@ export default function RosterFeed() {
                     balances={teamBalances}
                     currentDate={currentDate}
                     onRefresh={fetchData}
-                    loading={loading}
                 />
             )}
         </div>
