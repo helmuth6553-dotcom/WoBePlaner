@@ -160,6 +160,70 @@ export default function RosterFeed() {
         } else {
             setIsMonthVisible(false)
         }
+
+        // === ADMIN ONLY: Fetch all team data for TeamPanel ===
+        if (isAdmin) {
+            // Fetch all shift interests (to map user_id to shifts)
+            const { data: allInterests } = await supabase
+                .from('shift_interests')
+                .select('user_id, shift:shifts(id, start_time, end_time, type)')
+
+            const shiftsFromInterests = allInterests?.map(i => ({
+                user_id: i.user_id,
+                id: i.shift?.id,
+                start_time: i.shift?.start_time,
+                end_time: i.shift?.end_time,
+                type: i.shift?.type
+            })).filter(s => s.id) || []
+
+            // Fetch shifts with direct assignment
+            const { data: directShifts } = await supabase
+                .from('shifts')
+                .select('id, start_time, end_time, type, assigned_to')
+                .not('assigned_to', 'is', null)
+
+            const shiftsFromDirect = directShifts?.map(s => ({
+                user_id: s.assigned_to,
+                id: s.id,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                type: s.type
+            })) || []
+
+            // Merge both sources
+            const allHistoryShifts = [...shiftsFromInterests]
+            shiftsFromDirect.forEach(s => {
+                const exists = allHistoryShifts.some(h => h.id === s.id && h.user_id === s.user_id)
+                if (!exists) allHistoryShifts.push(s)
+            })
+            setAllShiftsHistory(allHistoryShifts)
+
+            // Fetch TEAM shifts (apply to all employees)
+            const { data: teamShiftsData } = await supabase
+                .from('shifts')
+                .select('id, start_time, end_time, type')
+                .eq('type', 'TEAM')
+            setAllTeamShiftsHistory(teamShiftsData || [])
+
+            // Fetch all absences for team
+            const { data: teamAbsences } = await supabase
+                .from('absences')
+                .select('start_date, end_date, user_id, status, type, planned_hours')
+                .eq('status', 'genehmigt')
+            setAllAbsencesHistory(teamAbsences || [])
+
+            // Fetch all time entries for team
+            const { data: teamEntries } = await supabase
+                .from('time_entries')
+                .select('user_id, shift_id, calculated_hours, status')
+            setAllTimeEntriesHistory(teamEntries || [])
+
+            // Fetch all corrections for team
+            const { data: teamCorrs } = await supabase
+                .from('balance_corrections')
+                .select('user_id, correction_hours, effective_month')
+            setAllCorrectionsHistory(teamCorrs || [])
+        }
     }
 
     useEffect(() => {
