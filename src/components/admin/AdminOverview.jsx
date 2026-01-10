@@ -199,13 +199,23 @@ export default function AdminOverview() {
                 }
             })
 
-            // Count flex shifts (shifts that were marked urgent and picked up)
+            // Count flex shifts (shifts that were marked urgent and picked up, OR have manual is_flex)
             const urgentShifts = shifts?.filter(s => s.urgent_since) || []
-            flexCount = urgentShifts.filter(s => {
-                // Check if someone picked it up (has interests after being urgent)
+
+            // Automatic FLEX: urgent shifts that have been picked up
+            const automaticFlexShiftIds = urgentShifts.filter(s => {
                 const shiftInterests = monthInterests.filter(i => i.shift_id === s.id)
                 return shiftInterests.length > 0
-            }).length
+            }).map(s => s.id)
+
+            // Manual FLEX: any interest with is_flex = true
+            const manualFlexShiftIds = monthInterests
+                .filter(i => i.is_flex === true)
+                .map(i => i.shift_id)
+
+            // Combine and count unique shift IDs
+            const allFlexShiftIds = new Set([...automaticFlexShiftIds, ...manualFlexShiftIds])
+            flexCount = allFlexShiftIds.size
 
             // === NEW METRICS ===
 
