@@ -637,6 +637,9 @@ export default function RosterFeed() {
         console.error("Error calculating balance:", err)
     }
 
+    // Year-month key for reliable useMemo dependency comparison
+    const yearMonth = format(currentDate, 'yyyy-MM')
+
     // Calculate team balances for TeamPanel (same logic as mobile "Kollegen Übersicht")
     const teamBalances = useMemo(() => {
         if (!isAdmin) return []
@@ -671,7 +674,7 @@ export default function RosterFeed() {
             }
         })
         return results
-    }, [isAdmin, allProfiles, allShiftsHistory, allTeamShiftsHistory, allAbsencesHistory, allTimeEntriesHistory, allCorrectionsHistory, currentDate])
+    }, [isAdmin, allProfiles, allShiftsHistory, allTeamShiftsHistory, allAbsencesHistory, allTimeEntriesHistory, allCorrectionsHistory, yearMonth, currentDate])
 
     return (
         <div className="flex flex-1 h-full">
