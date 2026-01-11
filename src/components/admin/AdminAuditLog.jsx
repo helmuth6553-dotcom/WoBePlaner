@@ -93,6 +93,7 @@ export default function AdminAuditLog() {
     // Get action type badge color
     const getActionBadge = (action) => {
         const badges = {
+            // English action names
             'shift_created': { bg: 'bg-green-50', text: 'text-green-700', label: 'Schicht erstellt' },
             'shift_updated': { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Schicht bearbeitet' },
             'shift_deleted': { bg: 'bg-red-50', text: 'text-red-700', label: 'Schicht gelöscht' },
@@ -100,6 +101,14 @@ export default function AdminAuditLog() {
             'absence_rejected': { bg: 'bg-red-50', text: 'text-red-700', label: 'Antrag abgelehnt' },
             'report_approved': { bg: 'bg-green-50', text: 'text-green-700', label: 'Bericht genehmigt' },
             'correction_added': { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Korrektur' },
+            // German action names (from database)
+            'absence_genehmigt': { bg: 'bg-green-50', text: 'text-green-700', label: 'Urlaub genehmigt' },
+            'absence_abgelehnt': { bg: 'bg-red-50', text: 'text-red-700', label: 'Urlaub abgelehnt' },
+            'urlaub_genehmigt': { bg: 'bg-green-50', text: 'text-green-700', label: 'Urlaub genehmigt' },
+            'urlaub_abgelehnt': { bg: 'bg-red-50', text: 'text-red-700', label: 'Urlaub abgelehnt' },
+            'krankmeldung': { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Krankmeldung' },
+            'bericht_genehmigt': { bg: 'bg-green-50', text: 'text-green-700', label: 'Bericht genehmigt' },
+            'korrektur': { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Korrektur' },
         }
         return badges[action] || { bg: 'bg-gray-50', text: 'text-gray-700', label: action }
     }
