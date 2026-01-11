@@ -256,7 +256,7 @@ export default function RosterFeed() {
             supabase.removeChannel(channel)
             clearInterval(pollInterval)
         }
-    }, [currentDate, user])
+    }, [currentDate, user, isAdmin])
 
     const shiftsByDate = useMemo(() => {
         const groups = {}
