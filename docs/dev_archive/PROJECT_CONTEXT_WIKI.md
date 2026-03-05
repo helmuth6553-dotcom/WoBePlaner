@@ -312,3 +312,29 @@ Das Sozialarbeiter-Team hat **deutlich komplexere Berechnungsregeln**:
 | `invitations` | 32 kB | MA-Einladungen |
 | `teams` | 32 kB | Multi-Tenancy (reserviert) |
 
+## 17. SESSION 05.03.2026 - SHIFT COVERAGE SYSTEM (FAIRNESS-INDEX)
+
+**Ziel:** Faires, blindes Abstimmungssystem für Krankheitsvertretungen ("Nachbesetzung").
+
+### Feature Übersicht:
+*   **Fairness-Index:** Berechnet aus Flex-Differenz (Sonderpunkte für "Springer") und negativem Stundensaldo. Wer Abstimmungen ignoriert, erhält **Strafpunkte**.
+*   **Blindes Voting:** Mitarbeiter stimmen mit 🟢 (Gerne), 🟡 (Notfall), 🔴 (Nein) ab. Im UI wird **nur der Score/Index** angezeigt, keine Namen.
+*   **Dezentrale Auflösung:** Jeder eingeloggte Mitarbeiter kann die Abstimmung schließen ("Bist du im Dienst?"). Das System wählt automatisch den besten Kandidaten basierend auf Präferenz und Fairness-Index.
+*   **Alert Banner:** Globales rotes Banner in der App informiert Mitarbeiter über ausstehende Abstimmungen.
+*   **Push Notifications (Edge Function):** Personalisiert mit Fairness-Index Breakdown.
+
+### Neue Komponenten & Utils:
+*   `src/components/CoverageVotingPanel.jsx` - Das zentrale Voting-UI (anonymisiert).
+*   `src/utils/fairnessIndex.js` - Logik zur Berechnung aller Index-Komponenten.
+*   `src/utils/coverageEligibility.js` - Prüft, wer teilnehmen darf (Urlaubs-/Ruhezeiten-Prüfung).
+
+### Neue Datenbank-Tabellen:
+*   `coverage_requests`: Status eines ausstehenden unbesetzten Dienstes ('open', 'assigned').
+*   `coverage_votes`: Tracks Teilnahme und Präferenz (`availability_preference` in `shift_interests`).
+
+### Bugfixes:
+*   **Edge Function Race Condition (`notify-sickness`):** 2 Sekunden Sleep hinzugefügt, damit das Frontend genügend Zeit hat, Schichten via `mark_shifts_urgent` RPC als dringend zu markieren, bevor die Edge Function läuft.
+*   **Cloudflare Deployment:** `.nvmrc` mit Node v20 hinzugefügt, da CF ansonsten Build Warnings / Node Issues hatte.
+
+---
+*Letztes Update: 06.03.2026*
