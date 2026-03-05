@@ -110,5 +110,26 @@ export const getDefaultTimes = (dateStr, type, holidays = []) => {
         end = createLocalTime(dateStr, 17, 0)
     }
 
+    // 7. EINSCHULUNG (Einschulungstermin)
+    if (type === 'EINSCHULUNG') {
+        // 13:00 - 15:00
+        start = createLocalTime(dateStr, 13, 0)
+        end = createLocalTime(dateStr, 15, 0)
+    }
+
+    // 8. MITARBEITERGESPRAECH
+    if (type === 'MITARBEITERGESPRAECH') {
+        // 10:00 - 11:00
+        start = createLocalTime(dateStr, 10, 0)
+        end = createLocalTime(dateStr, 11, 0)
+    }
+
+    // 9. SONSTIGES
+    if (type === 'SONSTIGES') {
+        // 10:00 - 11:00
+        start = createLocalTime(dateStr, 10, 0)
+        end = createLocalTime(dateStr, 11, 0)
+    }
+
     return { start, end }
 }

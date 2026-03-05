@@ -167,6 +167,68 @@ serve(async (req) => {
 
         console.log(`After preference filter: ${subscriptions.length} subscriptions (${usersWithSickAlertDisabled.size} disabled sick_alert)`)
 
+        // === COVERAGE SYSTEM: Create coverage records for urgent shifts ===
+        // Find shifts that were marked urgent by this sick report
+        const { data: urgentShifts } = await supabaseClient
+            .from('shifts')
+            .select('id, type, start_time, end_time')
+            .not('urgent_since', 'is', null)
+            .gte('start_time', record.start_date + 'T00:00:00')
+            .lte('start_time', record.end_date + 'T23:59:59')
+
+        console.log(`Found ${urgentShifts?.length || 0} urgent shifts for coverage records`)
+
+        // Get unique eligible user IDs from subscriptions
+        const coverageEligibleUserIds = [...new Set(subscriptions.map(s => s.user_id))]
+
+        // Create coverage_requests and coverage_votes for each urgent shift
+        if (urgentShifts?.length) {
+            for (const shift of urgentShifts) {
+                // Create coverage request
+                await supabaseClient.from('coverage_requests').upsert({
+                    shift_id: shift.id,
+                    status: 'open',
+                }, { onConflict: 'shift_id' })
+
+                // Create coverage_votes for each eligible user
+                const voteRecords = coverageEligibleUserIds.map(uid => ({
+                    shift_id: shift.id,
+                    user_id: uid,
+                    was_eligible: true,
+                    responded: false,
+                }))
+
+                if (voteRecords.length > 0) {
+                    await supabaseClient.from('coverage_votes').upsert(
+                        voteRecords,
+                        { onConflict: 'shift_id, user_id' }
+                    )
+                }
+            }
+            console.log(`Created coverage records for ${urgentShifts.length} shifts, ${coverageEligibleUserIds.length} eligible users`)
+        }
+
+        // === Calculate per-user flex counts for personalized push ===
+        const { data: flexData } = await supabaseClient
+            .from('shift_interests')
+            .select('user_id')
+            .eq('is_flex', true)
+
+        const flexCounts: Record<string, number> = {}
+        coverageEligibleUserIds.forEach(id => { flexCounts[id] = 0 })
+        flexData?.forEach((f: any) => {
+            if (flexCounts[f.user_id] !== undefined) flexCounts[f.user_id]++
+        })
+
+        const totalFlex = Object.values(flexCounts).reduce((sum: number, c: number) => sum + c, 0)
+        const teamAvgFlex = coverageEligibleUserIds.length > 0 ? (totalFlex / coverageEligibleUserIds.length).toFixed(1) : '0'
+
+        // Determine shift type text for push
+        const SHIFT_NAMES = { TD1: 'TD1', TD2: 'TD2', ND: 'Nachtdienst', DBD: 'DBD' }
+        const shiftTypeText = urgentShifts?.length === 1
+            ? (SHIFT_NAMES[urgentShifts[0].type] || urgentShifts[0].type)
+            : `${urgentShifts?.length || 0} Dienste`
+
         if (!subscriptions?.length) {
             console.log("No subscriptions found to notify.")
             return new Response(JSON.stringify({ message: 'No subs' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -203,17 +265,29 @@ serve(async (req) => {
             data: { url: '/roster' }
         })
 
-        console.log("Sending WebPush notifications...")
+        console.log("Sending personalized WebPush notifications...")
 
         const results = await Promise.allSettled(
             subscriptions.map(sub => {
+                const userFlexCount = flexCounts[sub.user_id] || 0
+
+                const personalPayload = JSON.stringify({
+                    title: `${shiftTypeText} am ${dateText} muss besetzt werden!`,
+                    body: `Dein Fairness-Index: ${userFlexCount}× eingesprungen (Team-Ø: ${teamAvgFlex}×). Jetzt abstimmen!`,
+                    icon: '/logo2.png',
+                    data: {
+                        url: '/roster',
+                        shiftId: urgentShifts?.[0]?.id || null
+                    }
+                })
+
                 return webpushNpm.sendNotification({
                     endpoint: sub.endpoint,
                     keys: {
                         p256dh: sub.p256dh,
                         auth: sub.auth
                     }
-                }, notificationPayload)
+                }, personalPayload)
             })
         )
 

@@ -93,6 +93,36 @@ const SHIFT_TEMPLATES = [
         has_standby: false,
         weekday_rules: {},
     },
+    {
+        code: 'EINSCHULUNG',
+        name: 'Einschulungstermin',
+        start_time: '13:00',
+        end_time: '15:00',
+        spans_midnight: false,
+        color: '#06b6d4',
+        has_standby: false,
+        weekday_rules: {},
+    },
+    {
+        code: 'MITARBEITERGESPRAECH',
+        name: 'Mitarbeitergespräch',
+        start_time: '10:00',
+        end_time: '11:00',
+        spans_midnight: false,
+        color: '#f97316',
+        has_standby: false,
+        weekday_rules: {},
+    },
+    {
+        code: 'SONSTIGES',
+        name: 'Sonstiges',
+        start_time: '10:00',
+        end_time: '11:00',
+        spans_midnight: false,
+        color: '#64748b',
+        has_standby: false,
+        weekday_rules: {},
+    },
 ]
 
 export function ShiftTemplateProvider({ children }) {

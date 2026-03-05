@@ -21,6 +21,7 @@ import { calculateWorkHours } from '../utils/timeCalculations'
 import { getDefaultTimes } from '../utils/shiftDefaults'
 import PullToRefresh from './PullToRefresh'
 import { downloadICalFile } from '../utils/calendarExport'
+import { calculateAllFairnessIndices } from '../utils/fairnessIndex'
 import { logAdminAction } from '../utils/adminAudit'
 
 export default function RosterFeed() {
@@ -56,6 +57,12 @@ export default function RosterFeed() {
     const [allAbsencesHistory, setAllAbsencesHistory] = useState([])
     const [allTimeEntriesHistory, setAllTimeEntriesHistory] = useState([])
     const [allCorrectionsHistory, setAllCorrectionsHistory] = useState([])
+
+    // Coverage system state
+    const [coverageRequests, setCoverageRequests] = useState([])
+    const [coverageVotes, setCoverageVotes] = useState([])
+    const [allFlexHistory, setAllFlexHistory] = useState([])
+    const [allCoverageVoteHistory, setAllCoverageVoteHistory] = useState([])
 
     const { getHoliday } = useHolidays()
 
@@ -132,6 +139,31 @@ export default function RosterFeed() {
             .order('start_time', { ascending: true })
 
         if (shiftData) setShifts(shiftData)
+
+        // Fetch coverage data
+        const { data: coverageReqs } = await supabase
+            .from('coverage_requests')
+            .select('*')
+            .eq('status', 'open')
+        setCoverageRequests(coverageReqs || [])
+
+        const { data: covVotes } = await supabase
+            .from('coverage_votes')
+            .select('*')
+        setCoverageVotes(covVotes || [])
+
+        // Fetch flex history (is_flex interests) for Fairness-Index
+        const { data: flexData } = await supabase
+            .from('shift_interests')
+            .select('user_id, is_flex, shift:shifts(start_time)')
+            .eq('is_flex', true)
+        setAllFlexHistory(flexData || [])
+
+        // Fetch all coverage vote history for penalty calculation
+        const { data: voteHistoryData } = await supabase
+            .from('coverage_votes')
+            .select('user_id, was_eligible, responded')
+        setAllCoverageVoteHistory(voteHistoryData || [])
 
         const monthStartStr = format(monthStart, 'yyyy-MM-dd')
         const monthEndStr = format(monthEnd, 'yyyy-MM-dd')
@@ -430,6 +462,84 @@ export default function RosterFeed() {
         }
     }
 
+    // Coverage System: Submit a vote (available/reluctant/emergency_only)
+    const submitCoverageVote = async (shiftId, preference) => {
+        if (!user) return
+
+        if (preference === null) {
+            // Remove vote ("Ändern" clicked)
+            await supabase.from('shift_interests').delete().match({ shift_id: shiftId, user_id: user.id })
+            await supabase.from('coverage_votes').update({ responded: false }).match({ shift_id: shiftId, user_id: user.id })
+        } else {
+            // Upsert interest with preference
+            await supabase.from('shift_interests').upsert(
+                { shift_id: shiftId, user_id: user.id, availability_preference: preference },
+                { onConflict: 'shift_id, user_id' }
+            )
+            // Mark vote as responded
+            await supabase.from('coverage_votes').update({ responded: true }).match({ shift_id: shiftId, user_id: user.id })
+        }
+
+        fetchData()
+    }
+
+    // Coverage System: Resolve (close) a coverage vote
+    const resolveCoverageRequest = async (shiftId) => {
+        // Find the best candidate: highest preference first, then highest fairness index
+        const shiftVotes = coverageVotes.filter(v => v.shift_id === shiftId)
+        const shiftInterests = shifts.find(s => s.id === shiftId)?.interests || []
+
+        // Build candidate list with preference + index
+        const PREF_ORDER = { available: 0, reluctant: 1, emergency_only: 2 }
+        const candidates = shiftInterests
+            .filter(i => i.availability_preference)
+            .map(i => {
+                const fi = fairnessIndices.find(f => f.userId === i.user_id)
+                return {
+                    userId: i.user_id,
+                    preference: i.availability_preference,
+                    prefOrder: PREF_ORDER[i.availability_preference] ?? 99,
+                    indexTotal: fi?.index?.total || 0,
+                }
+            })
+            .sort((a, b) => {
+                if (a.prefOrder !== b.prefOrder) return a.prefOrder - b.prefOrder
+                return b.indexTotal - a.indexTotal
+            })
+
+        if (candidates.length === 0) {
+            setAlertConfig({ isOpen: true, title: 'Keine Antworten', message: 'Es hat noch niemand abgestimmt.', type: 'info' })
+            return
+        }
+
+        const winner = candidates[0]
+        const winnerProfile = allProfiles.find(p => p.id === winner.userId)
+        const winnerName = winnerProfile?.display_name || winnerProfile?.full_name || 'Mitarbeiter'
+
+        // Assign the shift
+        await supabase.from('shift_interests').upsert(
+            { shift_id: shiftId, user_id: winner.userId, is_flex: true },
+            { onConflict: 'shift_id, user_id' }
+        )
+
+        // Update coverage request status
+        await supabase.from('coverage_requests').update({
+            status: 'assigned',
+            assigned_to: winner.userId,
+            resolved_by: user.id,
+            resolved_at: new Date().toISOString(),
+        }).eq('shift_id', shiftId)
+
+        setAlertConfig({
+            isOpen: true,
+            title: 'Dienst besetzt!',
+            message: `${winnerName} übernimmt den Dienst.`,
+            type: 'success'
+        })
+
+        fetchData()
+    }
+
     const handleSickReport = async (startDate, endDate) => {
         setIsSickModalOpen(false)
 
@@ -636,6 +746,34 @@ export default function RosterFeed() {
     } catch (err) {
         console.error("Error calculating balance:", err)
     }
+
+    // Calculate Fairness-Index for all non-admin users
+    const fairnessIndices = useMemo(() => {
+        const nonAdminIds = allProfiles.filter(p => p.role !== 'admin').map(p => p.id)
+        if (nonAdminIds.length === 0) return []
+
+        // Build balances map
+        const balancesMap = {}
+        allProfiles.filter(p => p.role !== 'admin').forEach(profile => {
+            try {
+                const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+                const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
+                const userShifts = [...personalShifts]
+                teamShiftsForUser.forEach(ts => {
+                    if (!userShifts.some(s => s.id === ts.id)) userShifts.push(ts)
+                })
+                const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
+                const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
+                const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
+                const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
+                if (b) balancesMap[profile.id] = b
+            } catch (e) {
+                // Skip if balance calc fails
+            }
+        })
+
+        return calculateAllFairnessIndices(nonAdminIds, allFlexHistory, balancesMap, allCoverageVoteHistory)
+    }, [allProfiles, allFlexHistory, allCoverageVoteHistory, allShiftsHistory, allTeamShiftsHistory, allAbsencesHistory, allTimeEntriesHistory, allCorrectionsHistory, currentDate])
 
     // Year-month key for reliable useMemo dependency comparison
     const yearMonth = format(currentDate, 'yyyy-MM')
@@ -961,6 +1099,12 @@ export default function RosterFeed() {
                                                         absences={dayAbsences}
                                                         holiday={holiday}
                                                         allProfiles={allProfiles}
+                                                        coverageRequests={coverageRequests}
+                                                        coverageVotes={coverageVotes}
+                                                        fairnessIndices={fairnessIndices}
+                                                        userBalance={balance}
+                                                        onCoverageVote={submitCoverageVote}
+                                                        onCoverageResolve={resolveCoverageRequest}
                                                     />
                                                 )
                                             })}

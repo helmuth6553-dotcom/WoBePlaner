@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { format, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { User, Check, Moon, Sun, CalendarOff, Users, Clock, AlertCircle, Thermometer, Plus, BookOpen } from 'lucide-react'
+import { User, Check, Moon, Sun, CalendarOff, Users, Clock, AlertCircle, Thermometer, Plus, BookOpen, GraduationCap, MessageCircle, MoreHorizontal } from 'lucide-react'
 import ActionSheet from './ActionSheet'
+import CoverageVotingPanel from './CoverageVotingPanel'
 import { calculateWorkHours } from '../utils/timeCalculations'
 
 const getUserColor = (name) => {
@@ -30,7 +31,7 @@ const getUserColor = (name) => {
     return colors[Math.abs(hash) % colors.length]
 }
 
-export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, absenceReason, holiday, absences = [], allProfiles = [] }) {
+export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, absenceReason, holiday, absences = [], allProfiles = [], coverageRequests = [], coverageVotes = [], fairnessIndices = [], userBalance = null, onCoverageVote, onCoverageResolve }) {
     // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [selectedShift, setSelectedShift] = useState(null)
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
@@ -114,7 +115,8 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
 
         if (absenceReason && absenceReason.status === 'genehmigt' && !isAdmin) {
             // Allow viewing Team/Training details even if absent?
-            if (shift.type !== 'TEAM' && shift.type !== 'FORTBILDUNG') {
+            const specialTypes = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
+            if (!specialTypes.includes(shift.type)) {
                 const msg = absenceReason.type && absenceReason.type.toLowerCase() === 'krank' ? 'Du bist krank gemeldet.' : 'Du bist im Urlaub.'
                 alert(msg + ' Keine Eintragung möglich.')
                 return
@@ -122,7 +124,8 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         }
 
         // Always open details for Admin OR for Special Events (Team/Training)
-        if (isAdmin || shift.type === 'TEAM' || shift.type === 'FORTBILDUNG') {
+        const specialTypes = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
+        if (isAdmin || specialTypes.includes(shift.type)) {
             setSelectedShift({ ...shift, label, icon })
             return
         }
@@ -140,15 +143,24 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
     }
 
     // Render function (not a component) to avoid 'created during render' errors
+    const SPECIAL_EVENT_CONFIG = {
+        TEAM: { label: 'Teamsitzung', icon: <Users size={18} />, bg: 'bg-purple-100 border-purple-200', iconBg: 'bg-purple-200 text-purple-700', color: 'text-purple-700', activeBg: 'bg-purple-200 border-purple-300', activeColor: 'text-purple-800 font-bold' },
+        FORTBILDUNG: { label: 'Fortbildung', icon: <BookOpen size={18} />, bg: 'bg-teal-50 border-teal-200', iconBg: 'bg-teal-100 text-teal-700', color: 'text-teal-700', activeBg: 'bg-teal-100 border-teal-300', activeColor: 'text-teal-800 font-bold' },
+        EINSCHULUNG: { label: 'Einschulungstermin', icon: <GraduationCap size={18} />, bg: 'bg-cyan-50 border-cyan-200', iconBg: 'bg-cyan-100 text-cyan-700', color: 'text-cyan-700', activeBg: 'bg-cyan-100 border-cyan-300', activeColor: 'text-cyan-800 font-bold' },
+        MITARBEITERGESPRAECH: { label: 'Mitarbeitergespräch', icon: <MessageCircle size={18} />, bg: 'bg-orange-50 border-orange-200', iconBg: 'bg-orange-100 text-orange-700', color: 'text-orange-700', activeBg: 'bg-orange-100 border-orange-300', activeColor: 'text-orange-800 font-bold' },
+        SONSTIGES: { label: 'Sonstiges', icon: <MoreHorizontal size={18} />, bg: 'bg-slate-50 border-slate-200', iconBg: 'bg-slate-100 text-slate-700', color: 'text-slate-700', activeBg: 'bg-slate-100 border-slate-300', activeColor: 'text-slate-800 font-bold' },
+    }
+
     const renderSpecialEventRow = (shift) => {
         const isTeam = shift.type === 'TEAM'
-        const label = isTeam ? 'Teamsitzung' : 'Fortbildung'
-        const icon = isTeam ? <Users size={18} /> : <BookOpen size={18} />
+        const config = SPECIAL_EVENT_CONFIG[shift.type] || SPECIAL_EVENT_CONFIG.SONSTIGES
+        const label = config.label
+        const icon = config.icon
 
-        let rowBg = isTeam ? "bg-purple-100 border-purple-200" : "bg-teal-50 border-teal-200"
-        let iconBg = isTeam ? "bg-purple-200 text-purple-700" : "bg-teal-100 text-teal-700"
+        let rowBg = config.bg
+        let iconBg = config.iconBg
         let statusText = ""
-        let statusColor = isTeam ? "text-purple-700" : "text-teal-700"
+        let statusColor = config.color
 
         if (isTeam) {
             statusText = "Pflicht"
@@ -156,9 +168,9 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
             const interestedCount = shift.interests?.length || 0
             const amIInterested = shift.interests?.some(i => i.user_id === userId)
             if (amIInterested) {
-                rowBg = "bg-teal-100 border-teal-300"
+                rowBg = config.activeBg
                 statusText = "Dabei"
-                statusColor = "text-teal-800 font-bold"
+                statusColor = config.activeColor
             } else {
                 statusText = interestedCount > 0 ? `${interestedCount} Pers.` : "Offen"
             }
@@ -271,10 +283,19 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                 iconBg = "bg-gray-100 text-gray-600"
             }
         } else if (isUrgent) {
-            rowBg = "bg-red-100 border-red-300 animate-pulse ring-2 ring-red-200"
-            statusText = "DRINGEND"
-            statusColor = "text-red-700 font-bold"
-            iconBg = "bg-red-200 text-red-700"
+            // Check if there's a coverage request with votes for this shift
+            const hasCoverageRequest = coverageRequests.some(cr => cr.shift_id === shift.id)
+            if (hasCoverageRequest) {
+                rowBg = "bg-red-50 border-red-200"
+                statusText = "Abstimmung"
+                statusColor = "text-red-600 font-bold"
+                iconBg = "bg-red-100 text-red-600"
+            } else {
+                rowBg = "bg-red-100 border-red-300 animate-pulse ring-2 ring-red-200"
+                statusText = "DRINGEND"
+                statusColor = "text-red-700 font-bold"
+                iconBg = "bg-red-200 text-red-700"
+            }
         }
 
         return (
@@ -326,6 +347,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         const shift = selectedShift
         const isTeam = shift.type === 'TEAM'
         const isTraining = shift.type === 'FORTBILDUNG'
+        const isSpecialOptIn = !isTeam && ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES'].includes(shift.type)
 
         let participants = []
 
@@ -367,7 +389,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                     </div>
                 </div>
 
-                {isTraining && !isAdmin && (
+                {isSpecialOptIn && !isAdmin && (
                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
                         <span className="font-bold text-blue-900">{amIParticipating ? "Du nimmst teil" : "Möchtest du teilnehmen?"}</span>
                         <button
@@ -467,14 +489,14 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                     <div className="space-y-3 pt-4 border-t border-gray-100">
                         <h5 className="font-bold text-gray-900">Verwaltung</h5>
 
-                        {isTraining && (
+                        {isSpecialOptIn && (
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Thema / Titel</label>
                                 <input
                                     type="text"
                                     value={editTitle}
                                     onChange={(e) => setEditTitle(e.target.value)}
-                                    placeholder="Thema der Fortbildung"
+                                    placeholder="Thema / Beschreibung"
                                     className="w-full p-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:ring-2 focus:ring-black focus:outline-none"
                                 />
                             </div>
@@ -533,7 +555,8 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         )
     }
 
-    const specialShifts = shifts.filter(s => s.type === 'TEAM' || s.type === 'FORTBILDUNG')
+    const SPECIAL_TYPES = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
+    const specialShifts = shifts.filter(s => SPECIAL_TYPES.includes(s.type))
 
     return (
         <>
@@ -599,6 +622,38 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                         </React.Fragment>
                     ))}
 
+                    {/* Coverage Voting Panels for urgent shifts */}
+                    {['TD1', 'TD2', 'ND', 'DBD'].map(slotCode => {
+                        const shift = shifts.find(s => s.type === slotCode)
+                        if (!shift) return null
+                        const isUrgentShift = !!shift.urgent_since && !shift.assigned_to && (!shift.interests || shift.interests.length === 0)
+                        const coverageReq = coverageRequests.find(cr => cr.shift_id === shift.id)
+                        if (!isUrgentShift || !coverageReq) return null
+
+                        const shiftVotes = coverageVotes.filter(v => v.shift_id === shift.id)
+                        const shiftHours = calculateWorkHours(shift.start_time, shift.end_time, shift.type)
+                        const assignedName = coverageReq.assigned_to
+                            ? allProfiles.find(p => p.id === coverageReq.assigned_to)?.display_name || allProfiles.find(p => p.id === coverageReq.assigned_to)?.full_name || 'Zugewiesen'
+                            : null
+
+                        return (
+                            <CoverageVotingPanel
+                                key={`coverage-${shift.id}`}
+                                shift={shift}
+                                userId={userId}
+                                isAdmin={isAdmin}
+                                coverageRequest={coverageReq}
+                                allVotes={shiftVotes}
+                                fairnessIndices={fairnessIndices}
+                                userBalance={userBalance}
+                                shiftHours={shiftHours}
+                                onVote={onCoverageVote}
+                                onResolve={onCoverageResolve}
+                                assignedUserName={assignedName}
+                            />
+                        )
+                    })}
+
                     {renderShiftRow('TD1', 'Tagdienst 1', <Sun size={18} />)}
                     {renderShiftRow('TD2', 'Tagdienst 2', <Sun size={18} />)}
                     {renderShiftRow('ND', 'Nachtdienst', <Moon size={18} />)}
@@ -606,20 +661,24 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
 
                     {isAdmin && isAddMenuOpen && (
                         <div className="mt-2 border-t border-dashed border-gray-200 pt-2 grid grid-cols-3 gap-1 animate-in slide-in-from-top-2 fade-in duration-200">
-                            {['TD1', 'TD2', 'ND', 'DBD', 'TEAM', 'FORTBILDUNG'].map(type => (
-                                <button
-                                    key={type}
-                                    onClick={() => {
-                                        onCreateShift(dateStr, type)
-                                        setIsAddMenuOpen(false)
-                                    }}
-                                    className={`py-2 text-xs font-bold border rounded-lg hover:text-white transition-colors
-                                        ${type === 'TEAM' || type === 'FORTBILDUNG' ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-600' : 'bg-white border-gray-200 hover:bg-black'}
+                            {['TD1', 'TD2', 'ND', 'DBD', 'TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES'].map(type => {
+                                const specialLabel = { TEAM: 'Teamsitzung', FORTBILDUNG: 'Fortbildung', EINSCHULUNG: 'Einschulung', MITARBEITERGESPRAECH: 'MA-Gespräch', SONSTIGES: 'Sonstiges' }
+                                const isSpecial = !!specialLabel[type]
+                                return (
+                                    <button
+                                        key={type}
+                                        onClick={() => {
+                                            onCreateShift(dateStr, type)
+                                            setIsAddMenuOpen(false)
+                                        }}
+                                        className={`py-2 text-xs font-bold border rounded-lg hover:text-white transition-colors
+                                        ${isSpecial ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-600' : 'bg-white border-gray-200 hover:bg-black'}
                                     `}
-                                >
-                                    {type === 'TEAM' ? 'Teamsitzung' : (type === 'FORTBILDUNG' ? 'Fortbildung' : type)}
-                                </button>
-                            ))}
+                                    >
+                                        {specialLabel[type] || type}
+                                    </button>
+                                )
+                            })}
                         </div>
                     )}
                 </div>

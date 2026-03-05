@@ -15,6 +15,9 @@ const SHIFT_TYPE_NAMES = {
     'DBD': 'Doppelbesetzter Dienst',
     'TEAM': 'Teamsitzung',
     'FORTBILDUNG': 'Fortbildung',
+    'EINSCHULUNG': 'Einschulungstermin',
+    'MITARBEITERGESPRAECH': 'Mitarbeitergespräch',
+    'SONSTIGES': 'Sonstiges',
 }
 
 /**

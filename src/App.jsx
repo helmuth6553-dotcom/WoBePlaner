@@ -37,6 +37,7 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState('roster')
   const [calendarDate, setCalendarDate] = useState(null)
   const [badges, setBadges] = useState({})
+  const [openCoverageCount, setOpenCoverageCount] = useState(0)
 
   // Fetch badge counts for navigation
   useEffect(() => {
@@ -77,6 +78,53 @@ function AppContent() {
       .channel('badge-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, fetchBadgeCounts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, fetchBadgeCounts)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, fetchBadgeCounts)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user, isAdmin])
+
+  // Fetch open coverage requests for non-admin users
+  useEffect(() => {
+    if (!user || isAdmin) {
+      setOpenCoverageCount(0)
+      return
+    }
+
+    const fetchCoverage = async () => {
+      try {
+        // Get open coverage requests
+        const { data: openReqs } = await supabase
+          .from('coverage_requests')
+          .select('shift_id')
+          .eq('status', 'open')
+
+        if (!openReqs?.length) {
+          setOpenCoverageCount(0)
+          return
+        }
+
+        // Check which ones this user hasn't voted on yet
+        const { data: myVotes } = await supabase
+          .from('coverage_votes')
+          .select('shift_id, responded')
+          .eq('user_id', user.id)
+          .eq('responded', true)
+
+        const votedShiftIds = new Set(myVotes?.map(v => v.shift_id) || [])
+        const unanswered = openReqs.filter(r => !votedShiftIds.has(r.shift_id))
+        setOpenCoverageCount(unanswered.length)
+      } catch (err) {
+        console.error('Failed to fetch coverage count:', err)
+      }
+    }
+
+    fetchCoverage()
+
+    const channel = supabase
+      .channel('coverage-banner')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, fetchCoverage)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_votes' }, fetchCoverage)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -104,6 +152,18 @@ function AppContent() {
 
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-white">
+
+        {/* Coverage Alert Banner */}
+        {openCoverageCount > 0 && activeTab !== 'roster' && (
+          <button
+            onClick={() => setActiveTab('roster')}
+            className="w-full py-2.5 px-4 bg-red-600 text-white text-sm font-bold flex items-center justify-center gap-2 animate-pulse hover:bg-red-700 transition-colors"
+          >
+            <span>⚠️</span>
+            <span>{openCoverageCount} offene{openCoverageCount === 1 ? 'r Dienst braucht' : ' Dienste brauchen'} deine Antwort</span>
+            <span>→ Jetzt abstimmen</span>
+          </button>
+        )}
 
         {/* Scrollable Content Area - Lazy components wrapped in Suspense */}
         {/* Disable App-level scroll for roster tab because RosterFeed uses PullToRefresh which has its own scroll container */}

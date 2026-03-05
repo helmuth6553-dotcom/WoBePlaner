@@ -712,6 +712,9 @@ export default function TimeTracking() {
                         // Display Type Logic
                         let displayType = item.type
                         if (isTeam) displayType = "Teamsitzung"
+                        if (item.type === 'EINSCHULUNG') displayType = "Einschulungstermin"
+                        if (item.type === 'MITARBEITERGESPRAECH') displayType = "MA-Gespräch"
+                        if (item.type === 'SONSTIGES') displayType = "Sonstiges"
 
                         return (
                             <div key={item.id} className={`p-4 rounded-xl border shadow-sm transition-all ${isDone ? 'bg-gray-100' : 'bg-white border-gray-200'}`}>

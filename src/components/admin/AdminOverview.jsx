@@ -100,10 +100,10 @@ export default function AdminOverview() {
 
             // Calculate statistics
             const shiftHours = {
-                TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0
+                TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0
             }
             const sickHours = {
-                TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0
+                TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0
             }
             let flexCount = 0
             let sickCount = 0
@@ -112,7 +112,7 @@ export default function AdminOverview() {
             // Calculate total planned shift hours (what the Dienstplan offers)
             let totalPlannedHours = 0
             shifts?.forEach(shift => {
-                if (shift.type !== 'TEAM' && shift.type !== 'FORTBILDUNG') {
+                if (shift.type !== 'TEAM' && shift.type !== 'FORTBILDUNG' && shift.type !== 'EINSCHULUNG' && shift.type !== 'MITARBEITERGESPRAECH' && shift.type !== 'SONSTIGES') {
                     // Personal shifts - count once
                     totalPlannedHours += calculateWorkHours(shift.start_time, shift.end_time, shift.type)
                 }
@@ -126,13 +126,13 @@ export default function AdminOverview() {
                 totalPlannedHours += teamHours * employees.length
             })
 
-            // Add FORTBILDUNG hours (per participant from interests)
-            const fortbildungShifts = shifts?.filter(s => s.type === 'FORTBILDUNG') || []
-            fortbildungShifts.forEach(shift => {
-                const fortHours = calculateWorkHours(shift.start_time, shift.end_time, shift.type)
+            // Add FORTBILDUNG/EINSCHULUNG hours (per participant from interests)
+            const optInShifts = shifts?.filter(s => s.type === 'FORTBILDUNG' || s.type === 'EINSCHULUNG' || s.type === 'MITARBEITERGESPRAECH' || s.type === 'SONSTIGES') || []
+            optInShifts.forEach(shift => {
+                const optInHours = calculateWorkHours(shift.start_time, shift.end_time, shift.type)
                 // Count interests for this shift
                 const participantCount = monthInterests.filter(i => i.shift_id === shift.id).length
-                totalPlannedHours += fortHours * participantCount
+                totalPlannedHours += optInHours * participantCount
             })
 
             // Calculate total Soll hours for all employees
@@ -297,7 +297,7 @@ export default function AdminOverview() {
             const now = new Date()
             const unfilledShifts = shifts?.filter(s => {
                 const shiftDate = new Date(s.start_time)
-                return shiftDate < now && !s.assigned_to && s.type !== 'TEAM' && s.type !== 'FORTBILDUNG'
+                return shiftDate < now && !s.assigned_to && s.type !== 'TEAM' && s.type !== 'FORTBILDUNG' && s.type !== 'EINSCHULUNG' && s.type !== 'MITARBEITERGESPRAECH' && s.type !== 'SONSTIGES'
             }) || []
 
             // 9. Upcoming vacations (next 14 days from today)
@@ -726,6 +726,18 @@ export default function AdminOverview() {
                                             <div className="text-xs text-gray-500 font-bold">Fortbildung</div>
                                             <div className="text-lg font-bold text-gray-800">{stats.shiftHours.FORTBILDUNG.toFixed(1)}h</div>
                                         </div>
+                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
+                                            <div className="text-xs text-gray-500 font-bold">Einschulung</div>
+                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.EINSCHULUNG.toFixed(1)}h</div>
+                                        </div>
+                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
+                                            <div className="text-xs text-gray-500 font-bold">MA-Gespr.</div>
+                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.MITARBEITERGESPRAECH.toFixed(1)}h</div>
+                                        </div>
+                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
+                                            <div className="text-xs text-gray-500 font-bold">Sonstiges</div>
+                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.SONSTIGES.toFixed(1)}h</div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -766,6 +778,18 @@ export default function AdminOverview() {
                                         <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
                                             <div className="text-xs text-red-500 font-bold">Fortb.</div>
                                             <div className="text-lg font-bold text-red-700">{stats.sickHours.FORTBILDUNG.toFixed(1)}h</div>
+                                        </div>
+                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
+                                            <div className="text-xs text-red-500 font-bold">Einsch.</div>
+                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.EINSCHULUNG.toFixed(1)}h</div>
+                                        </div>
+                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
+                                            <div className="text-xs text-red-500 font-bold">MA-G.</div>
+                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.MITARBEITERGESPRAECH.toFixed(1)}h</div>
+                                        </div>
+                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
+                                            <div className="text-xs text-red-500 font-bold">Sonst.</div>
+                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.SONSTIGES.toFixed(1)}h</div>
                                         </div>
                                     </div>
                                 )}
