@@ -11,7 +11,7 @@ CHECK (availability_preference IN ('available', 'reluctant', 'emergency_only'));
 -- 2. Coverage Votes tracking (for penalty/missed vote calculation)
 CREATE TABLE IF NOT EXISTS coverage_votes (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    shift_id UUID REFERENCES shifts(id) ON DELETE CASCADE NOT NULL,
+    shift_id INTEGER REFERENCES shifts(id) ON DELETE CASCADE NOT NULL,
     user_id UUID REFERENCES profiles(id) NOT NULL,
     was_eligible BOOLEAN DEFAULT true,
     responded BOOLEAN DEFAULT false,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS coverage_votes (
 -- 3. Coverage Requests tracking (lifecycle of a coverage request)
 CREATE TABLE IF NOT EXISTS coverage_requests (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    shift_id UUID REFERENCES shifts(id) ON DELETE CASCADE NOT NULL,
+    shift_id INTEGER REFERENCES shifts(id) ON DELETE CASCADE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
     status TEXT DEFAULT 'open'
         CHECK (status IN ('open', 'assigned', 'expired')),
