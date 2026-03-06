@@ -513,9 +513,9 @@ export default function RosterFeed() {
                     indexTotal: fi?.index?.total || 0,
                 }
             }).sort((a, b) => {
-                // Best preference first, then highest fairness index
+                // Best preference first, then lowest Soli-Punkte (least contributed = covers next)
                 if (a.prefOrder !== b.prefOrder) return a.prefOrder - b.prefOrder
-                return b.indexTotal - a.indexTotal
+                return a.indexTotal - b.indexTotal
             })
 
             // Hardness to fill: worst "best candidate" first. (e.g. reluctant=1 is harder than available=0)
@@ -572,21 +572,18 @@ export default function RosterFeed() {
             return
         }
 
-        // 5. Save all assignments to DB
+        // 5. Save all assignments to DB via RPC (bypasses RLS so any user can assign others)
         for (const assignment of assignmentsToSave) {
-            const { shiftId, userId } = assignment
-
-            await supabase.from('shift_interests').upsert(
-                { shift_id: shiftId, user_id: userId, is_flex: true },
-                { onConflict: 'shift_id, user_id' }
-            )
-
-            await supabase.from('coverage_requests').update({
-                status: 'assigned',
-                assigned_to: userId,
-                resolved_by: user.id,
-                resolved_at: new Date().toISOString(),
-            }).eq('shift_id', shiftId)
+            const { error } = await supabase.rpc('assign_coverage', {
+                p_shift_id: assignment.shiftId,
+                p_user_id: assignment.userId,
+                p_resolved_by: user.id,
+            })
+            if (error) {
+                console.error('assign_coverage RPC failed:', error)
+                setAlertConfig({ isOpen: true, title: 'Fehler', message: `Zuweisung fehlgeschlagen: ${error.message}`, type: 'error' })
+                return
+            }
         }
 
         setAlertConfig({
@@ -831,7 +828,7 @@ export default function RosterFeed() {
             }
         })
 
-        return calculateAllFairnessIndices(nonAdminIds, allFlexHistory, balancesMap, allCoverageVoteHistory)
+        return calculateAllFairnessIndices(nonAdminIds, allFlexHistory, allCoverageVoteHistory)
     }, [allProfiles, allFlexHistory, allCoverageVoteHistory, allShiftsHistory, allTeamShiftsHistory, allAbsencesHistory, allTimeEntriesHistory, allCorrectionsHistory, currentDate])
 
     // Year-month key for reliable useMemo dependency comparison

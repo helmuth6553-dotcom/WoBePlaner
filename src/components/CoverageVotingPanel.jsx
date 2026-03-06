@@ -3,9 +3,9 @@ import { ChevronDown, ChevronUp, Vote, CheckCircle2 } from 'lucide-react'
 import { getReadableBreakdown } from '../utils/fairnessIndex'
 
 /**
- * CoverageVotingPanel - Displayed on urgent shifts for the Fairness-Index voting system.
+ * CoverageVotingPanel - Displayed on urgent shifts for the Soli-Punkte voting system.
  * 
- * All users see anonymized Fairness-Index values.
+ * All users see anonymized Soli-Punkte values.
  * Users vote with 3 preference levels.
  * Any on-duty employee or admin can close the vote.
  */
@@ -33,7 +33,7 @@ export default function CoverageVotingPanel({
     const totalEligible = allVotes?.length || 0
     const totalResponded = allVotes?.filter(v => v.responded).length || 0
 
-    // Build anonymized list sorted by preference then index
+    // Build anonymized list sorted by preference then Soli-Punkte (ascending)
     const PREF_ORDER = { available: 0, reluctant: 1, emergency_only: 2 }
     const votingList = fairnessIndices?.map(fi => {
         const vote = allVotes?.find(v => v.user_id === fi.userId)
@@ -46,7 +46,7 @@ export default function CoverageVotingPanel({
         }
     })
         .sort((a, b) => {
-            // Sort: responded first, then by preference (available > reluctant > emergency_only), then by index desc
+            // Sort: responded first, then by preference (available > reluctant > emergency_only), then by Soli-Punkte asc
             if (a.responded && !b.responded) return -1
             if (!a.responded && b.responded) return 1
             if (a.responded && b.responded) {
@@ -54,10 +54,10 @@ export default function CoverageVotingPanel({
                 const prefB = PREF_ORDER[b.preference] ?? 99
                 if (prefA !== prefB) return prefA - prefB
             }
-            return b.indexTotal - a.indexTotal
+            return a.indexTotal - b.indexTotal
         }) || []
 
-    // Find the recommended person (highest index among best preference)
+    // Find the recommended person (lowest Soli-Punkte among best preference)
     const bestPreference = votingList.find(v => v.responded)?.preference
     const recommended = bestPreference
         ? votingList.find(v => v.preference === bestPreference)
@@ -121,7 +121,7 @@ export default function CoverageVotingPanel({
                                     <span className="text-gray-300">⬜</span>
                                 )}
                                 <span className={`font-bold ${entry.isMe ? 'text-blue-700' : ''}`}>
-                                    Fairness-Index {entry.indexTotal.toFixed(1)}
+                                    Soli-Punkte {entry.indexTotal.toFixed(1)}
                                     {entry.isMe && <span className="ml-1 text-blue-500 font-normal">(Du)</span>}
                                 </span>
                             </div>
@@ -145,14 +145,14 @@ export default function CoverageVotingPanel({
                 })}
             </div>
 
-            {/* My Fairness-Index breakdown (expandable) */}
+            {/* My Soli-Punkte breakdown (expandable) */}
             {myIndex && (
                 <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                     <button
                         onClick={() => setShowBreakdown(!showBreakdown)}
                         className="w-full flex items-center justify-between p-3 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                        <span>Dein Fairness-Index: {myIndex.index.total.toFixed(1)}</span>
+                        <span>Dein Soli-Punkte: {myIndex.index.total.toFixed(1)}</span>
                         {showBreakdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
                     {showBreakdown && (

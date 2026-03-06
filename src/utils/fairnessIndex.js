@@ -1,66 +1,54 @@
 /**
- * Fairness-Index Calculation for Shift Coverage
+ * Soli-Punkte Calculation for Shift Coverage
  *
- * The Fairness-Index determines who should cover an open shift.
- * Higher index = more likely to be asked (but fairer, because it means
- * the person has contributed less recently).
+ * Soli-Punkte measure how much a person has contributed to team coverage.
+ * Higher score = has contributed more (covered shifts, participated in votes).
+ * The greedy algorithm assigns shifts to the person with the LOWEST Soli-Punkte
+ * (who has contributed the least and should cover next).
  *
  * Components:
- * 1. Flex-Differenz: How much less this person has covered vs team average
- * 2. Stunden-Faktor: How many minus hours the person has
- * 3. Strafpunkte: Penalty for not participating in previous votes
+ * 1. Flex-Einsätze: How often this person has covered (last 6 months)
+ * 2. Abstimmungs-Teilnahme: How often this person participated in coverage votes
  */
 
 /**
- * Calculate the Fairness-Index for a single user.
+ * Calculate Soli-Punkte for a single user.
  *
  * @param {Object} params - Calculation parameters
  * @param {number} params.userFlexCount - How many times this user has covered (last 6 months)
- * @param {number} params.teamAvgFlex - Team average flex coverage count
- * @param {number} params.userBalanceHours - Current hour balance (negative = minus hours)
- * @param {number} params.missedVotes - Number of votes this user didn't participate in (last 6 months)
+ * @param {number} params.participatedVotes - Number of votes this user participated in (last 6 months)
  * @returns {{ total: number, breakdown: Object }}
  */
-export function calculateFairnessIndex({ userFlexCount, teamAvgFlex, userBalanceHours, missedVotes }) {
-    // 1. Flex-Differenz: who covered less gets more points
-    // Range: typically 0-10, can go negative if person covered MORE than average
-    const flexDiff = (teamAvgFlex - userFlexCount) * 2
+export function calculateFairnessIndex({ userFlexCount, participatedVotes }) {
+    // 1. Flex-Einsätze: who covered more gets more Soli-Punkte
+    const flexComponent = userFlexCount * 2
 
-    // 2. Stunden-Faktor: more minus hours = higher index (benefits from covering)
-    // Only counts negative balance, positive balance doesn't reduce index
-    const hoursFactor = userBalanceHours < 0 ? Math.abs(userBalanceHours) * 0.5 : 0
+    // 2. Abstimmungs-Teilnahme: each participated vote = +1.5 Soli-Punkte
+    const participationBonus = participatedVotes * 1.5
 
-    // 3. Strafpunkte: 1.5 points per missed vote
-    const penalty = missedVotes * 1.5
-
-    // Total (minimum 0)
-    const total = Math.max(0, Math.round((flexDiff + hoursFactor + penalty) * 10) / 10)
+    const total = Math.round((flexComponent + participationBonus) * 10) / 10
 
     return {
         total,
         breakdown: {
-            flexDiff: Math.round(flexDiff * 10) / 10,
-            hoursFactor: Math.round(hoursFactor * 10) / 10,
-            penalty: Math.round(penalty * 10) / 10,
+            flexComponent: Math.round(flexComponent * 10) / 10,
+            participationBonus: Math.round(participationBonus * 10) / 10,
             flexCount: userFlexCount,
-            teamAvgFlex: Math.round(teamAvgFlex * 10) / 10,
-            missedVotes,
-            balanceHours: userBalanceHours,
+            participatedVotes,
         }
     }
 }
 
 /**
- * Calculate Fairness-Index for all eligible users.
+ * Calculate Soli-Punkte for all eligible users.
  *
  * @param {Array} eligibleUserIds - List of user IDs who are eligible
  * @param {Array} allFlexHistory - All shift_interests with is_flex=true (last 6 months)
- * @param {Object} balances - Map of userId -> balance object { total: number }
  * @param {Array} voteHistory - All coverage_votes (last 6 months)
- * @returns {Array<{ userId: string, index: Object }>} Sorted by total descending
+ * @returns {Array<{ userId: string, index: Object }>} Sorted by total ascending (lowest Soli-Punkte first)
  */
-export function calculateAllFairnessIndices(eligibleUserIds, allFlexHistory, balances, voteHistory) {
-    // Calculate team average flex count
+export function calculateAllFairnessIndices(eligibleUserIds, allFlexHistory, voteHistory) {
+    // Count flex coverages per user
     const flexCounts = {}
     eligibleUserIds.forEach(id => { flexCounts[id] = 0 })
 
@@ -70,38 +58,31 @@ export function calculateAllFairnessIndices(eligibleUserIds, allFlexHistory, bal
         }
     })
 
-    const totalFlex = Object.values(flexCounts).reduce((sum, c) => sum + c, 0)
-    const teamAvgFlex = eligibleUserIds.length > 0 ? totalFlex / eligibleUserIds.length : 0
-
-    // Count missed votes per user
-    const missedVoteCounts = {}
-    eligibleUserIds.forEach(id => { missedVoteCounts[id] = 0 })
+    // Count participated votes per user
+    const participatedVoteCounts = {}
+    eligibleUserIds.forEach(id => { participatedVoteCounts[id] = 0 })
 
     voteHistory.forEach(vote => {
-        if (vote.was_eligible && !vote.responded && missedVoteCounts[vote.user_id] !== undefined) {
-            missedVoteCounts[vote.user_id]++
+        if (vote.was_eligible && vote.responded && participatedVoteCounts[vote.user_id] !== undefined) {
+            participatedVoteCounts[vote.user_id]++
         }
     })
 
-    // Calculate index for each user
+    // Calculate Soli-Punkte for each user
     const results = eligibleUserIds.map(userId => {
         const userFlexCount = flexCounts[userId] || 0
-        const userBalance = balances[userId]
-        const userBalanceHours = userBalance?.total || 0
-        const missedVotes = missedVoteCounts[userId] || 0
+        const participatedVotes = participatedVoteCounts[userId] || 0
 
         const index = calculateFairnessIndex({
             userFlexCount,
-            teamAvgFlex,
-            userBalanceHours,
-            missedVotes,
+            participatedVotes,
         })
 
         return { userId, index }
     })
 
-    // Sort by total descending (highest index first = most "deserving" to be asked)
-    results.sort((a, b) => b.index.total - a.index.total)
+    // Sort ascending (lowest Soli-Punkte first = least contributed = should cover next)
+    results.sort((a, b) => a.index.total - b.index.total)
 
     return results
 }
@@ -117,23 +98,15 @@ export function getReadableBreakdown(breakdown) {
 
     items.push({
         label: 'Flex-Einsätze (6 Monate)',
-        detail: `Du: ${breakdown.flexCount}× | Team-Ø: ${breakdown.teamAvgFlex}×`,
-        points: `${breakdown.flexDiff >= 0 ? '+' : ''}${breakdown.flexDiff}`,
+        detail: `${breakdown.flexCount}× eingesprungen`,
+        points: `+${breakdown.flexComponent}`,
     })
 
     items.push({
-        label: 'Stundensaldo',
-        detail: `Aktuell: ${breakdown.balanceHours >= 0 ? '+' : ''}${breakdown.balanceHours}h`,
-        points: `+${breakdown.hoursFactor}`,
+        label: 'Abstimmungs-Teilnahme (6 Monate)',
+        detail: `${breakdown.participatedVotes}× abgestimmt`,
+        points: `+${breakdown.participationBonus}`,
     })
-
-    if (breakdown.missedVotes > 0) {
-        items.push({
-            label: 'Verpasste Abstimmungen',
-            detail: `${breakdown.missedVotes}× nicht teilgenommen`,
-            points: `+${breakdown.penalty}`,
-        })
-    }
 
     return items
 }
