@@ -463,42 +463,42 @@ export default function RosterFeed() {
     }
 
     // Coverage System: Submit a vote (available/reluctant/emergency_only)
+    // NOTE: We only write to coverage_votes here. shift_interests is NOT touched until resolve,
+    // so the shift does NOT appear "assigned" while voting is in progress.
     const submitCoverageVote = async (shiftId, preference) => {
         if (!user) return
 
         if (preference === null) {
-            // Remove vote ("Ändern" clicked)
-            await supabase.from('shift_interests').delete().match({ shift_id: shiftId, user_id: user.id })
-            await supabase.from('coverage_votes').update({ responded: false }).match({ shift_id: shiftId, user_id: user.id })
+            // Remove vote ("Ändern" clicked) - clear preference + responded flag
+            await supabase.from('coverage_votes').update({
+                responded: false,
+                availability_preference: null
+            }).match({ shift_id: shiftId, user_id: user.id })
         } else {
-            // Upsert interest with preference
-            await supabase.from('shift_interests').upsert(
-                { shift_id: shiftId, user_id: user.id, availability_preference: preference },
-                { onConflict: 'shift_id, user_id' }
-            )
-            // Mark vote as responded
-            await supabase.from('coverage_votes').update({ responded: true }).match({ shift_id: shiftId, user_id: user.id })
+            // Record preference in coverage_votes only
+            await supabase.from('coverage_votes').update({
+                responded: true,
+                availability_preference: preference
+            }).match({ shift_id: shiftId, user_id: user.id })
         }
 
         fetchData()
     }
 
     // Coverage System: Resolve (close) a coverage vote
+    // Picks the best candidate from coverage_votes (preference + fairness index), then assigns to shift_interests.
     const resolveCoverageRequest = async (shiftId) => {
-        // Find the best candidate: highest preference first, then highest fairness index
-        const shiftVotes = coverageVotes.filter(v => v.shift_id === shiftId)
-        const shiftInterests = shifts.find(s => s.id === shiftId)?.interests || []
+        // Read preferences directly from coverage_votes state (not shift_interests)
+        const shiftVotes = coverageVotes.filter(v => v.shift_id === shiftId && v.responded && v.availability_preference)
 
-        // Build candidate list with preference + index
         const PREF_ORDER = { available: 0, reluctant: 1, emergency_only: 2 }
-        const candidates = shiftInterests
-            .filter(i => i.availability_preference)
-            .map(i => {
-                const fi = fairnessIndices.find(f => f.userId === i.user_id)
+        const candidates = shiftVotes
+            .map(v => {
+                const fi = fairnessIndices.find(f => f.userId === v.user_id)
                 return {
-                    userId: i.user_id,
-                    preference: i.availability_preference,
-                    prefOrder: PREF_ORDER[i.availability_preference] ?? 99,
+                    userId: v.user_id,
+                    preference: v.availability_preference,
+                    prefOrder: PREF_ORDER[v.availability_preference] ?? 99,
                     indexTotal: fi?.index?.total || 0,
                 }
             })
@@ -516,13 +516,13 @@ export default function RosterFeed() {
         const winnerProfile = allProfiles.find(p => p.id === winner.userId)
         const winnerName = winnerProfile?.display_name || winnerProfile?.full_name || 'Mitarbeiter'
 
-        // Assign the shift
+        // NOW assign the shift to the winner (first time shift_interests is touched)
         await supabase.from('shift_interests').upsert(
             { shift_id: shiftId, user_id: winner.userId, is_flex: true },
             { onConflict: 'shift_id, user_id' }
         )
 
-        // Update coverage request status
+        // Mark coverage request as resolved
         await supabase.from('coverage_requests').update({
             status: 'assigned',
             assigned_to: winner.userId,

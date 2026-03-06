@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS coverage_votes (
     user_id UUID REFERENCES profiles(id) NOT NULL,
     was_eligible BOOLEAN DEFAULT true,
     responded BOOLEAN DEFAULT false,
+    availability_preference TEXT CHECK (availability_preference IN ('available', 'reluctant', 'emergency_only')),
     created_at TIMESTAMPTZ DEFAULT now(),
     UNIQUE(shift_id, user_id)
 );
@@ -37,19 +38,24 @@ ALTER TABLE coverage_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE coverage_requests ENABLE ROW LEVEL SECURITY;
 
 -- Everyone can read coverage data
+DROP POLICY IF EXISTS "Anyone can read coverage_votes" ON coverage_votes;
 CREATE POLICY "Anyone can read coverage_votes" ON coverage_votes
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Anyone can read coverage_requests" ON coverage_requests;
 CREATE POLICY "Anyone can read coverage_requests" ON coverage_requests
     FOR SELECT USING (true);
 
 -- Users can update their own vote response
+DROP POLICY IF EXISTS "Users can update own votes" ON coverage_votes;
 CREATE POLICY "Users can update own votes" ON coverage_votes
     FOR UPDATE USING (auth.uid() = user_id);
 
 -- Service role handles inserts (via edge functions)
+DROP POLICY IF EXISTS "Service can manage coverage_votes" ON coverage_votes;
 CREATE POLICY "Service can manage coverage_votes" ON coverage_votes
     FOR ALL USING (true);
 
+DROP POLICY IF EXISTS "Service can manage coverage_requests" ON coverage_requests;
 CREATE POLICY "Service can manage coverage_requests" ON coverage_requests
     FOR ALL USING (true);

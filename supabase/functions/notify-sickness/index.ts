@@ -95,6 +95,12 @@ serve(async (req) => {
         // Check if we are crashing before even starting
         console.log("Function invoked - v2.0")
 
+        // NEW: Sleep for 2000ms to avoid a race condition. 
+        // The frontend inserts the absence (triggering this webhook) and THEN executes
+        // the mark_shifts_urgent RPC. We must wait for the RPC to commit so we can find the urgent shifts.
+        console.log("Waiting 2s for frontend RPCs to commit...")
+        await new Promise(r => setTimeout(r, 2000))
+
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
