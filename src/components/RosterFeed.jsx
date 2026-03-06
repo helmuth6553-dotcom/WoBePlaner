@@ -485,15 +485,26 @@ export default function RosterFeed() {
         fetchData()
     }
 
-    // Coverage System: Resolve (close) a coverage vote
-    // Picks the best candidate from coverage_votes (preference + fairness index), then assigns to shift_interests.
-    const resolveCoverageRequest = async (shiftId) => {
-        // Read preferences directly from coverage_votes state (not shift_interests)
-        const shiftVotes = coverageVotes.filter(v => v.shift_id === shiftId && v.responded && v.availability_preference)
+    // Coverage System: Resolve all open coverage requests greedily
+    // Optimizes assignments by prioritizing hardest-to-fill shifts first and distributing shifts among users.
+    const resolveAllCoverageRequests = async () => {
+        // 1. Get all open coverage requests
+        const openRequests = coverageRequests.filter(req => req.status === 'open')
+        if (openRequests.length === 0) return
+
+        // 2. Build a list of valid votes
+        const validVotes = coverageVotes.filter(v =>
+            openRequests.some(req => req.shift_id === v.shift_id) &&
+            v.responded &&
+            v.availability_preference
+        )
 
         const PREF_ORDER = { available: 0, reluctant: 1, emergency_only: 2 }
-        const candidates = shiftVotes
-            .map(v => {
+
+        // 3. Evaluate candidate quality for each shift
+        const shiftsWithCandidates = openRequests.map(req => {
+            const shiftVotes = validVotes.filter(v => v.shift_id === req.shift_id)
+            const candidates = shiftVotes.map(v => {
                 const fi = fairnessIndices.find(f => f.userId === v.user_id)
                 return {
                     userId: v.user_id,
@@ -501,39 +512,87 @@ export default function RosterFeed() {
                     prefOrder: PREF_ORDER[v.availability_preference] ?? 99,
                     indexTotal: fi?.index?.total || 0,
                 }
-            })
-            .sort((a, b) => {
+            }).sort((a, b) => {
+                // Best preference first, then highest fairness index
                 if (a.prefOrder !== b.prefOrder) return a.prefOrder - b.prefOrder
                 return b.indexTotal - a.indexTotal
             })
 
-        if (candidates.length === 0) {
+            // Hardness to fill: worst "best candidate" first. (e.g. reluctant=1 is harder than available=0)
+            const bestPref = candidates.length > 0 ? candidates[0].prefOrder : 99
+            const numCandidates = candidates.length
+
+            return {
+                shiftId: req.shift_id,
+                candidates,
+                bestPref,
+                numCandidates
+            }
+        })
+
+        // Sort shifts: Hardest to fill first. 
+        // 1. Worst bestPref first
+        // 2. Fewest number of candidates first
+        shiftsWithCandidates.sort((a, b) => {
+            if (a.bestPref !== b.bestPref) return b.bestPref - a.bestPref
+            return a.numCandidates - b.numCandidates
+        })
+
+        // 4. Assign shifts greedily
+        const assignedUsersThisBatch = new Set()
+        const assignmentsToSave = []
+
+        for (const shiftData of shiftsWithCandidates) {
+            let winner = null
+
+            // Try to find the best candidate who hasn't been assigned a shift yet
+            for (const candidate of shiftData.candidates) {
+                if (!assignedUsersThisBatch.has(candidate.userId)) {
+                    winner = candidate
+                    break
+                }
+            }
+
+            // Fallback: if all voted candidates already have a shift, pick the overall best anyway
+            if (!winner && shiftData.candidates.length > 0) {
+                winner = shiftData.candidates[0]
+            }
+
+            if (winner) {
+                assignedUsersThisBatch.add(winner.userId)
+                assignmentsToSave.push({
+                    shiftId: shiftData.shiftId,
+                    userId: winner.userId
+                })
+            }
+        }
+
+        if (assignmentsToSave.length === 0) {
             setAlertConfig({ isOpen: true, title: 'Keine Antworten', message: 'Es hat noch niemand abgestimmt.', type: 'info' })
             return
         }
 
-        const winner = candidates[0]
-        const winnerProfile = allProfiles.find(p => p.id === winner.userId)
-        const winnerName = winnerProfile?.display_name || winnerProfile?.full_name || 'Mitarbeiter'
+        // 5. Save all assignments to DB
+        for (const assignment of assignmentsToSave) {
+            const { shiftId, userId } = assignment
 
-        // NOW assign the shift to the winner (first time shift_interests is touched)
-        await supabase.from('shift_interests').upsert(
-            { shift_id: shiftId, user_id: winner.userId, is_flex: true },
-            { onConflict: 'shift_id, user_id' }
-        )
+            await supabase.from('shift_interests').upsert(
+                { shift_id: shiftId, user_id: userId, is_flex: true },
+                { onConflict: 'shift_id, user_id' }
+            )
 
-        // Mark coverage request as resolved
-        await supabase.from('coverage_requests').update({
-            status: 'assigned',
-            assigned_to: winner.userId,
-            resolved_by: user.id,
-            resolved_at: new Date().toISOString(),
-        }).eq('shift_id', shiftId)
+            await supabase.from('coverage_requests').update({
+                status: 'assigned',
+                assigned_to: userId,
+                resolved_by: user.id,
+                resolved_at: new Date().toISOString(),
+            }).eq('shift_id', shiftId)
+        }
 
         setAlertConfig({
             isOpen: true,
-            title: 'Dienst besetzt!',
-            message: `${winnerName} übernimmt den Dienst.`,
+            title: 'Dienste besetzt!',
+            message: `${assignmentsToSave.length} Dienst(e) ${assignmentsToSave.length > 1 ? 'wurden' : 'wurde'} optimal zugewiesen.`,
             type: 'success'
         })
 
@@ -1104,7 +1163,7 @@ export default function RosterFeed() {
                                                         fairnessIndices={fairnessIndices}
                                                         userBalance={balance}
                                                         onCoverageVote={submitCoverageVote}
-                                                        onCoverageResolve={resolveCoverageRequest}
+                                                        onCoverageResolve={resolveAllCoverageRequests}
                                                     />
                                                 )
                                             })}

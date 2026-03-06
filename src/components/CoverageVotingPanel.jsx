@@ -220,12 +220,12 @@ export default function CoverageVotingPanel({
                     className="w-full py-2.5 text-xs font-bold rounded-xl border-2 border-gray-300 bg-white text-gray-700 hover:bg-gray-100 active:scale-95 transition-all"
                     disabled={totalResponded === 0}
                 >
-                    Abstimmung abschließen
+                    Alle offenen Abstimmungen optimal besetzen
                 </button>
             ) : (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
                     <p className="text-xs font-bold text-amber-800">
-                        Bist du gerade im Dienst und für die Nachbesetzung verantwortlich?
+                        Bist du sicher? Dies wird alle aktuell offenen Dienste bestmöglich verteilen.
                     </p>
                     <div className="flex gap-2">
                         <button
