@@ -10,6 +10,10 @@ import { supabase } from '../supabase'
 import { startOfMonth, endOfMonth, format } from 'date-fns'
 import { filterShiftsByStartDate } from '../utils/timeTrackingHelpers'
 
+// Shift types that support multiple participants (group events)
+// These are confirmed as soon as the user is registered, regardless of interest count
+const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'TEAM']
+
 /**
  * Fetches all shifts for a user in a given month
  * @param {string} userId - User ID
@@ -72,11 +76,16 @@ export function useShifts(userId, selectedMonth, options = {}) {
                     interestCounts[i.shift_id] = (interestCounts[i.shift_id] || 0) + 1
                 })
 
-                // Only confirmed if user is the ONLY interested person
+                // Confirmed if: group shift type (always) OR only interested person
                 confirmedShifts = monthInterests
-                    .filter(i => interestCounts[i.shift_id] === 1)
+                    .filter(i => {
+                        const type = i.shifts?.type?.toUpperCase()
+                        if (!type) return false
+                        if (GROUP_SHIFT_TYPES.includes(type)) return true
+                        return interestCounts[i.shift_id] === 1
+                    })
                     .map(i => i.shifts)
-                    .filter(s => s)
+                    .filter(Boolean)
             }
 
             // 2. Get directly assigned shifts (backwards compatibility)

@@ -263,7 +263,15 @@ export default function AbsencePlanner({ initialDate }) {
                 absence.user_id,
                 'absence_request',
                 absence.id,
-                { before: { status: absence.status }, after: { status: status } }
+                {
+                    before: { status: absence.status },
+                    after: { status: status },
+                    context: {
+                        type: absence.type,
+                        start_date: absence.start_date,
+                        end_date: absence.end_date
+                    }
+                }
             )
 
             // Close modal and refresh

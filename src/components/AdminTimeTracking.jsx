@@ -6,7 +6,7 @@ import { CheckCircle, XCircle, Download, FileText, Sun, Thermometer, ChevronLeft
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateReportHash } from '../utils/security'
-import { logAdminAction } from '../utils/adminAudit'
+import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
 import { constructIso, constructInterruptionIso, safeFormatTime, safeFormatDate } from '../utils/timeTrackingHelpers'
 
 
@@ -531,6 +531,9 @@ export default function AdminTimeTracking() {
     const handleDeleteCorrection = async (correctionId) => {
         if (!confirm('Korrektur wirklich löschen?')) return
 
+        const before = await fetchBeforeState('balance_corrections', correctionId,
+            'id, user_id, correction_hours, effective_month, reason, created_by')
+
         const { error } = await supabase
             .from('balance_corrections')
             .delete()
@@ -539,6 +542,13 @@ export default function AdminTimeTracking() {
         if (error) {
             alert('Fehler: ' + error.message)
         } else {
+            await logAdminAction(
+                'balance_correction_deleted',
+                before?.user_id || selectedUserId,
+                'balance_correction',
+                correctionId,
+                { before }
+            )
             fetchData()
         }
     }
@@ -658,14 +668,35 @@ export default function AdminTimeTracking() {
 
 
 
-        const { error, data } = await supabase.from('time_entries').update({
+        const beforeEntry = {
+            actual_start: editingEntry.actual_start,
+            actual_end: editingEntry.actual_end,
+            interruptions: editingEntry.interruptions,
+            calculated_hours: editingEntry.calculated_hours,
+            status: editingEntry.status,
+            admin_note: editingEntry.admin_note
+        }
+
+        const updatePayload = {
             actual_start: startIso, actual_end: endIso, interruptions: finalInts,
             calculated_hours: calculatedHours, status: 'approved', admin_note: formData.adminNote
-        }).eq('id', editingEntry.id).select()
+        }
 
+        const { error, data } = await supabase.from('time_entries').update(updatePayload).eq('id', editingEntry.id).select()
 
-
-        if (error) alert(error.message); else { setEditingEntry(null); fetchData() }
+        if (error) {
+            alert(error.message)
+        } else {
+            await logAdminAction(
+                'time_entry_approved',
+                editingEntry.user_id || selectedUserId,
+                'time_entry',
+                editingEntry.id,
+                { before: beforeEntry, after: updatePayload }
+            )
+            setEditingEntry(null)
+            fetchData()
+        }
     }
 
     // Modal Init & Watch

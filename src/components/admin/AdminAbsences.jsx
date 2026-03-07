@@ -52,7 +52,16 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
                 targetUserId,
                 'absence_request',
                 id,
-                { before: { status: previousStatus }, after: { status: status } }
+                {
+                    before: { status: previousStatus },
+                    after: { status: status },
+                    context: {
+                        type: request?.type,
+                        start_date: request?.start_date,
+                        end_date: request?.end_date,
+                        employee_name: request?.profiles?.full_name
+                    }
+                }
             )
         }
 
@@ -81,7 +90,16 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
                 request.user_id,
                 'absence_request',
                 id,
-                { before: { status: request.status }, after: { status: 'storniert' } }
+                {
+                    before: { status: request.status },
+                    after: { status: 'storniert' },
+                    context: {
+                        type: request.type,
+                        start_date: request.start_date,
+                        end_date: request.end_date,
+                        employee_name: request.profiles?.full_name
+                    }
+                }
             )
         }
 

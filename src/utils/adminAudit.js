@@ -44,6 +44,22 @@ export async function logAdminAction(action, targetUserId, resourceType, resourc
 }
 
 /**
+ * Fetch current state of a record before updating it (for before/after diff)
+ * @param {string} table - Table name
+ * @param {string} id - Record ID
+ * @param {string} fields - Fields to select (default: '*')
+ * @returns {Promise<object|null>}
+ */
+export async function fetchBeforeState(table, id, fields = '*') {
+    try {
+        const { data } = await supabase.from(table).select(fields).eq('id', id).single()
+        return data
+    } catch {
+        return null
+    }
+}
+
+/**
  * Get audit log for a user
  * @param {string} userId - User ID to get logs for
  * @param {number} limit - Maximum number of records (default: 50)

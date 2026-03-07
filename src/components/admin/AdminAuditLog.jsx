@@ -56,8 +56,27 @@ export default function AdminAuditLog() {
         'korrektur': { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Korrektur', category: 'other' },
 
         // Employee actions
+        'employee_created': { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Mitarbeiter erstellt', category: 'other' },
         'employee_updated': { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Mitarbeiter aktualisiert', category: 'other' },
         'employee_invited': { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Mitarbeiter eingeladen', category: 'other' },
+        'employee_deactivated': { bg: 'bg-red-50', text: 'text-red-700', label: 'Mitarbeiter deaktiviert', category: 'other' },
+        'employee_reactivated': { bg: 'bg-green-50', text: 'text-green-700', label: 'Mitarbeiter reaktiviert', category: 'other' },
+        'deactivate_user': { bg: 'bg-red-50', text: 'text-red-700', label: 'Mitarbeiter deaktiviert', category: 'other' },
+        'reactivate_user': { bg: 'bg-green-50', text: 'text-green-700', label: 'Mitarbeiter reaktiviert', category: 'other' },
+
+        // Time entry actions
+        'time_entry_approved': { bg: 'bg-teal-50', text: 'text-teal-700', label: 'Zeiteintrag genehmigt', category: 'reports' },
+
+        // Balance correction actions
+        'create_correction': { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Korrektur erstellt', category: 'other' },
+        'balance_correction_deleted': { bg: 'bg-red-50', text: 'text-red-700', label: 'Korrektur gelöscht', category: 'other' },
+
+        // Report actions
+        'approve_report': { bg: 'bg-green-50', text: 'text-green-700', label: 'Bericht genehmigt', category: 'reports' },
+        'reject_report': { bg: 'bg-red-50', text: 'text-red-700', label: 'Bericht abgelehnt', category: 'reports' },
+
+        // Sick report
+        'sick_report_created': { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Krankmeldung erfasst', category: 'absences' },
     }
 
     const getActionBadge = (action) => {
@@ -175,18 +194,72 @@ export default function AdminAuditLog() {
     const renderChanges = (changes) => {
         if (!changes) return null
 
-        // Status change
+        // Status change with context (enriched absence logs)
         if (changes.before?.status && changes.after?.status) {
             return (
-                <div className="flex items-center gap-2 text-xs">
-                    <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 line-through">{changes.before.status}</span>
-                    <span>➜</span>
-                    <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">{changes.after.status}</span>
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs">
+                        <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 line-through">{changes.before.status}</span>
+                        <span>➜</span>
+                        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">{changes.after.status}</span>
+                    </div>
+                    {changes.context && (
+                        <div className="text-[10px] text-gray-400">
+                            {changes.context.type && <span>{changes.context.type}</span>}
+                            {changes.context.start_date && changes.context.end_date && (
+                                <span> ({changes.context.start_date} bis {changes.context.end_date})</span>
+                            )}
+                        </div>
+                    )}
                 </div>
             )
         }
 
-        // Shift changes
+        // Before/After diff (employee_updated, shift_updated with before/after, time_entry_approved)
+        if (changes.before && changes.after && !changes.before.status) {
+            const allKeys = [...new Set([...Object.keys(changes.before || {}), ...Object.keys(changes.after || {})])]
+            const changedKeys = allKeys.filter(k => JSON.stringify(changes.before?.[k]) !== JSON.stringify(changes.after?.[k]))
+            if (changedKeys.length > 0) {
+                return (
+                    <div className="space-y-0.5">
+                        {changedKeys.slice(0, 4).map(key => (
+                            <div key={key} className="text-[10px]">
+                                <span className="text-gray-400">{key}: </span>
+                                <span className="text-red-400 line-through">{String(changes.before?.[key] ?? '-')}</span>
+                                <span className="text-gray-300"> ➜ </span>
+                                <span className="text-green-600 font-medium">{String(changes.after?.[key] ?? '-')}</span>
+                            </div>
+                        ))}
+                        {changedKeys.length > 4 && <div className="text-[10px] text-gray-300">+{changedKeys.length - 4} weitere</div>}
+                    </div>
+                )
+            }
+        }
+
+        // Sick report
+        if (changes.after?.type === 'Krank' && changes.after?.start_date) {
+            return (
+                <div className="text-xs text-gray-600">
+                    {changes.after.start_date} bis {changes.after.end_date}
+                    {changes.after.planned_hours > 0 && <span className="ml-1">({changes.after.planned_hours}h)</span>}
+                    {changes.after.affected_shifts?.length > 0 && (
+                        <span className="ml-1 text-gray-400">({changes.after.affected_shifts.length} Schichten betroffen)</span>
+                    )}
+                </div>
+            )
+        }
+
+        // Balance correction deleted
+        if (changes.before?.correction_hours !== undefined && !changes.after) {
+            return (
+                <div className="text-xs text-gray-600">
+                    {changes.before.correction_hours > 0 ? '+' : ''}{changes.before.correction_hours}h
+                    {changes.before.reason && <span className="text-gray-400 ml-1">({changes.before.reason})</span>}
+                </div>
+            )
+        }
+
+        // Shift changes (legacy format)
         const shiftChanges = changes.changes || changes
         if (shiftChanges?.start_time || shiftChanges?.end_time) {
             try {

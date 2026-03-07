@@ -75,12 +75,19 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         const td2 = dayShifts.find(s => s.type?.toUpperCase() === 'TD2')
 
         if (td1 && td2) {
-            // Same person doing both TD1 and TD2 - calculate as one continuous shift
-            // from TD1 start to TD2 end (no breaks)
-            const start = new Date(td1.start_time)
-            const end = new Date(td2.end_time)
-            const combinedMinutes = (end - start) / (1000 * 60)
-            actualMinutes += combinedMinutes
+            // Same person doing both TD1 and TD2 - use time_entries if available
+            const td1Entry = entryMap[td1.id]
+            const td2Entry = entryMap[td2.id]
+
+            const td1Hours = td1Entry?.calculated_hours !== undefined
+                ? td1Entry.calculated_hours
+                : calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
+
+            const td2Hours = td2Entry?.calculated_hours !== undefined
+                ? td2Entry.calculated_hours
+                : calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
+
+            actualMinutes += (td1Hours + td2Hours) * 60
             processedShiftIds.add(td1.id)
             processedShiftIds.add(td2.id)
         }
@@ -191,11 +198,19 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
             const td2 = dayShifts.find(s => s.type?.toUpperCase() === 'TD2')
 
             if (td1 && td2) {
-                // Same person doing both - calculate as one continuous shift (no breaks)
-                const start = new Date(td1.start_time)
-                const end = new Date(td2.end_time)
-                const combinedMinutes = (end - start) / (1000 * 60)
-                pastActual += combinedMinutes
+                // Same person doing both TD1 and TD2 - use time_entries if available
+                const td1Entry = entryMap[td1.id]
+                const td2Entry = entryMap[td2.id]
+
+                const td1Hours = td1Entry?.calculated_hours !== undefined
+                    ? td1Entry.calculated_hours
+                    : calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
+
+                const td2Hours = td2Entry?.calculated_hours !== undefined
+                    ? td2Entry.calculated_hours
+                    : calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
+
+                pastActual += (td1Hours + td2Hours) * 60
                 processedPastIds.add(td1.id)
                 processedPastIds.add(td2.id)
             }

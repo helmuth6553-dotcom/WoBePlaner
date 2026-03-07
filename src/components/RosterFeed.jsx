@@ -22,7 +22,7 @@ import { getDefaultTimes } from '../utils/shiftDefaults'
 import PullToRefresh from './PullToRefresh'
 import { downloadICalFile } from '../utils/calendarExport'
 import { calculateAllFairnessIndices } from '../utils/fairnessIndex'
-import { logAdminAction } from '../utils/adminAudit'
+import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
 
 export default function RosterFeed() {
 
@@ -656,8 +656,8 @@ export default function RosterFeed() {
         }
 
         // 4. Now remove user from shifts and mark as urgent via RPC (bypasses RLS)
+        const shiftIdsToMarkUrgent = []
         if (shiftsInRange) {
-            const shiftIdsToMarkUrgent = []
 
             for (const shift of shiftsInRange) {
                 const myInterest = shift.interests.find(i => i.user_id === user.id)
@@ -684,6 +684,24 @@ export default function RosterFeed() {
                 }
             }
         }
+
+        // Audit Log: Krankmeldung
+        await logAdminAction(
+            'sick_report_created',
+            user.id,
+            'absence',
+            null,
+            {
+                after: {
+                    start_date: startDate,
+                    end_date: endDate,
+                    type: 'Krank',
+                    planned_hours: totalPlannedHours,
+                    affected_shifts: plannedShiftsSnapshot,
+                    shifts_marked_urgent: shiftIdsToMarkUrgent || []
+                }
+            }
+        )
 
         const hoursMsg = totalPlannedHours > 0
             ? ` (${totalPlannedHours}h geplante Arbeitszeit gespeichert)`
@@ -1081,6 +1099,9 @@ export default function RosterFeed() {
                                                         onUpdateShift={async (shiftId, newStart, newEnd, newTitle) => {
                                                             if (!isAdmin) return
 
+                                                            const before = await fetchBeforeState('shifts', shiftId,
+                                                                'id, start_time, end_time, type, title, assigned_to')
+
                                                             const updatePayload = {
                                                                 start_time: newStart,
                                                                 end_time: newEnd
@@ -1094,9 +1115,9 @@ export default function RosterFeed() {
                                                             if (error) {
                                                                 setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
                                                             } else {
-                                                                // Audit Log
-                                                                await logAdminAction('shift_updated', null, 'shift', shiftId, {
-                                                                    changes: updatePayload
+                                                                await logAdminAction('shift_updated', before?.assigned_to || null, 'shift', shiftId, {
+                                                                    before: { start_time: before?.start_time, end_time: before?.end_time, type: before?.type, title: before?.title },
+                                                                    after: updatePayload
                                                                 })
                                                                 setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst aktualisiert', type: 'success' })
                                                                 fetchData()

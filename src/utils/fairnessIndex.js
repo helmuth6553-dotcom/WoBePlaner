@@ -20,11 +20,11 @@
  * @returns {{ total: number, breakdown: Object }}
  */
 export function calculateFairnessIndex({ userFlexCount, participatedVotes }) {
-    // 1. Flex-Einsätze: who covered more gets more Soli-Punkte
-    const flexComponent = userFlexCount * 2
+    // 1. Flex-Einsätze: each coverage = +10 Soli-Punkte
+    const flexComponent = userFlexCount * 10
 
-    // 2. Abstimmungs-Teilnahme: each participated vote = +1.5 Soli-Punkte
-    const participationBonus = participatedVotes * 1.5
+    // 2. Abstimmungs-Teilnahme: each participated vote = +2 Soli-Punkte
+    const participationBonus = participatedVotes * 2
 
     const total = Math.round((flexComponent + participationBonus) * 10) / 10
 

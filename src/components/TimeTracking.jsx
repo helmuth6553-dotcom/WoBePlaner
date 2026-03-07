@@ -8,6 +8,8 @@ import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCal
 import { generateReportHash } from '../utils/security'
 import { constructIso, constructInterruptionIso } from '../utils/timeTrackingHelpers'
 
+// Shift types that support multiple participants (group events)
+const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'TEAM']
 
 export default function TimeTracking() {
     const { user, isAdmin } = useAuth()
@@ -200,11 +202,17 @@ export default function TimeTracking() {
                 interestCounts[i.shift_id] = (interestCounts[i.shift_id] || 0) + 1
             })
 
-            // Filter to only shifts where user is the ONLY interested person (confirmed)
+            // Confirmed if: group shift type (always) OR only interested person
             confirmedShifts = monthInterests
-                .filter(i => interestCounts[i.shift_id] === 1)
+                .filter(i => {
+                    const type = i.shifts?.type?.toUpperCase()
+                    if (!type) return false
+                    if (GROUP_SHIFT_TYPES.includes(type)) return true
+                    return interestCounts[i.shift_id] === 1
+                })
                 .map(i => i.shifts)
-                .filter(s => s)
+                .filter(Boolean)
+
         }
 
         // Also get shifts directly assigned (for backwards compatibility)

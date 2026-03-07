@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Users, CheckCircle, XCircle, Plus, Mail, Trash2, Link as LinkIcon, Shield } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../../supabase'
-import { logAdminAction } from '../../utils/adminAudit'
+import { logAdminAction, fetchBeforeState } from '../../utils/adminAudit'
 
 /**
  * =========================================================================
@@ -152,6 +152,25 @@ export default function AdminEmployees() {
                 throw new Error(response.data?.error || 'Unbekannter Fehler')
             }
 
+            // Audit Log: Mitarbeiter erstellt
+            await logAdminAction(
+                'employee_created',
+                response.data?.user_id || null,
+                'profile',
+                response.data?.user_id || null,
+                {
+                    after: {
+                        email: formData.email,
+                        full_name: formData.full_name,
+                        weekly_hours: parseFloat(formData.weekly_hours) || 40,
+                        start_date: formData.start_date,
+                        vacation_days_per_year: parseFloat(formData.vacation_days_per_year) || 25,
+                        role: formData.role,
+                        initial_balance: parseFloat(formData.initial_balance) || 0
+                    }
+                }
+            )
+
             setShowInviteModal(false)
             setFormData({
                 email: '',
@@ -173,18 +192,30 @@ export default function AdminEmployees() {
     }
 
     const handleUpdateUser = async () => {
-        const { error } = await supabase.from('profiles').update({
+        const before = await fetchBeforeState('profiles', editingUser.id,
+            'full_name, weekly_hours, start_date, vacation_days_per_year, role, initial_balance')
+
+        const updatePayload = {
             full_name: formData.full_name,
             weekly_hours: formData.weekly_hours,
             start_date: formData.start_date,
             vacation_days_per_year: formData.vacation_days_per_year,
             role: formData.role,
             initial_balance: formData.initial_balance
-        }).eq('id', editingUser.id)
+        }
+
+        const { error } = await supabase.from('profiles').update(updatePayload).eq('id', editingUser.id)
 
         if (error) {
             alert(error.message)
         } else {
+            await logAdminAction(
+                'employee_updated',
+                editingUser.id,
+                'profile',
+                editingUser.id,
+                { before, after: updatePayload }
+            )
             setEditingUser(null)
             fetchData()
         }
