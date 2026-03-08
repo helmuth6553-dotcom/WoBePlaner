@@ -5,16 +5,16 @@ import { Trophy, Zap, MessageSquare, ChevronDown, ChevronUp, ShieldCheck, AlertT
 import { calculateFairnessIndex, calculateAllFairnessIndices } from '../utils/fairnessIndex'
 
 const RANK_TIERS = {
-    safe: { label: 'Gut geschützt', icon: ShieldCheck, bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-    mid: { label: 'Mittleres Risiko', icon: AlertTriangle, bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+    safe: { label: 'Top-Beitragender', icon: ShieldCheck, bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+    mid: { label: 'Mittelfeld', icon: AlertTriangle, bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
     risk: { label: 'Du bist bald dran', icon: Flame, bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
 }
 
 function getTier(rank, total) {
     const third = Math.ceil(total / 3)
-    if (rank <= third) return 'risk'       // lowest Soli = least contributed = most likely next
+    if (rank <= third) return 'safe'       // top ranks = most contributed = safe
     if (rank <= third * 2) return 'mid'
-    return 'safe'                           // highest Soli = contributed most = safe
+    return 'risk'                           // bottom ranks = least contributed = next up
 }
 
 export default function SoliPunktePanel() {
@@ -153,8 +153,8 @@ export default function SoliPunktePanel() {
                     Platz {myRank} <span className="text-base font-medium text-gray-500">von {totalMembers}</span>
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                    {tier === 'safe' && 'Du hast viel beigetragen — beim nächsten Einspringen bist du weiter hinten.'}
-                    {tier === 'mid' && 'Du bist im Mittelfeld — ein paar Einsätze oder Abstimmungen heben dich nach oben.'}
+                    {tier === 'safe' && 'Du hast viel beigetragen — weiter so! Beim nächsten offenen Dienst sind andere zuerst dran.'}
+                    {tier === 'mid' && 'Du bist im Mittelfeld — ein paar Einsätze oder Abstimmungen bringen dich weiter nach oben.'}
                     {tier === 'risk' && 'Du hast wenig beigetragen — beim nächsten offenen Dienst wirst du wahrscheinlich empfohlen.'}
                 </p>
             </div>

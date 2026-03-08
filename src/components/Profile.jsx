@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
-import { Settings, BarChart3, Trophy, Palmtree } from 'lucide-react'
+import { Settings, BarChart3, Trophy, Palmtree, Thermometer } from 'lucide-react'
 import ProfileSettings from './ProfileSettings'
 import ProfileStats from './ProfileStats'
 import SoliPunktePanel from './SoliPunktePanel'
 import ProfileVacation from './ProfileVacation'
+import ProfileSickLeave from './ProfileSickLeave'
 
 const SECTIONS = [
     { id: 'settings', label: 'Profil', icon: Settings },
     { id: 'stats', label: 'Statistik', icon: BarChart3, employeeOnly: true },
     { id: 'soli', label: 'Soli-Punkte', icon: Trophy, employeeOnly: true },
     { id: 'vacation', label: 'Urlaub', icon: Palmtree, employeeOnly: true },
+    { id: 'sick', label: 'Krankenstand', icon: Thermometer, employeeOnly: true },
 ]
 
 export default function Profile() {
@@ -86,6 +88,10 @@ export default function Profile() {
 
             {activeSection === 'vacation' && !isAdmin && (
                 <ProfileVacation />
+            )}
+
+            {activeSection === 'sick' && !isAdmin && (
+                <ProfileSickLeave />
             )}
         </div>
     )

@@ -81,8 +81,8 @@ export function calculateAllFairnessIndices(eligibleUserIds, allFlexHistory, vot
         return { userId, index }
     })
 
-    // Sort ascending (lowest Soli-Punkte first = least contributed = should cover next)
-    results.sort((a, b) => a.index.total - b.index.total)
+    // Sort descending (highest Soli-Punkte first = contributed most = rank 1)
+    results.sort((a, b) => b.index.total - a.index.total)
 
     return results
 }
