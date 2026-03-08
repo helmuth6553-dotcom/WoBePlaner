@@ -223,17 +223,16 @@ export const calculateDailyAbsenceHours = (dateInput, absence, plannedShifts = [
             }
         }
 
-        // Rule: Stored Planned Hours (Priority 2 - for old absences without snapshot)
-        // If the absence record has stored 'planned_hours', use that.
-        // IMPORTANT: planned_hours is the TOTAL for the entire sick period, so divide by number of days.
-        if (absence?.planned_hours !== undefined && absence?.planned_hours !== null && Number(absence.planned_hours) > 0) {
-            // Calculate number of days in the sick period
-            const startDate = absence.start_date ? parseISO(absence.start_date) : date
-            const endDate = absence.end_date ? parseISO(absence.end_date) : date
-            const totalDays = Math.max(1, differenceInDays(endDate, startDate) + 1)
-
-            // Return per-day average
-            return Number(absence.planned_hours) / totalDays
+        // Rule: Stored Planned Hours (Priority 2 - ONLY for old absences without snapshot)
+        // If we have a snapshot but no shifts on this day, that means no work was planned → return 0.
+        // Only fall back to planned_hours average if there is NO snapshot at all.
+        if (!absence?.planned_shifts_snapshot || absence.planned_shifts_snapshot.length === 0) {
+            if (absence?.planned_hours !== undefined && absence?.planned_hours !== null && Number(absence.planned_hours) > 0) {
+                const startDate = absence.start_date ? parseISO(absence.start_date) : date
+                const endDate = absence.end_date ? parseISO(absence.end_date) : date
+                const totalDays = Math.max(1, differenceInDays(endDate, startDate) + 1)
+                return Number(absence.planned_hours) / totalDays
+            }
         }
 
         // Rule: Live Planned Shifts (Priority 3 - Fallback for old absences without snapshot)
