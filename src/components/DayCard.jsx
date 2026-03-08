@@ -638,6 +638,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
 
                         return (
                             <CoverageVotingPanel
+                                id="coverage-voting-section"
                                 key={`coverage-${shift.id}`}
                                 shift={shift}
                                 userId={userId}

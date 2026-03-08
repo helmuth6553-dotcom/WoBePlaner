@@ -85,46 +85,50 @@ function AppContent() {
   }, [user, isAdmin])
 
   // Fetch open coverage requests for non-admin users
+  const refreshCoverageCount = async () => {
+    if (!user || isAdmin) {
+      setOpenCoverageCount(0)
+      return
+    }
+    try {
+      // Only count votes that were created FOR this user (excludes sick person)
+      const { data: myPendingVotes } = await supabase
+        .from('coverage_votes')
+        .select('shift_id')
+        .eq('user_id', user.id)
+        .eq('responded', false)
+
+      if (!myPendingVotes?.length) {
+        setOpenCoverageCount(0)
+        return
+      }
+
+      // Filter to only shifts with open coverage requests
+      const shiftIds = myPendingVotes.map(v => v.shift_id)
+      const { data: openReqs } = await supabase
+        .from('coverage_requests')
+        .select('shift_id')
+        .in('shift_id', shiftIds)
+        .eq('status', 'open')
+
+      setOpenCoverageCount(openReqs?.length || 0)
+    } catch (err) {
+      console.error('Failed to fetch coverage count:', err)
+    }
+  }
+
   useEffect(() => {
     if (!user || isAdmin) {
       setOpenCoverageCount(0)
       return
     }
 
-    const fetchCoverage = async () => {
-      try {
-        // Get open coverage requests
-        const { data: openReqs } = await supabase
-          .from('coverage_requests')
-          .select('shift_id')
-          .eq('status', 'open')
-
-        if (!openReqs?.length) {
-          setOpenCoverageCount(0)
-          return
-        }
-
-        // Check which ones this user hasn't voted on yet
-        const { data: myVotes } = await supabase
-          .from('coverage_votes')
-          .select('shift_id, responded')
-          .eq('user_id', user.id)
-          .eq('responded', true)
-
-        const votedShiftIds = new Set(myVotes?.map(v => v.shift_id) || [])
-        const unanswered = openReqs.filter(r => !votedShiftIds.has(r.shift_id))
-        setOpenCoverageCount(unanswered.length)
-      } catch (err) {
-        console.error('Failed to fetch coverage count:', err)
-      }
-    }
-
-    fetchCoverage()
+    refreshCoverageCount()
 
     const channel = supabase
       .channel('coverage-banner')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, fetchCoverage)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_votes' }, fetchCoverage)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, refreshCoverageCount)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_votes' }, refreshCoverageCount)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -153,10 +157,18 @@ function AppContent() {
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-white">
 
-        {/* Coverage Alert Banner */}
-        {openCoverageCount > 0 && activeTab !== 'roster' && (
+        {/* Coverage Alert Banner - shown on all tabs */}
+        {openCoverageCount > 0 && (
           <button
-            onClick={() => setActiveTab('roster')}
+            onClick={() => {
+              if (activeTab !== 'roster') {
+                setActiveTab('roster')
+                // Scroll after tab switch renders
+                setTimeout(() => document.getElementById('coverage-voting-section')?.scrollIntoView({ behavior: 'smooth' }), 300)
+              } else {
+                document.getElementById('coverage-voting-section')?.scrollIntoView({ behavior: 'smooth' })
+              }
+            }}
             className="w-full py-2.5 px-4 bg-red-600 text-white text-sm font-bold flex items-center justify-center gap-2 animate-pulse hover:bg-red-700 transition-colors"
           >
             <span>⚠️</span>
@@ -169,7 +181,7 @@ function AppContent() {
         {/* Disable App-level scroll for roster tab because RosterFeed uses PullToRefresh which has its own scroll container */}
         <div className={`flex-1 ${activeTab === 'roster' ? 'overflow-hidden' : 'overflow-y-auto'} scrollbar-hide pb-20 md:pb-0`}>
 
-          {activeTab === 'roster' && <RosterFeed />}
+          {activeTab === 'roster' && <RosterFeed onCoverageVoteChanged={refreshCoverageCount} />}
           {activeTab === 'times' && (
             <Suspense fallback={<TimeTrackingSkeleton />}>
               {isAdmin ? <AdminTimeTracking /> : (USE_NEW_TIME_TRACKING ? <TimeTrackingV2 /> : <TimeTracking />)}

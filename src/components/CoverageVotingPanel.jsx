@@ -10,6 +10,7 @@ import { getReadableBreakdown } from '../utils/fairnessIndex'
  * Any on-duty employee or admin can close the vote.
  */
 export default function CoverageVotingPanel({
+    id,
     shift,
     userId,
     isAdmin,
@@ -75,7 +76,7 @@ export default function CoverageVotingPanel({
 
     if (isResolved) {
         return (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-2">
+            <div id={id} className="bg-green-50 border border-green-200 rounded-xl p-4 mb-2">
                 <div className="flex items-center gap-2 mb-1">
                     <CheckCircle2 size={18} className="text-green-600" />
                     <span className="font-bold text-green-800">Dienst besetzt</span>
@@ -88,7 +89,7 @@ export default function CoverageVotingPanel({
     }
 
     return (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-2 space-y-3">
+        <div id={id} className="bg-red-50 border border-red-200 rounded-xl p-4 mb-2 space-y-3">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

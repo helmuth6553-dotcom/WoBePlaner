@@ -24,7 +24,7 @@ import { downloadICalFile } from '../utils/calendarExport'
 import { calculateAllFairnessIndices } from '../utils/fairnessIndex'
 import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
 
-export default function RosterFeed() {
+export default function RosterFeed({ onCoverageVoteChanged }) {
 
     const { user, isAdmin } = useAuth()
     const [shifts, setShifts] = useState([])
@@ -483,6 +483,7 @@ export default function RosterFeed() {
         }
 
         fetchData()
+        onCoverageVoteChanged?.()
     }
 
     // Coverage System: Resolve all open coverage requests greedily
@@ -594,6 +595,7 @@ export default function RosterFeed() {
         })
 
         fetchData()
+        onCoverageVoteChanged?.()
     }
 
     const handleSickReport = async (startDate, endDate) => {
