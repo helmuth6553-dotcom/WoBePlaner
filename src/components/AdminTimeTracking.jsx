@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, subDays, addDays } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { CheckCircle, XCircle, Download, FileText, Sun, Thermometer, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert, Eye, PenTool } from 'lucide-react'
+import { CheckCircle, XCircle, Download, FileText, Sun, Thermometer, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert, Eye, PenTool, Circle, RotateCcw } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateReportHash } from '../utils/security'
@@ -39,25 +39,26 @@ export default function AdminTimeTracking() {
     const [calculatedHours, setCalculatedHours] = useState(0)
 
     // Fetch Users with their status for current month
+    const fetchUsers = async () => {
+        const { data } = await supabase.from('profiles').select('*').or('is_active.eq.true,is_active.is.null').neq('role', 'admin').order('full_name')
+
+        // Fetch status for selected month
+        const [year, month] = selectedMonth.split('-').map(Number)
+        const { data: reports } = await supabase.from('monthly_reports')
+            .select('user_id, status')
+            .eq('year', year)
+            .eq('month', month)
+
+        // Merge status into users
+        const usersWithStatus = (data || []).map(u => ({
+            ...u,
+            monthStatus: reports?.find(r => r.user_id === u.id)?.status || null
+        }))
+
+        setUsers(usersWithStatus)
+    }
+
     useEffect(() => {
-        const fetchUsers = async () => {
-            const { data } = await supabase.from('profiles').select('*').or('is_active.eq.true,is_active.is.null').neq('role', 'admin').order('full_name')
-
-            // Fetch status for selected month
-            const [year, month] = selectedMonth.split('-').map(Number)
-            const { data: reports } = await supabase.from('monthly_reports')
-                .select('user_id, status')
-                .eq('year', year)
-                .eq('month', month)
-
-            // Merge status into users
-            const usersWithStatus = (data || []).map(u => ({
-                ...u,
-                monthStatus: reports?.find(r => r.user_id === u.id)?.status || null
-            }))
-
-            setUsers(usersWithStatus)
-        }
         fetchUsers()
     }, [selectedMonth])
 
@@ -423,8 +424,6 @@ export default function AdminTimeTracking() {
 
     // Open Correction Modal with current balance calculation
     const handleOpenCorrectionModal = async () => {
-        // We need to calculate the current balance for this user/month
-        // Fetch all necessary data
         const monthDate = new Date(selectedMonth + '-01')
         const oneYearAgo = new Date(monthDate)
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
@@ -435,16 +434,59 @@ export default function AdminTimeTracking() {
             return
         }
 
-        // Fetch shifts, absences, entries, corrections for this user
-        const [shiftsRes, absencesRes, entriesRes, corrsRes] = await Promise.all([
+        const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'TEAM']
+
+        // Fetch all data needed for balance: shifts, interests, TEAM shifts, absences, entries, corrections
+        const [shiftsRes, interestsRes, teamShiftsRes, absencesRes, entriesRes, corrsRes] = await Promise.all([
             supabase.from('shifts').select('id, start_time, end_time, type, assigned_to').gte('start_time', oneYearAgo.toISOString()),
+            supabase.from('shift_interests').select('shift_id, shifts(*)').eq('user_id', selectedUserId),
+            supabase.from('shifts').select('id, start_time, end_time, type').eq('type', 'TEAM').gte('start_time', oneYearAgo.toISOString()),
             supabase.from('absences').select('*').eq('user_id', selectedUserId).eq('status', 'genehmigt'),
             supabase.from('time_entries').select('*').eq('user_id', selectedUserId),
             supabase.from('balance_corrections').select('*').eq('user_id', selectedUserId)
         ])
 
-        const userShifts = (shiftsRes.data || []).filter(s => s.assigned_to === selectedUserId).map(s => ({
-            user_id: s.assigned_to,
+        // Build confirmed shifts using same logic as TimeTracking:
+        // 1. Shifts via shift_interests (group shifts always confirmed, others only if sole interested)
+        const interestShiftIds = (interestsRes.data || []).map(i => i.shift_id)
+        let confirmedFromInterests = []
+
+        if (interestShiftIds.length > 0) {
+            const { data: allInterests } = await supabase
+                .from('shift_interests')
+                .select('shift_id')
+                .in('shift_id', interestShiftIds)
+
+            const interestCounts = {}
+            allInterests?.forEach(int => {
+                interestCounts[int.shift_id] = (interestCounts[int.shift_id] || 0) + 1
+            })
+
+            confirmedFromInterests = (interestsRes.data || [])
+                .filter(i => {
+                    const type = i.shifts?.type?.toUpperCase()
+                    if (!type) return false
+                    if (GROUP_SHIFT_TYPES.includes(type)) return true
+                    return interestCounts[i.shift_id] === 1
+                })
+                .map(i => i.shifts)
+                .filter(Boolean)
+        }
+
+        // 2. Shifts via assigned_to (backwards compatibility)
+        const assignedShifts = (shiftsRes.data || []).filter(s => s.assigned_to === selectedUserId)
+
+        // 3. TEAM shifts (mandatory for all)
+        const teamShifts = teamShiftsRes.data || []
+
+        // Merge all, deduplicate by ID
+        const shiftMap = new Map()
+        confirmedFromInterests.forEach(s => shiftMap.set(s.id, s))
+        assignedShifts.forEach(s => { if (!shiftMap.has(s.id)) shiftMap.set(s.id, s) })
+        teamShifts.forEach(s => { if (!shiftMap.has(s.id)) shiftMap.set(s.id, s) })
+
+        const userShifts = Array.from(shiftMap.values()).map(s => ({
+            user_id: selectedUserId,
             id: s.id,
             start_time: s.start_time,
             end_time: s.end_time,
@@ -581,6 +623,7 @@ export default function AdminTimeTracking() {
 
             generatePDF(true)
             fetchData()
+            fetchUsers()
         }
     }
 
@@ -609,6 +652,7 @@ export default function AdminTimeTracking() {
             )
 
             fetchData()
+            fetchUsers()
         }
     }
 
@@ -765,23 +809,59 @@ export default function AdminTimeTracking() {
                         </button>
                     </div>
 
-                    {/* 2. User Select (Bottom) */}
-                    <div className="relative w-full">
-                        <select
-                            value={selectedUserId}
-                            onChange={e => setSelectedUserId(e.target.value)}
-                            className="w-full appearance-none bg-white hover:bg-gray-50 border border-gray-200 text-gray-900 text-base rounded-xl focus:ring-2 focus:ring-black focus:border-transparent block p-4 pr-10 font-bold transition-all cursor-pointer outline-none shadow-sm"
-                        >
-                            <option value="">Mitarbeiter wählen...</option>
-                            {users.map(u => (
-                                <option key={u.id} value={u.id}>
-                                    {u.monthStatus === 'genehmigt' ? '✅ ' : u.monthStatus === 'eingereicht' ? '🟡 ' : '⚪ '}
-                                    {u.display_name || u.full_name}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                    {/* 2. Employee List with Status */}
+                    {(() => {
+                        const statusCounts = users.reduce((acc, u) => {
+                            const s = u.monthStatus || 'offen'
+                            acc[s] = (acc[s] || 0) + 1
+                            return acc
+                        }, {})
+                        return (
+                            <div className="text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-1 px-1">
+                                {statusCounts.offen > 0 && <span className="flex items-center gap-1"><Circle size={10} className="text-gray-400" />{statusCounts.offen} offen</span>}
+                                {statusCounts.eingereicht > 0 && <span className="flex items-center gap-1"><FileText size={10} className="text-blue-500" />{statusCounts.eingereicht} eingereicht</span>}
+                                {statusCounts.genehmigt > 0 && <span className="flex items-center gap-1"><CheckCircle size={10} className="text-green-500" />{statusCounts.genehmigt} genehmigt</span>}
+                                {statusCounts.abgelehnt > 0 && <span className="flex items-center gap-1"><RotateCcw size={10} className="text-red-500" />{statusCounts.abgelehnt} zurückgew.</span>}
+                            </div>
+                        )
+                    })()}
+                    <div className="w-full border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                        <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                            {users.map(u => {
+                                const status = u.monthStatus || 'offen'
+                                const isSelected = selectedUserId === u.id
+                                return (
+                                    <button
+                                        key={u.id}
+                                        onClick={() => setSelectedUserId(isSelected ? '' : u.id)}
+                                        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                                            isSelected ? 'bg-gray-100 font-bold' : 'hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <span className="text-sm text-gray-900 truncate">{u.display_name || u.full_name}</span>
+                                        {status === 'genehmigt' && (
+                                            <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                                <CheckCircle size={12} />genehmigt
+                                            </span>
+                                        )}
+                                        {status === 'eingereicht' && (
+                                            <span className="flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                                <FileText size={12} />eingereicht
+                                            </span>
+                                        )}
+                                        {status === 'abgelehnt' && (
+                                            <span className="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                                                <RotateCcw size={12} />zurückgew.
+                                            </span>
+                                        )}
+                                        {status === 'offen' && (
+                                            <span className="flex items-center gap-1 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                                                <Circle size={12} />offen
+                                            </span>
+                                        )}
+                                    </button>
+                                )
+                            })}
                         </div>
                     </div>
 
@@ -966,8 +1046,8 @@ export default function AdminTimeTracking() {
                     </div>
                 )}
 
-                {/* Add Correction Button */}
-                {selectedUserId && (
+                {/* Add Correction Button - only after approval */}
+                {selectedUserId && userMonthStatus?.status === 'genehmigt' && (
                     <button
                         onClick={handleOpenCorrectionModal}
                         className="mt-4 w-full py-3 bg-purple-100 text-purple-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-purple-200 transition-colors border border-purple-200"
