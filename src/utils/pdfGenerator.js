@@ -4,7 +4,7 @@ import { de } from 'date-fns/locale'
 import { getShiftSegments } from './timeCalculations'
 
 // Helper: Find matching snapshot entry for comparison
-const findSnapshotEntry = (snapshot, entry) => {
+export const findSnapshotEntry = (snapshot, entry) => {
     if (!snapshot || !Array.isArray(snapshot)) return null
     return snapshot.find(s =>
         s.id === entry.id ||
@@ -14,7 +14,7 @@ const findSnapshotEntry = (snapshot, entry) => {
 }
 
 // Helper: Calculate correction diff between snapshot and current entry
-const calculateCorrection = (snapEntry, entry) => {
+export const calculateCorrection = (snapEntry, entry) => {
     if (!snapEntry) return null
     const startChanged = snapEntry.actual_start !== entry.actual_start
     const endChanged = snapEntry.actual_end !== entry.actual_end

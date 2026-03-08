@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
 import { format, parseISO, startOfMonth, endOfMonth, addDays, subDays, eachDayOfInterval, areIntervalsOverlapping } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { CheckCircle, Save, Calendar, Download, Sun, Thermometer, ChevronRight, ChevronLeft, Users, XCircle } from 'lucide-react'
+import { CheckCircle, Save, Calendar, Download, Sun, Thermometer, ChevronRight, ChevronLeft, Users, XCircle, Pencil } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
 import { generateReportHash } from '../utils/security'
 import { constructIso, constructInterruptionIso } from '../utils/timeTrackingHelpers'
+import { findSnapshotEntry, calculateCorrection } from '../utils/pdfGenerator'
 
 // Shift types that support multiple participants (group events)
 const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'TEAM']
@@ -29,7 +30,7 @@ export default function TimeTracking() {
     const [password, setPassword] = useState('')
     const [submitError, setSubmitError] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
-    const [showSnapshotModal, setShowSnapshotModal] = useState(false)
+    const [expandedCorrections, setExpandedCorrections] = useState({})
 
     // Form State
     const [formData, setFormData] = useState({
@@ -639,6 +640,23 @@ export default function TimeTracking() {
         return false
     })
 
+    // Compute corrections: compare current entries against original snapshot
+    const corrections = useMemo(() => {
+        const snapshot = monthStatus?.original_data_snapshot
+        if (!snapshot) return {}
+        const result = {}
+        items.forEach(item => {
+            const entry = entries[item.id]
+            if (!entry) return
+            const snapEntry = findSnapshotEntry(snapshot, entry)
+            const correction = calculateCorrection(snapEntry, entry)
+            if (correction) result[item.id] = correction
+        })
+        return result
+    }, [monthStatus, entries, items])
+
+    const correctionCount = Object.keys(corrections).length
+
     return (
         <div className="p-4 pb-24 max-w-xl mx-auto">
             <h1 className="text-2xl font-bold mb-2 px-2">Zeiterfassung</h1>
@@ -664,10 +682,11 @@ export default function TimeTracking() {
                             <Download size={18} /> Arbeitsnachweis herunterladen (PDF)
                         </button>
                     )}
-                    {monthStatus.original_data_snapshot && (
-                        <button onClick={() => setShowSnapshotModal(true)} className="w-full mt-2 bg-yellow-50 border border-yellow-200 text-yellow-800 py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-yellow-100">
-                            Original-Daten anzeigen
-                        </button>
+                    {correctionCount > 0 && monthStatus.status === 'genehmigt' && (
+                        <div className="w-full mt-2 bg-amber-50 border border-amber-200 text-amber-800 py-2 px-4 rounded-lg font-bold flex items-center justify-center gap-2 text-sm">
+                            <Pencil size={16} />
+                            <span>{correctionCount} von {items.length} Einträgen wurden vom Admin korrigiert</span>
+                        </div>
                     )}
                 </div>
             )}
@@ -759,15 +778,24 @@ export default function TimeTracking() {
                                             )}
                                         </div>
                                     </div>
-                                    {isAbsence ? (
+                                    {monthStatus?.status === 'genehmigt' ? (
+                                        corrections[item.id] ? (
+                                            <button
+                                                onClick={() => setExpandedCorrections(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                                                className="px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase bg-amber-100 text-amber-700 flex items-center gap-1.5 hover:bg-amber-200 active:scale-95 transition-all cursor-pointer"
+                                            >
+                                                <Pencil size={12} />
+                                                Korrigiert
+                                                <ChevronRight size={12} className={`transition-transform duration-200 ${expandedCorrections[item.id] ? 'rotate-90' : ''}`} />
+                                            </button>
+                                        ) : null
+                                    ) : isAbsence ? (
                                         <div className="px-2 py-1 rounded text-xs font-bold uppercase bg-green-100 text-green-700">
                                             Genehmigt
                                         </div>
                                     ) : entry ? (
-                                        <div className="flex items-center gap-1">
-                                            <div className={`px-2 py-1 rounded text-xs font-bold uppercase ${isDone ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                {isDone ? 'Genehmigt' : 'Erfasst'}
-                                            </div>
+                                        <div className="px-2 py-1 rounded text-xs font-bold uppercase bg-yellow-100 text-yellow-700">
+                                            Erfasst
                                         </div>
                                     ) : (
                                         <div className="px-2 py-1 rounded text-xs font-bold uppercase bg-gray-100 text-gray-500">Offen</div>
@@ -845,6 +873,31 @@ export default function TimeTracking() {
                                                 <span className="text-gray-600">Stunden:</span>
                                                 <span className="font-mono font-bold text-blue-600">{isNaN(displayHours) ? displayHours : `${displayHours}h`}</span>
                                             </div>
+                                        </div>
+                                    )
+                                })()}
+                                {expandedCorrections[item.id] && corrections[item.id] && (() => {
+                                    const c = corrections[item.id]
+                                    const fmtTime = (iso) => iso ? format(parseISO(iso), 'HH:mm') : '--:--'
+                                    return (
+                                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-sm space-y-1.5">
+                                            <div className="flex justify-between text-gray-500">
+                                                <span>Deine Eingabe:</span>
+                                                <span className="font-mono">{fmtTime(c.originalStart)} - {fmtTime(c.originalEnd)} = {c.originalHours.toFixed(2)}h</span>
+                                            </div>
+                                            <div className="flex justify-between text-green-700 font-bold">
+                                                <span>Korrigiert auf:</span>
+                                                <span className="font-mono">{fmtTime(c.currentStart)} - {fmtTime(c.currentEnd)} = {c.currentHours.toFixed(2)}h</span>
+                                            </div>
+                                            <div className={`flex justify-between font-bold ${c.hoursDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                <span>Differenz:</span>
+                                                <span className="font-mono">{c.hoursDiff > 0 ? '+' : ''}{c.hoursDiff.toFixed(2)}h</span>
+                                            </div>
+                                            {c.adminNote && (
+                                                <div className="text-gray-600 italic border-t border-amber-200 pt-1.5 mt-1">
+                                                    Grund: {c.adminNote}
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 })()}
@@ -1024,31 +1077,6 @@ export default function TimeTracking() {
                 )
             })()}
 
-            {showSnapshotModal && monthStatus?.original_data_snapshot && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
-                        <h2 className="text-xl font-bold mb-2">Meine Original-Eingabe</h2>
-                        <p className="text-sm text-gray-500 mb-4">Eingereicht am {monthStatus.submitted_at && format(parseISO(monthStatus.submitted_at), 'dd.MM.yyyy HH:mm')}</p>
-                        <div className="space-y-1 text-sm">
-                            <div className="grid grid-cols-4 font-bold border-b pb-2 text-xs text-gray-500 uppercase">
-                                <div>Datum</div>
-                                <div>Zeit</div>
-                                <div>Std</div>
-                                <div>Typ</div>
-                            </div>
-                            {monthStatus.original_data_snapshot.map(snap => (
-                                <div key={snap.id} className="grid grid-cols-4 items-center py-1.5 border-b border-gray-50 text-xs">
-                                    <div>{snap.entry_date ? format(parseISO(snap.entry_date), 'dd.MM.') : '--'}</div>
-                                    <div className="font-mono">{snap.actual_start ? format(parseISO(snap.actual_start), 'HH:mm') : '--:--'}</div>
-                                    <div>{Number(snap.calculated_hours || 0).toFixed(1)}h</div>
-                                    <div className="uppercase">{snap.shifts?.type || 'Url'}</div>
-                                </div>
-                            ))}
-                        </div>
-                        <button onClick={() => setShowSnapshotModal(false)} className="mt-4 w-full bg-gray-100 hover:bg-gray-200 py-2 rounded-lg font-bold">Schließen</button>
-                    </div>
-                </div>
-            )}
         </div>
     )
 }
