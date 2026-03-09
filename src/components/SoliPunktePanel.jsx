@@ -1,20 +1,21 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
-import { Trophy, Zap, MessageSquare, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Flame } from 'lucide-react'
+import { Trophy, Zap, MessageSquare, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Flame, TrendingUp, Minus, Users, Coffee } from 'lucide-react'
 import { calculateFairnessIndex, calculateAllFairnessIndices } from '../utils/fairnessIndex'
 
 const RANK_TIERS = {
-    safe: { label: 'Top-Beitragender', icon: ShieldCheck, bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-    mid: { label: 'Mittelfeld', icon: AlertTriangle, bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-    risk: { label: 'Du bist bald dran', icon: Flame, bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+    safe: { label: 'Schon wieder ich', icon: ShieldCheck, bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', title: 'Schon wieder ich' },
+    mid: { label: 'Kommt drauf an', icon: Users, bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', title: 'Kommt drauf an' },
+    risk: { label: "Hab's nicht gesehen", icon: Coffee, bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', title: "Hab's nicht gesehen" },
 }
 
 function getTier(rank, total) {
-    const third = Math.ceil(total / 3)
-    if (rank <= third) return 'safe'       // top ranks = most contributed = safe
-    if (rank <= third * 2) return 'mid'
-    return 'risk'                           // bottom ranks = least contributed = next up
+    const safeCount = Math.ceil(total * 0.3)
+    const midCount = Math.ceil(total * 0.4)
+    if (rank <= safeCount) return 'safe'
+    if (rank <= safeCount + midCount) return 'mid'
+    return 'risk'
 }
 
 export default function SoliPunktePanel() {
@@ -25,7 +26,8 @@ export default function SoliPunktePanel() {
     const [myFlexCount, setMyFlexCount] = useState(0)
     const [myVoteStats, setMyVoteStats] = useState({ participated: 0, eligible: 0 })
     const [teamAvgFlex, setTeamAvgFlex] = useState(0)
-    const [prevMonthRank, setPrevMonthRank] = useState(null)
+    const [prevMyTotal, setPrevMyTotal] = useState(null)
+    const [prevTeamAvg, setPrevTeamAvg] = useState(null)
 
     useEffect(() => {
         if (!user) return
@@ -87,10 +89,12 @@ export default function SoliPunktePanel() {
             // so previous month comparison is approximate (all votes up to prev month end)
             // This is a best-effort approximation
             const prevIndices = calculateAllFairnessIndices(nonAdminIds, prevFlexData, voteData || [])
-            const prevMyIdx = prevIndices.findIndex(i => i.userId === user.id)
-            if (prevMyIdx >= 0) {
-                setPrevMonthRank(prevMyIdx + 1)
+            const prevMy = prevIndices.find(i => i.userId === user.id)
+            if (prevMy) {
+                setPrevMyTotal(prevMy.index.total)
             }
+            const prevTotalSum = prevIndices.reduce((sum, item) => sum + item.index.total, 0)
+            setPrevTeamAvg(prevIndices.length > 0 ? prevTotalSum / prevIndices.length : 0)
         } catch (err) {
             console.error('SoliPunktePanel error:', err)
         } finally {
@@ -105,27 +109,14 @@ export default function SoliPunktePanel() {
     const tierConfig = tier ? RANK_TIERS[tier] : null
     const TierIcon = tierConfig?.icon
 
-    // Segment data for stacked bar chart
-    const chartData = useMemo(() => {
-        if (allIndices.length === 0) return []
-        return allIndices.map((entry, idx) => {
-            const bd = entry.index.breakdown
-            const flexPart = bd.flexComponent
-            const votePart = bd.participationBonus
-            const total = entry.index.total
-            return {
-                rank: idx + 1,
-                isMe: entry.userId === user?.id,
-                total,
-                flexPart,
-                votePart,
-            }
-        })
-    }, [allIndices, user])
-
+    // Calculate Min and Max to establish the slider scale
     const maxScore = useMemo(() => {
-        return Math.max(...chartData.map(d => d.total), 1)
-    }, [chartData])
+        return Math.max(...allIndices.map(d => d.index.total), 1)
+    }, [allIndices])
+
+    const minScore = useMemo(() => {
+        return Math.min(...allIndices.map(d => d.index.total), 0)
+    }, [allIndices])
 
     if (loading) {
         return <div className="animate-pulse bg-gray-100 rounded-2xl h-48"></div>
@@ -133,90 +124,81 @@ export default function SoliPunktePanel() {
 
     if (!myRank) return null
 
-    const rankDiff = prevMonthRank ? prevMonthRank - myRank : null
+    const myTotalPoints = myIndex >= 0 ? allIndices[myIndex].index.total : 0
+    const pointRange = Math.max(maxScore - minScore, 1)
+
+    // Map points to a 0-100 percentage for the slider.
+    // Constrain it between 5% and 95% to leave visual room on the rounded edges.
+    const rawPercentage = ((myTotalPoints - minScore) / pointRange) * 100
+    const sliderPos = Math.max(5, Math.min(95, rawPercentage))
+
+    const teamAvgTotal = allIndices.length > 0 ? allIndices.reduce((sum, i) => sum + i.index.total, 0) / allIndices.length : 0
+
+    // Trend calculation
+    let myTrend = null
+    let teamTrend = null
+    if (prevMyTotal !== null && prevTeamAvg !== null) {
+        myTrend = myTotalPoints - prevMyTotal
+        teamTrend = teamAvgTotal - prevTeamAvg
+    }
 
     return (
         <div className="space-y-4">
-            {/* 1. Rang-Karte */}
-            <div className={`p-5 rounded-2xl border ${tierConfig.bg} ${tierConfig.border}`}>
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                        <Trophy size={20} className={tierConfig.text} />
-                        <h3 className="font-bold text-gray-900">Dein Soli-Rang</h3>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${tierConfig.bg} ${tierConfig.text} border ${tierConfig.border}`}>
-                        <TierIcon size={12} />
-                        {tierConfig.label}
+            {/* 1. Visual Slider Card */}
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex flex-col items-center">
+                <div className="text-center w-full mb-8">
+                    <span className="text-[10px] sm:text-xs font-bold tracking-widest text-gray-400 uppercase">
+                        Dein Status im Team
                     </span>
                 </div>
-                <p className="text-2xl font-black text-gray-900">
-                    Platz {myRank} <span className="text-base font-medium text-gray-500">von {totalMembers}</span>
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                    {tier === 'safe' && 'Du hast viel beigetragen — weiter so! Beim nächsten offenen Dienst sind andere zuerst dran.'}
-                    {tier === 'mid' && 'Du bist im Mittelfeld — ein paar Einsätze oder Abstimmungen bringen dich weiter nach oben.'}
-                    {tier === 'risk' && 'Du hast wenig beigetragen — beim nächsten offenen Dienst wirst du wahrscheinlich empfohlen.'}
-                </p>
-            </div>
 
-            {/* 2. Team-Vergleich Balkendiagramm */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-gray-900 text-sm">Team-Vergleich</h3>
-                    <div className="flex gap-3 text-[10px]">
-                        <span className="flex items-center gap-1">
-                            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400"></span>
-                            Einspringen
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <span className="w-2.5 h-2.5 rounded-sm bg-teal-400"></span>
-                            Abstimmungen
-                        </span>
+                <div className="w-full relative px-2 sm:px-6 mb-4">
+                    {/* Gradient Background Track */}
+                    <div className="h-4 sm:h-5 rounded-full w-full bg-gradient-to-r from-red-300 via-amber-300 to-emerald-300 opacity-60"></div>
+
+                    {/* The thumb */}
+                    <div
+                        className="absolute top-1/2 flex flex-col items-center transition-all duration-1000 ease-out z-10"
+                        style={{ left: `calc(${sliderPos}%)`, transform: 'translate(-50%, -50%)' }}
+                    >
+                        {/* Tooltip above */}
+                        <div className="absolute bottom-full mb-2 bg-[#0f172a] text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg whitespace-nowrap shadow-lg animate-in fade-in slide-in-from-bottom-1">
+                            Du ({myTotalPoints.toFixed(0)})
+                            {/* bottom arrow pointing to the circle */}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#0f172a]"></div>
+                        </div>
+
+                        {/* The circle thumb */}
+                        <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white border-[3px] border-indigo-100 shadow-md flex items-center justify-center">
+                            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-indigo-500"></div>
+                        </div>
+                    </div>
+
+                    {/* Labels below */}
+                    <div className="flex justify-between mt-5 px-1">
+                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-red-500 uppercase">Nicht gesehen</span>
+                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-amber-500 uppercase">Mal Schauen</span>
+                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-emerald-500 uppercase">Schon wieder ich</span>
                     </div>
                 </div>
+            </div>
 
-                <div className="space-y-1.5">
-                    {chartData.map((d, idx) => {
-                        const flexWidth = maxScore > 0 ? (d.flexPart / maxScore) * 100 : 0
-                        const voteWidth = maxScore > 0 ? (d.votePart / maxScore) * 100 : 0
-                        const totalWidth = flexWidth + voteWidth
-
-                        return (
-                            <div key={idx}>
-                                {/* Separator line between ranks above and below me */}
-                                {d.isMe && idx > 0 && (
-                                    <div className="border-t-2 border-dashed border-gray-300 my-2"></div>
-                                )}
-                                <div className={`flex items-center gap-2 py-1.5 px-2 rounded-lg transition-all ${d.isMe ? 'bg-blue-50 ring-2 ring-blue-300' : ''}`}>
-                                    <span className={`text-[10px] font-bold w-8 text-right shrink-0 ${d.isMe ? 'text-blue-700' : 'text-gray-400'}`}>
-                                        {d.isMe ? 'DU' : `#${d.rank}`}
-                                    </span>
-                                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden relative">
-                                        <div
-                                            className="h-full flex rounded-full overflow-hidden"
-                                            style={{ width: `${Math.max(totalWidth, 2)}%` }}
-                                        >
-                                            {flexWidth > 0 && (
-                                                <div
-                                                    className="h-full bg-emerald-400"
-                                                    style={{ width: `${(flexWidth / totalWidth) * 100}%` }}
-                                                />
-                                            )}
-                                            {voteWidth > 0 && (
-                                                <div
-                                                    className="h-full bg-teal-400"
-                                                    style={{ width: `${(voteWidth / totalWidth) * 100}%` }}
-                                                />
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                {d.isMe && idx < chartData.length - 1 && (
-                                    <div className="border-t-2 border-dashed border-gray-300 my-2"></div>
-                                )}
-                            </div>
-                        )
-                    })}
+            {/* 2. Tier Descriptive Card */}
+            <div className={`rounded-3xl p-5 sm:p-6 ${tierConfig.bg} border ${tierConfig.border}`}>
+                <div className="flex items-center gap-4">
+                    <div className="bg-white p-3 rounded-2xl shadow-sm shrink-0">
+                        <TierIcon size={24} className={tierConfig.text} />
+                    </div>
+                    <div>
+                        <h3 className={`font-black text-lg ${tierConfig.text}`}>
+                            {tierConfig.title}
+                        </h3>
+                        <p className="text-gray-600 text-xs sm:text-sm mt-1 leading-relaxed">
+                            {tier === 'safe' && 'Wenn alle fragen wer einspringt, kennen alle die Antwort.'}
+                            {tier === 'mid' && 'Solide Mitte. Das Team zählt auf dich.'}
+                            {tier === 'risk' && 'Die Benachrichtigung war da. Wirklich.'}
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -226,7 +208,7 @@ export default function SoliPunktePanel() {
                     onClick={() => setExpanded(!expanded)}
                     className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
                 >
-                    <h3 className="font-bold text-gray-900 text-sm">Warum Platz {myRank}?</h3>
+                    <h3 className="font-bold text-gray-900 text-sm">Zusammensetzung deiner Punkte ({myTotalPoints.toFixed(1)})</h3>
                     {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                 </button>
 
@@ -245,7 +227,9 @@ export default function SoliPunktePanel() {
                                     </span>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                    Du bist {myFlexCount}× eingesprungen — Team-Schnitt {teamAvgFlex}×
+                                    {myFlexCount === 0
+                                        ? 'Noch keine Einsätze. Hol dir +10 Punkte für dein erstes Mal Einspringen!'
+                                        : `Du bist ${myFlexCount}× eingesprungen — Team-Schnitt ${teamAvgFlex}×`}
                                 </p>
                                 {myFlexCount < teamAvgFlex && (
                                     <span className="text-[10px] text-red-500 font-medium">↓ unter Schnitt</span>
@@ -269,7 +253,9 @@ export default function SoliPunktePanel() {
                                     </span>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                    {myVoteStats.participated} von {myVoteStats.eligible} Abstimmungen teilgenommen
+                                    {myVoteStats.participated === 0
+                                        ? 'Nutze Abstimmungen häufiger, um Punkte zu sammeln.'
+                                        : `${myVoteStats.participated} von ${myVoteStats.eligible} Abstimmungen teilgenommen.`}
                                 </p>
                                 {myVoteStats.eligible > 0 && myVoteStats.participated < myVoteStats.eligible && (
                                     <span className="text-[10px] text-amber-500 font-medium">
@@ -283,18 +269,22 @@ export default function SoliPunktePanel() {
                 )}
             </div>
 
-            {/* 4. Verlauf-Hinweis */}
-            {rankDiff !== null && rankDiff !== 0 && (
-                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 text-center">
-                    <p className="text-sm text-gray-600">
-                        Letzten Monat warst du <span className="font-bold">Platz {prevMonthRank}</span>
-                        {rankDiff > 0 && (
-                            <span className="text-emerald-600 font-bold"> — du hast dich um {rankDiff} {rankDiff === 1 ? 'Platz' : 'Plätze'} verbessert</span>
-                        )}
-                        {rankDiff < 0 && (
-                            <span className="text-red-600 font-bold"> — du bist um {Math.abs(rankDiff)} {Math.abs(rankDiff) === 1 ? 'Platz' : 'Plätze'} abgerutscht</span>
-                        )}
-                    </p>
+            {/* 4. Verlauf-Hinweis (Trend) */}
+            {myTrend !== null && teamTrend !== null && (
+                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 text-center flex items-center justify-center gap-3">
+                    {myTrend >= teamTrend ? (
+                        <TrendingUp size={24} className="text-emerald-500" />
+                    ) : (
+                        <Minus size={24} className="text-gray-400" />
+                    )}
+                    <div className="text-left">
+                        <p className="text-sm text-gray-900 font-bold">Monats-Trend</p>
+                        <p className="text-xs text-gray-600">
+                            {myTrend >= teamTrend
+                                ? `Du hast diesen Monat +${myTrend.toFixed(1)} Pkt gesammelt (Ø Team: +${teamTrend.toFixed(1)}). Top!`
+                                : `Du warst diesen Monat weniger aktiv als der Team-Durchschnitt (+${teamTrend.toFixed(1)} Pkt).`}
+                        </p>
+                    </div>
                 </div>
             )}
         </div>
