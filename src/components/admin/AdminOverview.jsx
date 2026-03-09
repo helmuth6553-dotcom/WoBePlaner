@@ -602,7 +602,7 @@ export default function AdminOverview() {
 
                                 <div className="grid grid-cols-4 gap-3">
                                     {/* SOLL */}
-                                    <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group">
+                                    <div className="bg-white p-3 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] relative overflow-hidden group transition-all">
                                         <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
                                             <Target size={32} />
                                         </div>
@@ -614,7 +614,7 @@ export default function AdminOverview() {
                                     </div>
 
                                     {/* GEPLANT */}
-                                    <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group">
+                                    <div className="bg-white p-3 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] relative overflow-hidden group transition-all">
                                         <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
                                             <Clock size={32} />
                                         </div>
@@ -626,7 +626,7 @@ export default function AdminOverview() {
                                     </div>
 
                                     {/* IST */}
-                                    <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group">
+                                    <div className="bg-white p-3 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] relative overflow-hidden group transition-all">
                                         <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
                                             <Activity size={32} />
                                         </div>
@@ -642,7 +642,7 @@ export default function AdminOverview() {
                                     </div>
 
                                     {/* PUFFER */}
-                                    <div className={`p-3 rounded-2xl border shadow-sm relative overflow-hidden group transition-all ${stats.puffer >= 0
+                                    <div className={`p-3 rounded-[1.5rem] border shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] relative overflow-hidden group transition-all ${stats.puffer >= 0
                                         ? 'bg-emerald-50 border-emerald-100'
                                         : 'bg-rose-50 border-rose-100'
                                         }`}>
@@ -838,7 +838,7 @@ export default function AdminOverview() {
                                 <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
                                     <Thermometer size={18} /> Krankmuster
                                 </h3>
-                                <div className="bg-white p-4 rounded-xl border border-gray-100">
+                                <div className="bg-white p-4 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] transition-all">
                                     <div className="text-xs text-gray-500 font-bold mb-2">Krankmeldungen nach Wochentag</div>
                                     <div className="grid grid-cols-7 gap-1 text-center">
                                         {['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'].map((day, i) => (
@@ -894,7 +894,7 @@ export default function AdminOverview() {
                                 </h3>
                                 <div className="space-y-3">
                                     {employeeStats.map(emp => (
-                                        <div key={emp.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                                        <div key={emp.id} className="bg-white p-4 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
                                             <div
                                                 className="flex justify-between items-start mb-3 cursor-pointer"
                                                 onClick={() => toggleEmployeeExpansion(emp.id)}

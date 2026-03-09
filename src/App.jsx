@@ -155,7 +155,7 @@ function AppContent() {
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} badges={badges} />
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-white">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50">
 
         {/* Coverage Alert Banner - shown on all tabs */}
         {openCoverageCount > 0 && (

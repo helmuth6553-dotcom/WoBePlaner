@@ -37,7 +37,7 @@ export default function RosterLogModal({ isOpen, onClose }) {
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-2xl h-[80vh] shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-[1.5rem] w-full max-w-2xl h-[80vh] shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 flex flex-col animate-in zoom-in-95 duration-200">
                 <div className="p-6 border-b flex justify-between items-center">
                     <h3 className="text-xl font-bold flex items-center gap-2">
                         <History className="text-gray-600" /> Änderungsprotokoll

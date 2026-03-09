@@ -812,7 +812,7 @@ export default function AdminTimeTracking() {
             <h1 className="text-2xl font-bold mb-6">Zeitenkontrolle (Admin)</h1>
 
             {/* Controls */}
-            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm mb-8">
+            <div className="bg-white p-5 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] mb-8">
                 <div className="flex flex-col gap-4">
 
                     {/* 1. Month Picker (Top) */}
@@ -861,9 +861,8 @@ export default function AdminTimeTracking() {
                                     <button
                                         key={u.id}
                                         onClick={() => setSelectedUserId(isSelected ? '' : u.id)}
-                                        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
-                                            isSelected ? 'bg-gray-100 font-bold' : 'hover:bg-gray-50'
-                                        }`}
+                                        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${isSelected ? 'bg-gray-100 font-bold' : 'hover:bg-gray-50'
+                                            }`}
                                     >
                                         <span className="text-sm text-gray-900 truncate">{u.display_name || u.full_name}</span>
                                         {status === 'genehmigt' && (
@@ -972,7 +971,7 @@ export default function AdminTimeTracking() {
                     }
 
                     return (
-                        <div key={e.id} className="bg-white p-4 rounded-xl border border-gray-100">
+                        <div key={e.id} className="bg-white p-4 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
                             <div className="flex justify-between items-center mb-2">
                                 <div className="font-bold flex items-center gap-2 flex-wrap">
                                     {safeFormatDay(itemDate)} {safeFormatDate(itemDate)}

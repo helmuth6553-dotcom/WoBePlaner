@@ -194,9 +194,9 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
     return (
         <div>
             <h2 className="text-xl font-bold mb-6">Offene Urlaubsanträge</h2>
-            {requests.length === 0 && (<div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200 mb-8"><CheckCircle className="mx-auto text-green-500 mb-2" size={32} /><p className="text-gray-500">Alles erledigt!</p></div>)}
+            {requests.length === 0 && (<div className="text-center py-10 bg-gray-50 rounded-[1.5rem] border border-dashed border-gray-200 mb-8"><CheckCircle className="mx-auto text-green-500 mb-2" size={32} /><p className="text-gray-500">Alles erledigt!</p></div>)}
             <div className="space-y-3 mb-12">{requests.map(req => (
-                <div key={req.id} className="bg-white border p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center shadow-sm gap-4">
+                <div key={req.id} className="bg-white border border-gray-100/80 p-4 rounded-[1.5rem] flex flex-col md:flex-row justify-between items-start md:items-center shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all gap-4">
                     <div className="w-full md:w-auto">
                         <div className="flex items-center gap-2 mb-1">
                             <span className="font-bold text-lg">{req.profiles?.full_name || req.profiles?.email}</span>
@@ -222,7 +222,7 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
 
             <h2 className="text-xl font-bold mb-6 pt-8 border-t border-gray-200">Archiv</h2>
             <div className="space-y-3">{archive.map(req => (
-                <div key={req.id} className="bg-gray-50 border p-4 rounded-xl flex flex-col sm:flex-row flex-wrap justify-between items-start sm:items-center shadow-sm gap-3">
+                <div key={req.id} className="bg-gray-50 border border-gray-100/80 p-4 rounded-[1.5rem] flex flex-col sm:flex-row flex-wrap justify-between items-start sm:items-center shadow-[0_2px_10px_rgb(0,0,0,0.04)] gap-3">
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                             <span className="font-bold text-sm sm:text-lg text-gray-700 truncate">{req.profiles?.full_name || req.profiles?.email}</span>

@@ -97,7 +97,7 @@ export default function ProfileSickLeave() {
         const needsCertificate = calDays >= 3
 
         return (
-            <div key={leave.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+            <div key={leave.id} className="bg-white p-4 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all border border-gray-100/80">
                 <div className="flex items-center justify-between">
                     <div>
                         <p className="font-bold text-gray-900">
@@ -115,11 +115,10 @@ export default function ProfileSickLeave() {
                         </p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                            leave.status === 'genehmigt'
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${leave.status === 'genehmigt'
                                 ? 'bg-emerald-50 text-emerald-700'
                                 : 'bg-amber-50 text-amber-700'
-                        }`}>
+                            }`}>
                             {leave.status === 'genehmigt' ? 'Bestätigt' : 'Offen'}
                         </span>
                     </div>
@@ -151,7 +150,7 @@ export default function ProfileSickLeave() {
     return (
         <div className="space-y-4">
             {/* Stats Header */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                         <Thermometer size={20} className="text-red-500" />
@@ -189,7 +188,7 @@ export default function ProfileSickLeave() {
 
             {/* Empty State */}
             {sickLeaves.length === 0 && (
-                <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
+                <div className="bg-white p-8 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80 text-center">
                     <Thermometer size={32} className="text-gray-300 mx-auto mb-3" />
                     <p className="text-gray-400 font-medium">Keine Krankmeldungen vorhanden</p>
                 </div>

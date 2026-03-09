@@ -104,12 +104,12 @@ export default function ProfileStats() {
 
         const shiftsFromInterests = myInterests?.map(i => i.shift).filter(s => s) || []
         const allMyShifts = [...shiftsFromInterests]
-        ;(myDirectShifts || []).forEach(s => {
-            if (!allMyShifts.some(h => h.id === s.id)) allMyShifts.push(s)
-        })
-        ;(teamShifts || []).forEach(s => {
-            if (!allMyShifts.some(h => h.id === s.id)) allMyShifts.push(s)
-        })
+            ; (myDirectShifts || []).forEach(s => {
+                if (!allMyShifts.some(h => h.id === s.id)) allMyShifts.push(s)
+            })
+            ; (teamShifts || []).forEach(s => {
+                if (!allMyShifts.some(h => h.id === s.id)) allMyShifts.push(s)
+            })
 
         const { data: myEntries } = await supabase
             .from('time_entries').select('*').eq('user_id', user.id)
@@ -140,7 +140,7 @@ export default function ProfileStats() {
             const mStart = startOfMonth(now)
             const mEnd = endOfMonth(now)
             const entryMap = {}
-            ;(myEntries || []).forEach(e => { if (e.shift_id) entryMap[e.shift_id] = e })
+                ; (myEntries || []).forEach(e => { if (e.shift_id) entryMap[e.shift_id] = e })
 
             const currentShifts = allMyShifts.filter(s => {
                 if (!s.start_time) return false
@@ -172,34 +172,34 @@ export default function ProfileStats() {
             const year = now.getFullYear()
             const holidays = getHolidays(year)
             const absBreak = {}
-            ;(myAbsences || []).forEach(abs => {
-                if (!abs.start_date || !abs.end_date) return
-                const absStart = new Date(abs.start_date)
-                const absEnd = new Date(abs.end_date)
-                const start = absStart < mStart ? mStart : absStart
-                const end = absEnd > mEnd ? mEnd : absEnd
-                if (start > end) return
-                if (!(absStart <= mEnd && absEnd >= mStart)) return
+                ; (myAbsences || []).forEach(abs => {
+                    if (!abs.start_date || !abs.end_date) return
+                    const absStart = new Date(abs.start_date)
+                    const absEnd = new Date(abs.end_date)
+                    const start = absStart < mStart ? mStart : absStart
+                    const end = absEnd > mEnd ? mEnd : absEnd
+                    if (start > end) return
+                    if (!(absStart <= mEnd && absEnd >= mStart)) return
 
-                const absType = abs.type || 'Sonstige'
-                if (!absBreak[absType]) absBreak[absType] = { hours: 0, days: 0 }
+                    const absType = abs.type || 'Sonstige'
+                    if (!absBreak[absType]) absBreak[absType] = { hours: 0, days: 0 }
 
-                if (abs.planned_hours && Number(abs.planned_hours) > 0) {
-                    absBreak[absType].hours += Number(abs.planned_hours)
-                    // Estimate days
-                    const days = eachDayOfInterval({ start, end })
-                    absBreak[absType].days += days.filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
-                } else {
-                    const days = eachDayOfInterval({ start, end })
-                    days.forEach(day => {
-                        const hours = calculateDailyAbsenceHours(day, abs, allMyShifts, profile)
-                        if (hours > 0) {
-                            absBreak[absType].hours += hours
-                            absBreak[absType].days += 1
-                        }
-                    })
-                }
-            })
+                    if (abs.planned_hours && Number(abs.planned_hours) > 0) {
+                        absBreak[absType].hours += Number(abs.planned_hours)
+                        // Estimate days
+                        const days = eachDayOfInterval({ start, end })
+                        absBreak[absType].days += days.filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
+                    } else {
+                        const days = eachDayOfInterval({ start, end })
+                        days.forEach(day => {
+                            const hours = calculateDailyAbsenceHours(day, abs, allMyShifts, profile)
+                            if (hours > 0) {
+                                absBreak[absType].hours += hours
+                                absBreak[absType].days += 1
+                            }
+                        })
+                    }
+                })
             Object.keys(absBreak).forEach(k => {
                 absBreak[k].hours = Math.round(absBreak[k].hours * 100) / 100
             })
@@ -210,14 +210,14 @@ export default function ProfileStats() {
             allMyShifts.forEach(s => { if (s.id) shiftStartMap[s.id] = s.start_time })
 
             const intByMonth = {}
-            ;(myEntries || []).forEach(entry => {
-                const ints = entry.interruptions
-                if (!ints || !Array.isArray(ints) || ints.length === 0) return
-                const shiftStart = shiftStartMap[entry.shift_id]
-                if (!shiftStart) return
-                const key = format(new Date(shiftStart), 'yyyy-MM')
-                intByMonth[key] = (intByMonth[key] || 0) + ints.length
-            })
+                ; (myEntries || []).forEach(entry => {
+                    const ints = entry.interruptions
+                    if (!ints || !Array.isArray(ints) || ints.length === 0) return
+                    const shiftStart = shiftStartMap[entry.shift_id]
+                    if (!shiftStart) return
+                    const key = format(new Date(shiftStart), 'yyyy-MM')
+                    intByMonth[key] = (intByMonth[key] || 0) + ints.length
+                })
             setInterruptionsByMonth(intByMonth)
 
         } catch (err) {
@@ -233,12 +233,12 @@ export default function ProfileStats() {
             .eq('is_flex', true)
 
         const byMonth = {}
-        ;(myFlex || []).forEach(f => {
-            const st = f.shift?.start_time
-            if (!st) return
-            const key = format(new Date(st), 'yyyy-MM')
-            byMonth[key] = (byMonth[key] || 0) + 1
-        })
+            ; (myFlex || []).forEach(f => {
+                const st = f.shift?.start_time
+                if (!st) return
+                const key = format(new Date(st), 'yyyy-MM')
+                byMonth[key] = (byMonth[key] || 0) + 1
+            })
         setFlexHistory(byMonth)
 
         const { data: profiles } = await supabase
@@ -379,7 +379,7 @@ export default function ProfileStats() {
     return (
         <div className="space-y-4">
             {/* Nächster Dienst */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
                 <div className="flex items-center gap-2 mb-3">
                     <CalendarClock size={20} className="text-indigo-600" />
                     <h3 className="font-bold text-gray-900">Nächster Dienst</h3>
@@ -410,7 +410,7 @@ export default function ProfileStats() {
 
             {/* Stundenkonto mit expandierbarer Aufschlüsselung */}
             {balance && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80 overflow-hidden">
                     <button
                         onClick={() => setDetailExpanded(!detailExpanded)}
                         className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
@@ -426,7 +426,7 @@ export default function ProfileStats() {
                             <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold ${balance.total >= 0
                                 ? 'bg-emerald-50 text-emerald-700'
                                 : 'bg-red-50 text-red-700'
-                            }`}>
+                                }`}>
                                 {balance.total >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                 {balance.total > 0 ? '+' : ''}{balance.total}h
                             </div>
@@ -553,7 +553,7 @@ export default function ProfileStats() {
 
             {/* Stundenverlauf 12 Monate */}
             {cumulativeData.length > 0 && (
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
                     <div className="flex items-center gap-2 mb-1">
                         <BarChart3 size={20} className="text-gray-700" />
                         <h3 className="font-bold text-gray-900">Stundenverlauf</h3>
@@ -661,7 +661,7 @@ export default function ProfileStats() {
             )}
 
             {/* Einspring-Historie */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
                 <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                         <Zap size={20} className="text-emerald-600" />
@@ -701,7 +701,7 @@ export default function ProfileStats() {
             </div>
 
             {/* Bereitschafts-Unterbrechungen */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
                 <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                         <BellRing size={20} className="text-orange-500" />

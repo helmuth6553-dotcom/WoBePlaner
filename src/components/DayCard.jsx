@@ -560,7 +560,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
 
     return (
         <>
-            <div data-date={dateStr} className={`bg-white shadow-sm rounded-2xl mb-4 overflow-hidden border ${holiday || isSick ? 'border-red-100' : (absenceReason ? 'border-orange-100' : 'border-gray-100')}`}>
+            <div data-date={dateStr} className={`bg-white shadow-[0_2px_10px_rgb(0,0,0,0.04)] rounded-[1.5rem] mb-4 overflow-hidden border ${holiday || isSick ? 'border-red-100' : (absenceReason ? 'border-orange-100' : 'border-gray-100/80')} transition-all duration-200 hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)]`}>
                 <div className={`px-5 py-4 border-b flex justify-between items-center ${holiday || isSick ? 'bg-red-50/50' : (absenceReason ? 'bg-orange-50/50' : 'bg-white')}`}>
                     <div className="flex items-center gap-3">
                         <div className="flex flex-col">
