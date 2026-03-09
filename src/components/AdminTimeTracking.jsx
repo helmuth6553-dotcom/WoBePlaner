@@ -670,7 +670,19 @@ export default function AdminTimeTracking() {
     }
 
     const generatePDF = async (official = false, approverNameOverride = null) => {
-        const user = users.find(u => u.id === selectedUserId)
+        let user = users.find(u => u.id === selectedUserId)
+
+        // Fetch full profile data to ensure we have full_name
+        if (user) {
+            const { data: fullProfile } = await supabase.from('profiles')
+                .select('id, full_name, email, weekly_hours')
+                .eq('id', selectedUserId)
+                .single()
+            if (fullProfile) {
+                user = { ...user, ...fullProfile }
+            }
+        }
+
         // PDF Gen needs 'shifts' object usually, we simulate it for Absences to prevent crash
         const pdfEntries = entries.map(e => {
             if (e.shifts) return e

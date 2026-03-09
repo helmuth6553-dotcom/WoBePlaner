@@ -272,8 +272,7 @@ export const generateTimeReportPDF = ({
         azBis: margin + 77,
         bzVon: margin + 97,
         bzBis: margin + 117,
-        stunden: margin + 137,
-        anm: margin + 153
+        anm: margin + 137
     }
 
     const rowHeight = 5
@@ -298,7 +297,6 @@ export const generateTimeReportPDF = ({
         doc.text('Bis', colX.azBis, yPos)
         doc.text('Von', colX.bzVon, yPos)
         doc.text('Bis', colX.bzBis, yPos)
-        doc.text('Std', colX.stunden, yPos)
         doc.text('Anm.', colX.anm, yPos)
 
         yPos += 3
