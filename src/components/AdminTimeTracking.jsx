@@ -634,7 +634,7 @@ export default function AdminTimeTracking() {
                 { year: userMonthStatus.year, month: userMonthStatus.month }
             )
 
-            generatePDF(true)
+            generatePDF(true, approverName)
             fetchData()
             fetchUsers()
         }
@@ -669,7 +669,7 @@ export default function AdminTimeTracking() {
         }
     }
 
-    const generatePDF = async (official = false) => {
+    const generatePDF = async (official = false, approverNameOverride = null) => {
         const user = users.find(u => u.id === selectedUserId)
         // PDF Gen needs 'shifts' object usually, we simulate it for Absences to prevent crash
         const pdfEntries = entries.map(e => {
@@ -684,7 +684,9 @@ export default function AdminTimeTracking() {
                 }
             }
         })
-        const status = official ? { ...userMonthStatus, status: 'genehmigt', approved_at: new Date().toISOString() } : userMonthStatus
+        const status = official
+            ? { ...userMonthStatus, status: 'genehmigt', approved_at: new Date().toISOString(), approver_name: approverNameOverride || userMonthStatus?.approver_name }
+            : userMonthStatus
 
         // Lazy load PDF generator only when needed (saves ~611KB on initial load)
         const { generateTimeReportPDF } = await import('../utils/timeReportPdfGenerator')

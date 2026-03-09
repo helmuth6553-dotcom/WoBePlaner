@@ -16,22 +16,41 @@ import { jsPDF } from 'jspdf'
 import { format, parseISO, getISOWeek } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { findSnapshotEntry, calculateCorrection } from './pdfGenerator'
+import { getShiftSegments } from './timeCalculations'
 
 /**
  * Helper: Convert time to industrial format with zero-padded hours
  * 09:30 → "09,50" | 13:45 → "13,75"
+ * Robust: handles ISO strings, HH:MM, HH.MM, HHMM, already-formatted 09,50
  */
-const timeToDecimal = (isoString) => {
-    if (!isoString) return '-'
-    try {
-        const date = parseISO(isoString)
-        const hours = String(date.getHours()).padStart(2, '0')
-        const minutes = date.getMinutes()
-        const decMinutes = Math.round((minutes / 60) * 100).toString().padStart(2, '0')
-        return `${hours},${decMinutes}`
-    } catch {
-        return '-'
+const timeToDecimal = (timeStr) => {
+    if (!timeStr) return ''
+    const cleaned = String(timeStr).trim()
+
+    // Already formatted as HH,MM
+    if (cleaned.includes(',')) {
+        const parts = cleaned.split(',')
+        return `${parts[0].padStart(2, '0')},${parts[1]}`
     }
+
+    // ISO string or timestamp
+    if (cleaned.includes('T') || (cleaned.includes('-') && cleaned.includes(':'))) {
+        try {
+            const date = parseISO(cleaned)
+            const hours = String(date.getHours()).padStart(2, '0')
+            const decMinutes = Math.round((date.getMinutes() / 60) * 100).toString().padStart(2, '0')
+            return `${hours},${decMinutes}`
+        } catch { /* fall through */ }
+    }
+
+    // HH:MM or HH.MM or HHMM format
+    const matches = cleaned.match(/(\d{1,2})[:.]?(\d{2})/)
+    if (matches) {
+        const decMinutes = Math.round((parseInt(matches[2], 10) / 60) * 100).toString().padStart(2, '0')
+        return `${matches[1].padStart(2, '0')},${decMinutes}`
+    }
+
+    return cleaned
 }
 
 /**
@@ -55,6 +74,104 @@ const getDayNumber = (dateStr) => {
     } catch {
         return '?'
     }
+}
+
+/**
+ * Helper: Pair consecutive WORK and STANDBY segments into rows
+ * Strategy: When we see a WORK segment, hold it. When we see STANDBY, pair them.
+ * If another WORK comes before STANDBY is flushed, save the pair and start fresh.
+ */
+const buildLines = (segments) => {
+    const lines = []
+    let current = { work: null, standby: null }
+
+    segments.forEach(seg => {
+        if (seg.type === 'WORK') {
+            // If we already have a WORK, we must have incomplete pair — flush it first
+            if (current.work !== null) {
+                lines.push(current)
+                current = { work: null, standby: null }
+            }
+            current.work = seg
+        } else {
+            // STANDBY
+            if (current.standby !== null) {
+                // Already have a STANDBY — flush pair first
+                lines.push(current)
+                current = { work: null, standby: null }
+            }
+            current.standby = seg
+        }
+    })
+
+    // Flush remaining
+    if (current.work !== null || current.standby !== null) {
+        lines.push(current)
+    }
+
+    return lines
+}
+
+/**
+ * Pre-process entries into PDF row objects
+ * For ND shifts: expands into multiple rows (one per segment pair)
+ * For regular shifts: single row
+ *
+ * Returns array of row objects with: { datum, tag, diensttyp, azVon, azBis, bzVon, bzBis, correction, anm }
+ */
+const buildPdfRows = (entries, correctionMap) => {
+    const rows = []
+
+    entries.forEach(entry => {
+        const shift = entry.shifts
+        const shiftType = shift?.type || entry.absences?.type || ''
+        const isNight = shiftType?.toUpperCase() === 'ND' ||
+                        shiftType?.toLowerCase().includes('nacht') ||
+                        shift?.is_bereitschaft
+
+        const dayStr = entry.actual_start || entry.entry_date
+        const correction = correctionMap[entry.id]
+
+        if (isNight && entry.actual_start && entry.actual_end) {
+            // Night shift: expand into segment-pair rows
+            const segments = getShiftSegments(
+                entry.actual_start, entry.actual_end,
+                shiftType, entry.interruptions || []
+            )
+            const lines = buildLines(segments)
+
+            lines.forEach((line, lineIdx) => {
+                rows.push({
+                    datum:    lineIdx === 0 ? getDayNumber(dayStr) : '',
+                    tag:      lineIdx === 0 ? getDayAbbr(dayStr) : '',
+                    diensttyp: lineIdx === 0 ? shiftType : '',
+                    azVon:    line.work    ? timeToDecimal(line.work.start.toISOString()) : '',
+                    azBis:    line.work    ? timeToDecimal(line.work.end.toISOString()) : '',
+                    bzVon:    line.standby ? timeToDecimal(line.standby.start.toISOString()) : '',
+                    bzBis:    line.standby ? timeToDecimal(line.standby.end.toISOString()) : '',
+                    correction:    lineIdx === 0 ? correction : null,
+                    anm:           lineIdx === 0 && correction?.adminNote
+                                       ? correction.adminNote.substring(0, 28)
+                                       : '',
+                })
+            })
+        } else {
+            // Regular entry (TD1, TD2, TEAM, Krank, Urlaub, etc.)
+            rows.push({
+                datum:     getDayNumber(dayStr),
+                tag:       getDayAbbr(dayStr),
+                diensttyp: shiftType,
+                azVon:     timeToDecimal(entry.actual_start),
+                azBis:     timeToDecimal(entry.actual_end),
+                bzVon:     '',
+                bzBis:     '',
+                correction: correction || null,
+                anm:       correction?.adminNote?.substring(0, 28) || '',
+            })
+        }
+    })
+
+    return rows
 }
 
 /**
@@ -104,6 +221,15 @@ export const generateTimeReportPDF = ({
     })
 
     let yPos = margin
+
+    // =========================================================================
+    // MAIN TITLE
+    // =========================================================================
+    doc.setFontSize(18)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(30, 41, 59)
+    doc.text('Arbeitszeitaufzeichnung', margin, yPos + 6)
+    yPos += 14
 
     // =========================================================================
     // HEADER BOX
@@ -226,10 +352,10 @@ export const generateTimeReportPDF = ({
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7)
 
-    let lastDayNumber = null
-    let rowIndex = 0
+    // Pre-process: expand ND entries into multiple row objects
+    const pdfRows = buildPdfRows(sortedEntries, correctionMap)
 
-    sortedEntries.forEach((entry) => {
+    pdfRows.forEach((row, rowIndex) => {
         // Page break
         if (yPos > 270) {
             doc.addPage()
@@ -237,86 +363,52 @@ export const generateTimeReportPDF = ({
             yPos = drawTableHeader()
         }
 
-        const dateStr = entry.actual_start || entry.entry_date
-        if (!dateStr) return
-
-        const dayNum = getDayNumber(dateStr)
-        const dayAbbr = getDayAbbr(dateStr)
-        const showDayNum = dayNum !== lastDayNumber
-        lastDayNumber = dayNum
-
-        // Get shift info
-        const shift = entry.shifts
-        const shiftType = shift?.type || entry.absences?.type || '-'
-
-        // Determine if Bereitschaft (on-call)
-        const isBereitschaft = shiftType?.toLowerCase().includes('bereit') ||
-            shiftType?.toLowerCase().includes('nd') ||
-            shift?.is_bereitschaft
-
-        // Time decimals
-        const startDecimal = timeToDecimal(entry.actual_start)
-        const endDecimal = timeToDecimal(entry.actual_end)
-
         // Zebra striping
         if (rowIndex % 2 === 0) {
             doc.setFillColor(244, 249, 255)
             doc.rect(margin, yPos - rowHeight + 1, contentWidth, rowHeight + 1, 'F')
         }
 
-        // Get correction if exists
-        const correction = correctionMap[entry.id]
-
-        // Render row
         doc.setTextColor(0, 0, 0)
 
-        if (showDayNum) {
-            doc.text(dayNum, colX.datum, yPos)
-            doc.text(dayAbbr, colX.tag, yPos)
-        }
-
-        // Dienst type (truncate if too long)
-        let displayType = shiftType
+        // Datum, Tag, Dienst (empty for continuation rows of ND)
+        doc.text(row.datum, colX.datum, yPos)
+        doc.text(row.tag, colX.tag, yPos)
+        let displayType = row.diensttyp
         if (displayType && displayType.length > 12) {
             displayType = displayType.substring(0, 10) + '..'
         }
         doc.text(displayType, colX.dienst, yPos)
 
-        // Work time or On-call time
-        if (!isBereitschaft) {
-            // AZ (Arbeitszeit) columns
-            if (correction?.timeChanged && correction.originalStart) {
-                drawCorrectedTime(colX.azVon, yPos, correction.originalStart, entry.actual_start)
-            } else {
-                doc.text(startDecimal, colX.azVon, yPos)
-            }
+        // Granular field-level correction comparison
+        const startChanged = row.correction?.originalStart && row.correction.originalStart !== row.correction.currentStart
+        const endChanged = row.correction?.originalEnd && row.correction.originalEnd !== row.correction.currentEnd
 
-            if (correction?.timeChanged && correction.originalEnd) {
-                drawCorrectedTime(colX.azBis, yPos, correction.originalEnd, entry.actual_end)
-            } else {
-                doc.text(endDecimal, colX.azBis, yPos)
-            }
+        // AZ Von (Arbeitszeit)
+        if (startChanged && row.azVon) {
+            drawCorrectedTime(colX.azVon, yPos, row.correction.originalStart, row.correction.currentStart)
         } else {
-            // BZ (Bereitschaft) columns
-            if (correction?.timeChanged && correction.originalStart) {
-                drawCorrectedTime(colX.bzVon, yPos, correction.originalStart, entry.actual_start)
-            } else {
-                doc.text(startDecimal, colX.bzVon, yPos)
-            }
-
-            if (correction?.timeChanged && correction.originalEnd) {
-                drawCorrectedTime(colX.bzBis, yPos, correction.originalEnd, entry.actual_end)
-            } else {
-                doc.text(endDecimal, colX.bzBis, yPos)
-            }
+            doc.text(row.azVon, colX.azVon, yPos)
         }
 
-        // Admin note (if correction exists)
-        if (correction?.adminNote) {
+        // AZ Bis (Arbeitszeit)
+        if (endChanged && row.azBis) {
+            drawCorrectedTime(colX.azBis, yPos, row.correction.originalEnd, row.correction.currentEnd)
+        } else {
+            doc.text(row.azBis, colX.azBis, yPos)
+        }
+
+        // BZ Von/Bis (Bereitschaft) — no corrections on BZ
+        doc.text(row.bzVon, colX.bzVon, yPos)
+        doc.text(row.bzBis, colX.bzBis, yPos)
+
+        // Admin note (only on first row of entry)
+        if (row.anm) {
             doc.setFontSize(6)
             doc.setTextColor(150, 100, 0)
-            doc.text(correction.adminNote.substring(0, 28), colX.anm, yPos)
+            doc.text(row.anm, colX.anm, yPos)
             doc.setTextColor(0, 0, 0)
+            doc.setFontSize(7)
         }
 
         // Soft divider after row
@@ -325,7 +417,6 @@ export const generateTimeReportPDF = ({
         doc.line(margin, yPos + 2, pageWidth - margin, yPos + 2)
 
         yPos += rowHeight
-        rowIndex++
     })
 
     // =========================================================================
