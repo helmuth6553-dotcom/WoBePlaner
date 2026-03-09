@@ -275,12 +275,19 @@ export const generateTimeReportPDF = ({
         anm: margin + 137
     }
 
-    const rowHeight = 5
+    const rowHeight = 7
+
+    // Column center points for alignment
+    const colCenter = {
+        datum: (colX.datum + colX.tag) / 2,
+        tag: (colX.tag + colX.dienst) / 2,
+        dienst: (colX.dienst + colX.azVon) / 2,
+    }
 
     const drawTableHeader = () => {
         // Header row 1: Group titles
         doc.setFont('helvetica', 'bold')
-        doc.setFontSize(7)
+        doc.setFontSize(9)
         doc.setTextColor(100, 116, 139)
 
         doc.text('Arbeitszeit', colX.azVon + 10, yPos, { align: 'center' })
@@ -289,10 +296,10 @@ export const generateTimeReportPDF = ({
         yPos += 4
 
         // Header row 2: Column names
-        doc.setFontSize(6)
-        doc.text('Datum', colX.datum, yPos)
-        doc.text('Tag', colX.tag, yPos)
-        doc.text('Dienst', colX.dienst, yPos)
+        doc.setFontSize(8)
+        doc.text('Datum', colCenter.datum, yPos, { align: 'center' })
+        doc.text('Tag', colCenter.tag, yPos, { align: 'center' })
+        doc.text('Dienst', colCenter.dienst, yPos, { align: 'center' })
         doc.text('Von', colX.azVon, yPos)
         doc.text('Bis', colX.azBis, yPos)
         doc.text('Von', colX.bzVon, yPos)
@@ -315,10 +322,10 @@ export const generateTimeReportPDF = ({
         const original = timeToDecimal(originalISO)
         const corrected = timeToDecimal(currentISO)
 
-        doc.setFontSize(7)
+        doc.setFontSize(9)
         doc.setFont('helvetica', 'normal')
         const w1 = doc.getTextWidth(original)
-        doc.setFontSize(9)
+        doc.setFontSize(11)
         doc.setFont('helvetica', 'bold')
         const w2 = doc.getTextWidth(corrected)
 
@@ -327,7 +334,7 @@ export const generateTimeReportPDF = ({
         const startX = centerX - (w1 + gap + w2) / 2
 
         // Original grau durchgestrichen
-        doc.setFontSize(7)
+        doc.setFontSize(9)
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(148, 163, 184)
         doc.text(original, startX, y)
@@ -336,19 +343,22 @@ export const generateTimeReportPDF = ({
         doc.line(startX - 0.5, y - 1.2, startX + w1 + 0.5, y - 1.2)
 
         // Korrektur rot fett
-        doc.setFontSize(9)
+        doc.setFontSize(11)
         doc.setFont('helvetica', 'bold')
         doc.setTextColor(220, 38, 38)
         doc.text(corrected, startX + w1 + gap, y)
 
+        // Reset to default row style
         doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
     }
 
     // =========================================================================
     // TABLE ROWS
     // =========================================================================
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
+    doc.setFontSize(9)
 
     // Pre-process: expand ND entries into multiple row objects
     const pdfRows = buildPdfRows(sortedEntries, correctionMap)
@@ -361,22 +371,27 @@ export const generateTimeReportPDF = ({
             yPos = drawTableHeader()
         }
 
-        // Zebra striping
+        // Zebra striping — full row height
         if (rowIndex % 2 === 0) {
             doc.setFillColor(244, 249, 255)
-            doc.rect(margin, yPos - rowHeight + 1, contentWidth, rowHeight + 1, 'F')
+            doc.rect(margin, yPos, contentWidth, rowHeight, 'F')
         }
 
-        doc.setTextColor(0, 0, 0)
+        // Vertically centered text position within the row
+        const textY = yPos + rowHeight * 0.65
 
-        // Datum, Tag, Dienst (empty for continuation rows of ND)
-        doc.text(row.datum, colX.datum, yPos)
-        doc.text(row.tag, colX.tag, yPos)
+        doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+
+        // Datum, Tag, Dienst (empty for continuation rows of ND) — centered
+        doc.text(row.datum, colCenter.datum, textY, { align: 'center' })
+        doc.text(row.tag, colCenter.tag, textY, { align: 'center' })
         let displayType = row.diensttyp
         if (displayType && displayType.length > 12) {
             displayType = displayType.substring(0, 10) + '..'
         }
-        doc.text(displayType, colX.dienst, yPos)
+        doc.text(displayType, colCenter.dienst, textY, { align: 'center' })
 
         // Granular field-level correction comparison
         const startChanged = row.correction?.originalStart && row.correction.originalStart !== row.correction.currentStart
@@ -384,35 +399,35 @@ export const generateTimeReportPDF = ({
 
         // AZ Von (Arbeitszeit)
         if (startChanged && row.azVon) {
-            drawCorrectedTime(colX.azVon, yPos, row.correction.originalStart, row.correction.currentStart)
+            drawCorrectedTime(colX.azVon, textY, row.correction.originalStart, row.correction.currentStart)
         } else {
-            doc.text(row.azVon, colX.azVon, yPos)
+            doc.text(row.azVon, colX.azVon, textY)
         }
 
         // AZ Bis (Arbeitszeit)
         if (endChanged && row.azBis) {
-            drawCorrectedTime(colX.azBis, yPos, row.correction.originalEnd, row.correction.currentEnd)
+            drawCorrectedTime(colX.azBis, textY, row.correction.originalEnd, row.correction.currentEnd)
         } else {
-            doc.text(row.azBis, colX.azBis, yPos)
+            doc.text(row.azBis, colX.azBis, textY)
         }
 
         // BZ Von/Bis (Bereitschaft) — no corrections on BZ
-        doc.text(row.bzVon, colX.bzVon, yPos)
-        doc.text(row.bzBis, colX.bzBis, yPos)
+        doc.text(row.bzVon, colX.bzVon, textY)
+        doc.text(row.bzBis, colX.bzBis, textY)
 
         // Admin note (only on first row of entry)
         if (row.anm) {
-            doc.setFontSize(6)
+            doc.setFontSize(8)
             doc.setTextColor(150, 100, 0)
-            doc.text(row.anm, colX.anm, yPos)
+            doc.text(row.anm, colX.anm, textY)
             doc.setTextColor(0, 0, 0)
-            doc.setFontSize(7)
+            doc.setFontSize(9)
         }
 
-        // Soft divider after row
+        // Soft divider at bottom of row
         doc.setDrawColor(241, 245, 249)
         doc.setLineWidth(0.2)
-        doc.line(margin, yPos + 2, pageWidth - margin, yPos + 2)
+        doc.line(margin, yPos + rowHeight, pageWidth - margin, yPos + rowHeight)
 
         yPos += rowHeight
     })
