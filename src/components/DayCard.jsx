@@ -651,6 +651,8 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                                 onVote={onCoverageVote}
                                 onResolve={onCoverageResolve}
                                 assignedUserName={assignedName}
+                                sickCount={(absences || []).filter(a => a.type?.toLowerCase() === 'krank').length}
+                                vacationCount={(absences || []).filter(a => a.type?.toLowerCase() !== 'krank').length}
                             />
                         )
                     })}

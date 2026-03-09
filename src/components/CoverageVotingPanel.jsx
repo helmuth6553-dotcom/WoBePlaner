@@ -22,6 +22,8 @@ export default function CoverageVotingPanel({
     onVote,                 // (shiftId, preference) => void
     onResolve,              // (shiftId) => void
     assignedUserName,       // string - name shown after resolution
+    sickCount = 0,
+    vacationCount = 0,
 }) {
     const [showBreakdown, setShowBreakdown] = useState(false)
     const [showConfirmResolve, setShowConfirmResolve] = useState(false)
@@ -89,61 +91,108 @@ export default function CoverageVotingPanel({
     }
 
     return (
-        <div id={id} className="bg-red-50 border border-red-200 rounded-xl p-4 mb-2 space-y-3">
+        <div id={id} className="bg-red-50 border border-red-200 rounded-xl p-4 mb-2 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Vote size={18} className="text-red-600" />
                     <span className="font-bold text-red-800 text-sm">Dienst muss besetzt werden</span>
                 </div>
-                <span className="text-xs text-red-500 font-medium">
-                    {totalResponded} von {totalEligible} abgestimmt
-                </span>
+                <div className="text-right flex flex-col items-end">
+                    <div className="flex items-center gap-2">
+                        {totalResponded < totalEligible && (
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                            </span>
+                        )}
+                        <span className="text-xs text-red-500 font-bold block">
+                            {totalResponded} von {totalEligible} abgestimmt
+                        </span>
+                    </div>
+                    {(sickCount > 0 || vacationCount > 0) && (
+                        <span className="text-[10px] text-red-400 font-medium block pt-0.5">
+                            (Fehlen heute: {[sickCount > 0 ? `${sickCount} Krank` : '', vacationCount > 0 ? `${vacationCount} Urlaub` : ''].filter(Boolean).join(', ')})
+                        </span>
+                    )}
+                </div>
             </div>
+
+            {/* Gamification: Progress Bar */}
+            {totalEligible > 0 && (
+                <div className="h-1.5 w-full bg-red-100/50 rounded-full overflow-hidden mb-1">
+                    <div
+                        className="h-full bg-red-400 transition-all duration-1000 ease-out"
+                        style={{ width: `${(totalResponded / totalEligible) * 100}%` }}
+                    />
+                </div>
+            )}
 
             {/* Anonymized voting list */}
             <div className="space-y-1.5">
-                {votingList.map((entry, idx) => {
-                    const pref = entry.preference ? PREF_CONFIG[entry.preference] : null
-                    const isRecommended = entry === recommended
+                {isAdmin ? (
+                    votingList.map((entry, idx) => {
+                        const pref = entry.preference ? PREF_CONFIG[entry.preference] : null
+                        const isRecommended = entry === recommended
 
-                    return (
-                        <div
-                            key={idx}
-                            className={`flex items-center justify-between p-2 rounded-lg text-xs border transition-all
-                                ${entry.isMe ? 'ring-2 ring-blue-400 bg-blue-50 border-blue-200' :
-                                    entry.responded ? 'bg-white border-gray-200' :
-                                        'bg-gray-50 border-gray-100 text-gray-400'}`}
-                        >
-                            <div className="flex items-center gap-2">
-                                {pref ? (
-                                    <span>{pref.emoji}</span>
-                                ) : (
-                                    <span className="text-gray-300">⬜</span>
-                                )}
-                                <span className={`font-bold ${entry.isMe ? 'text-blue-700' : ''}`}>
-                                    Soli-Punkte {entry.indexTotal.toFixed(1)}
-                                    {entry.isMe && <span className="ml-1 text-blue-500 font-normal">(Du)</span>}
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {pref && (
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${pref.bg}`}>
-                                        {pref.label}
+                        return (
+                            <div
+                                key={idx}
+                                className={`flex items-center justify-between p-2 rounded-lg text-xs border transition-all
+                                    ${entry.isMe ? 'ring-2 ring-blue-400 bg-blue-50 border-blue-200' :
+                                        entry.responded ? 'bg-white border-gray-200' :
+                                            'bg-gray-50 border-gray-100 text-gray-400'}`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    {pref ? (
+                                        <span>{pref.emoji}</span>
+                                    ) : (
+                                        <span className="text-gray-300">⬜</span>
+                                    )}
+                                    <span className={`font-bold ${entry.isMe ? 'text-blue-700' : ''}`}>
+                                        Soli-Punkte {entry.indexTotal.toFixed(1)}
+                                        {entry.isMe && <span className="ml-1 text-blue-500 font-normal">(Du)</span>}
                                     </span>
-                                )}
-                                {!entry.responded && (
-                                    <span className="text-[10px] text-gray-400">Keine Antwort</span>
-                                )}
-                                {isRecommended && (
-                                    <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200">
-                                        ⭐ Empfehlung
-                                    </span>
-                                )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {pref && (
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${pref.bg}`}>
+                                            {pref.label}
+                                        </span>
+                                    )}
+                                    {!entry.responded && (
+                                        <span className="text-[10px] text-gray-400">Keine Antwort</span>
+                                    )}
+                                    {isRecommended && (
+                                        <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200">
+                                            ⭐ Empfehlung
+                                        </span>
+                                    )}
+                                </div>
                             </div>
+                        )
+                    })
+                ) : (
+                    <div className="bg-white/50 border border-gray-100 rounded-lg p-3 text-center">
+                        <div className="flex items-center gap-1.5 py-1 justify-center flex-wrap">
+                            {/* Render Responded Avatars */}
+                            {Array.from({ length: totalResponded }).map((_, i) => (
+                                <div key={`resp-${i}`} className="w-6 h-6 rounded-full bg-green-500 border-2 border-white shadow-sm flex items-center justify-center animate-in zoom-in duration-300" title="Hat abgestimmt">
+                                    <CheckCircle2 size={12} className="text-white" />
+                                </div>
+                            ))}
+                            {/* Render Missing (Ghost) Avatars */}
+                            {Array.from({ length: Math.max(0, totalEligible - totalResponded) }).map((_, i) => (
+                                <div key={`miss-${i}`} className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white border-dashed animate-pulse flex items-center justify-center" title="Fehlt noch">
+                                    <span className="text-[10px] font-bold text-gray-400">?</span>
+                                </div>
+                            ))}
                         </div>
-                    )
-                })}
+                        <p className="text-xs text-gray-500 mt-2 font-medium">
+                            Noch {totalEligible - totalResponded} {totalEligible - totalResponded === 1 ? 'Stimme' : 'Stimmen'} offen
+                        </p>
+                    </div>
+                )}
             </div>
 
             {/* My Soli-Punkte breakdown (expandable) */}
@@ -182,35 +231,44 @@ export default function CoverageVotingPanel({
 
             {/* Voting buttons */}
             {!myVote?.responded ? (
-                <div className="grid grid-cols-3 gap-2">
-                    <button
-                        onClick={() => onVote(shift.id, 'available')}
-                        className="py-2.5 px-2 text-xs font-bold rounded-xl border-2 border-green-300 bg-green-50 text-green-700 hover:bg-green-100 active:scale-95 transition-all"
-                    >
-                        🟢 Kann ich
-                    </button>
-                    <button
-                        onClick={() => onVote(shift.id, 'reluctant')}
-                        className="py-2.5 px-2 text-xs font-bold rounded-xl border-2 border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 active:scale-95 transition-all"
-                    >
-                        🟡 Ungern
-                    </button>
-                    <button
-                        onClick={() => onVote(shift.id, 'emergency_only')}
-                        className="py-2.5 px-2 text-xs font-bold rounded-xl border-2 border-red-300 bg-red-50 text-red-700 hover:bg-red-100 active:scale-95 transition-all"
-                    >
-                        🔴 Notfall
-                    </button>
+                <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                        <button
+                            onClick={() => onVote(shift.id, 'available')}
+                            className="py-2.5 px-2 text-xs font-bold rounded-xl border-2 border-green-300 bg-green-50 text-green-700 hover:bg-green-100 active:scale-95 transition-all"
+                        >
+                            🟢 Kann ich
+                        </button>
+                        <button
+                            onClick={() => onVote(shift.id, 'reluctant')}
+                            className="py-2.5 px-2 text-xs font-bold rounded-xl border-2 border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 active:scale-95 transition-all"
+                        >
+                            🟡 Ungern
+                        </button>
+                        <button
+                            onClick={() => onVote(shift.id, 'emergency_only')}
+                            className="py-2.5 px-2 text-xs font-bold rounded-xl border-2 border-red-300 bg-red-50 text-red-700 hover:bg-red-100 active:scale-95 transition-all"
+                        >
+                            🔴 Notfall
+                        </button>
+                    </div>
                 </div>
             ) : (
-                <div className={`text-center py-2 rounded-xl text-xs font-bold border ${PREF_CONFIG[myVote.availability_preference]?.bg || 'bg-gray-50 border-gray-200 text-gray-600'}`}>
-                    ✓ Deine Antwort: {PREF_CONFIG[myVote.availability_preference]?.label || 'Abgestimmt'}
-                    <button
-                        onClick={() => onVote(shift.id, null)}
-                        className="ml-2 underline text-gray-500 hover:text-gray-700"
-                    >
-                        Ändern
-                    </button>
+                <div className={`text-center py-2 px-3 rounded-xl text-xs font-bold border flex flex-col items-center gap-2 ${PREF_CONFIG[myVote.availability_preference]?.bg || 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+                    <div className="flex items-center justify-center gap-1.5 animate-in zoom-in spin-in-12 duration-500">
+                        <CheckCircle2 size={16} className="opacity-80" />
+                        <span>Deine Antwort: {PREF_CONFIG[myVote.availability_preference]?.label || 'Abgestimmt'}</span>
+                        <button
+                            onClick={() => onVote(shift.id, null)}
+                            className="ml-2 underline opacity-60 hover:opacity-100 transition-opacity"
+                        >
+                            Ändern
+                        </button>
+                    </div>
+                    {/* Gamification: +2 Points Badge */}
+                    <div className="inline-flex items-center gap-1 bg-white/60 px-2 py-0.5 rounded-full text-[10px] text-gray-800 animate-in zoom-in duration-500 shadow-sm border border-white/50">
+                        <span className="text-amber-500">✨</span> +2 Soli-Punkte gesichert
+                    </div>
                 </div>
             )}
 
