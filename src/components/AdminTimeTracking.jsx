@@ -600,9 +600,22 @@ export default function AdminTimeTracking() {
         if (!userMonthStatus) return
         if (!confirm(`Abschließen?`)) return
 
+        // Get admin name for signature
+        const { data: { user: adminUser } } = await supabase.auth.getUser()
+        const { data: adminProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', adminUser.id)
+            .single()
+        const approverName = adminProfile?.full_name || 'Administrator'
+
         const { error } = await supabase
             .from('monthly_reports')
-            .update({ status: 'genehmigt', approved_at: new Date().toISOString() })
+            .update({
+                status: 'genehmigt',
+                approved_at: new Date().toISOString(),
+                approver_name: approverName
+            })
             .eq('id', userMonthStatus.id)
 
         if (error) {

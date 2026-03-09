@@ -1,47 +1,37 @@
 /**
  * =========================================================================
- * Time Report PDF Generator
- * 
- * Generates "Arbeitszeitaufzeichnung" PDFs based on official DOWAS template
- * 
- * Features:
- * - Decimal time format (9,50 instead of 9:30)
- * - Weekly subtotals (Wochenarbeitszeit)
- * - Regular work + On-call (Bereitschaft) columns
- * - Night shifts split across days
- * - Digital signature verification footer
- * - No surcharge columns (Nacht/Sonn/FT removed)
+ * Time Report PDF Generator (Redesigned)
+ *
+ * Modern layout with:
+ * - Rounded header box with employee metadata
+ * - Zebra-striped table with soft dividers
+ * - "Red pen" correction visualization (original strikethrough + correction in red)
+ * - Manual pagination with repeated headers
+ * - Digital signature box with integrity hash
+ * - Industrial time format (09,50 instead of 09:30)
  * =========================================================================
  */
 
 import { jsPDF } from 'jspdf'
 import { format, parseISO, getISOWeek } from 'date-fns'
 import { de } from 'date-fns/locale'
+import { findSnapshotEntry, calculateCorrection } from './pdfGenerator'
 
 /**
- * Helper: Convert time to decimal format with comma (German style)
- * 09:30 → "9,50" | 13:45 → "13,75"
+ * Helper: Convert time to industrial format with zero-padded hours
+ * 09:30 → "09,50" | 13:45 → "13,75"
  */
 const timeToDecimal = (isoString) => {
     if (!isoString) return '-'
     try {
         const date = parseISO(isoString)
-        const hours = date.getHours()
+        const hours = String(date.getHours()).padStart(2, '0')
         const minutes = date.getMinutes()
-        const decimal = hours + (minutes / 60)
-        return decimal.toFixed(2).replace('.', ',')
+        const decMinutes = Math.round((minutes / 60) * 100).toString().padStart(2, '0')
+        return `${hours},${decMinutes}`
     } catch {
         return '-'
     }
-}
-
-/**
- * Helper: Format hours to German decimal format
- * 2.25 → "2,25"
- */
-const hoursToDecimal = (hours) => {
-    if (hours === null || hours === undefined) return '-'
-    return Number(hours).toFixed(2).replace('.', ',')
 }
 
 /**
@@ -69,22 +59,17 @@ const getDayNumber = (dateStr) => {
 
 /**
  * Generate Time Report PDF
- * 
  * @param {Object} params
  * @param {string} params.yearMonth - "2025-12" format
- * @param {Object} params.user - User profile { full_name, email, weekly_hours }
+ * @param {Object} params.user - User profile { full_name, weekly_hours }
  * @param {Array} params.entries - Time entries with shifts
- * @param {Object} params.statusData - { status, submitted_at, approved_at, data_hash, approver_name }
- * @param {Object} params.vacationData - { saldo, used, remaining }
- * @param {Object} params.balanceData - { sollstunden, saldo_monat, saldo_uebertrag, saldo_neu }
+ * @param {Object} params.statusData - { status, submitted_at, approved_at, data_hash, approver_name, original_data_snapshot }
  */
 export const generateTimeReportPDF = ({
     yearMonth,
     user,
     entries,
-    statusData,
-    vacationData,
-    balanceData
+    statusData
 }) => {
     const doc = new jsPDF()
 
@@ -99,107 +84,17 @@ export const generateTimeReportPDF = ({
 
     // Parse month for header
     const monthDate = new Date(yearMonth + '-01')
-    const monthName = format(monthDate, 'MMM', { locale: de }).toLowerCase()
-    const year = format(monthDate, 'yy')
+    const monthName = format(monthDate, 'MMMM yyyy', { locale: de })
 
-    let yPos = margin
-
-    // =========================================================================
-    // HEADER
-    // =========================================================================
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(10)
-    doc.setTextColor(0, 0, 0)
-
-    // Month/Year top left
-    doc.text(`${monthName} ${year}`, margin, yPos + 4)
-
-    yPos += 8
-
-    // Title line
-    doc.setFont("helvetica", "bold")
-    doc.text("Arbeitszeitaufzeichnung von:", margin, yPos + 4)
-    doc.setFont("helvetica", "normal")
-    doc.text(userName, margin + 60, yPos + 4)
-
-    // Right side: Vacation balance
-    if (vacationData) {
-        doc.setFontSize(8)
-        const rightX = pageWidth - margin
-        doc.text(`Urlaubssaldo`, rightX - 50, yPos)
-        doc.text(`${hoursToDecimal(vacationData.saldo)}`, rightX, yPos, { align: 'right' })
-        doc.text(`Verbrauch`, rightX - 50, yPos + 4)
-        doc.text(`${vacationData.used ? hoursToDecimal(vacationData.used) : '-'}`, rightX, yPos + 4, { align: 'right' })
-        doc.text(`neuer Urlaubssaldo`, rightX - 50, yPos + 8)
-        doc.text(`${hoursToDecimal(vacationData.remaining)}`, rightX, yPos + 8, { align: 'right' })
+    // Correction map (before table loop)
+    const correctionMap = {}
+    if (statusData?.original_data_snapshot) {
+        entries.forEach(entry => {
+            const snapEntry = findSnapshotEntry(statusData.original_data_snapshot, entry)
+            const corr = calculateCorrection(snapEntry, entry)
+            if (corr) correctionMap[entry.id] = corr
+        })
     }
-
-    yPos += 14
-
-    // Weekly hours
-    doc.setFontSize(9)
-    doc.text(`Wostd.`, margin, yPos)
-    doc.setFont("helvetica", "bold")
-    doc.text(`${weeklyHours}`, margin + 15, yPos)
-    doc.setFont("helvetica", "normal")
-
-    yPos += 8
-
-    // =========================================================================
-    // TABLE HEADER
-    // =========================================================================
-    const colX = {
-        datum: margin,
-        tag: margin + 14,
-        anfang: margin + 26,
-        ende: margin + 42,
-        taetigkeit: margin + 58,
-        regStden: margin + 85,
-        bAnfang: margin + 105,
-        bEnde: margin + 121,
-        bStunden: margin + 137
-    }
-
-    // Header row 1: Group headers
-    doc.setFillColor(255, 255, 255)
-    doc.setDrawColor(0, 0, 0)
-    doc.setLineWidth(0.3)
-
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(7)
-
-    // Draw top border
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 4
-
-    // "Reguläre Arbeitszeiten" spanning
-    doc.text("Reguläre Arbeitszeiten", colX.anfang + 15, yPos, { align: 'center' })
-    // "Bereitschaftsdienste" spanning
-    doc.text("Bereitschaftsdienste", colX.bAnfang + 20, yPos, { align: 'center' })
-
-    yPos += 4
-
-    // Header row 2: Column names
-    doc.setFontSize(6)
-    doc.text("Datum", colX.datum, yPos)
-    doc.text("Tag", colX.tag, yPos)
-    doc.text("Anfang", colX.anfang, yPos)
-    doc.text("Ende", colX.ende, yPos)
-    doc.text("Tätigkeit", colX.taetigkeit, yPos)
-    doc.text("Reg.Stden", colX.regStden, yPos)
-    doc.text("Anfang", colX.bAnfang, yPos)
-    doc.text("Ende", colX.bEnde, yPos)
-    doc.text("Stunden", colX.bStunden, yPos)
-
-    yPos += 3
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 3
-
-    // =========================================================================
-    // TABLE ROWS
-    // =========================================================================
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
 
     // Sort entries by date
     const sortedEntries = [...entries].sort((a, b) => {
@@ -208,238 +103,331 @@ export const generateTimeReportPDF = ({
         return dateA - dateB
     })
 
-    // Group by week for weekly subtotals
-    let currentWeek = null
-    let weeklyHoursSum = 0
+    let yPos = margin
+
+    // =========================================================================
+    // HEADER BOX
+    // =========================================================================
+    doc.setFillColor(248, 250, 252)
+    doc.setDrawColor(226, 232, 240)
+    doc.roundedRect(margin, yPos, contentWidth, 18, 2, 2, 'FD')
+
+    // Header content (3 columns)
+    doc.setFontSize(6)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(148, 163, 184)
+
+    const col1 = margin + 5
+    const col2 = margin + 75
+    const col3 = margin + 140
+
+    doc.text('MITARBEITER', col1, yPos + 4)
+    doc.text('MONAT', col2, yPos + 4)
+    doc.text('WOCHENSTUNDEN', col3, yPos + 4)
+
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(30, 41, 59)
+
+    doc.text(userName, col1, yPos + 12)
+    doc.text(monthName, col2, yPos + 12)
+    doc.text(`${weeklyHours}`, col3, yPos + 12)
+
+    yPos += 22
+
+    // =========================================================================
+    // TABLE SETUP
+    // =========================================================================
+    const colX = {
+        datum: margin,
+        tag: margin + 18,
+        dienst: margin + 32,
+        azVon: margin + 57,
+        azBis: margin + 77,
+        bzVon: margin + 97,
+        bzBis: margin + 117,
+        stunden: margin + 137,
+        anm: margin + 153
+    }
+
+    const rowHeight = 5
+
+    const drawTableHeader = () => {
+        // Header row 1: Group titles
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(7)
+        doc.setTextColor(100, 116, 139)
+
+        doc.text('Arbeitszeit', colX.azVon + 10, yPos, { align: 'center' })
+        doc.text('Bereitschaftszeit', colX.bzVon + 10, yPos, { align: 'center' })
+
+        yPos += 4
+
+        // Header row 2: Column names
+        doc.setFontSize(6)
+        doc.text('Datum', colX.datum, yPos)
+        doc.text('Tag', colX.tag, yPos)
+        doc.text('Dienst', colX.dienst, yPos)
+        doc.text('Von', colX.azVon, yPos)
+        doc.text('Bis', colX.azBis, yPos)
+        doc.text('Von', colX.bzVon, yPos)
+        doc.text('Bis', colX.bzBis, yPos)
+        doc.text('Std', colX.stunden, yPos)
+        doc.text('Anm.', colX.anm, yPos)
+
+        yPos += 3
+        doc.setDrawColor(226, 232, 240)
+        doc.setLineWidth(0.3)
+        doc.line(margin, yPos, pageWidth - margin, yPos)
+        yPos += 3
+
+        return yPos
+    }
+
+    yPos = drawTableHeader()
+
+    // Helper: Draw corrected time inline
+    const drawCorrectedTime = (x, y, originalISO, currentISO) => {
+        const original = timeToDecimal(originalISO)
+        const corrected = timeToDecimal(currentISO)
+
+        doc.setFontSize(7)
+        doc.setFont('helvetica', 'normal')
+        const w1 = doc.getTextWidth(original)
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'bold')
+        const w2 = doc.getTextWidth(corrected)
+
+        const gap = 1.5
+        const centerX = x + 10
+        const startX = centerX - (w1 + gap + w2) / 2
+
+        // Original grau durchgestrichen
+        doc.setFontSize(7)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(148, 163, 184)
+        doc.text(original, startX, y)
+        doc.setDrawColor(148, 163, 184)
+        doc.setLineWidth(0.3)
+        doc.line(startX - 0.5, y - 1.2, startX + w1 + 0.5, y - 1.2)
+
+        // Korrektur rot fett
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(220, 38, 38)
+        doc.text(corrected, startX + w1 + gap, y)
+
+        doc.setTextColor(0, 0, 0)
+    }
+
+    // =========================================================================
+    // TABLE ROWS
+    // =========================================================================
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+
     let lastDayNumber = null
+    let rowIndex = 0
 
-    // Totals for footer
-    let totalRegularHours = 0
-    let totalBereitschaftHours = 0
-    let workDays = new Set()
-
-    sortedEntries.forEach((entry, _index) => {
-        // Page break check
-        if (yPos > pageHeight - 50) {
+    sortedEntries.forEach((entry) => {
+        // Page break
+        if (yPos > 270) {
             doc.addPage()
             yPos = margin + 10
+            yPos = drawTableHeader()
         }
 
         const dateStr = entry.actual_start || entry.entry_date
         if (!dateStr) return
 
-        const entryDate = parseISO(dateStr)
         const dayNum = getDayNumber(dateStr)
         const dayAbbr = getDayAbbr(dateStr)
-        const week = getISOWeek(entryDate)
-
-        // Track work days
-        workDays.add(dayNum)
-
-        // Week change → print weekly subtotal
-        if (currentWeek !== null && week !== currentWeek && weeklyHoursSum > 0) {
-            // Print Wochenarbeitszeit row
-            doc.setFont("helvetica", "normal")
-            doc.setFontSize(7)
-            doc.text("Wochenarbeitszeit", colX.taetigkeit, yPos)
-            doc.setFont("helvetica", "bold")
-            doc.text(hoursToDecimal(weeklyHoursSum), colX.regStden, yPos)
-            doc.setFont("helvetica", "normal")
-
-            yPos += 4
-            doc.setDrawColor(150, 150, 150)
-            doc.line(margin, yPos, pageWidth - margin, yPos)
-            yPos += 4
-
-            weeklyHoursSum = 0
-        }
-        currentWeek = week
+        const showDayNum = dayNum !== lastDayNumber
+        lastDayNumber = dayNum
 
         // Get shift info
         const shift = entry.shifts
         const shiftType = shift?.type || entry.absences?.type || '-'
 
-        // Calculate hours
-        const hours = entry.calculated_hours || 0
-
-        // Determine if Bereitschaft or regular
+        // Determine if Bereitschaft (on-call)
         const isBereitschaft = shiftType?.toLowerCase().includes('bereit') ||
             shiftType?.toLowerCase().includes('nd') ||
             shift?.is_bereitschaft
 
-        // Start/End times in decimal
+        // Time decimals
         const startDecimal = timeToDecimal(entry.actual_start)
         const endDecimal = timeToDecimal(entry.actual_end)
 
-        // Only show day number if different from last row
-        const showDayNum = dayNum !== lastDayNumber
-        lastDayNumber = dayNum
+        // Zebra striping
+        if (rowIndex % 2 === 0) {
+            doc.setFillColor(244, 249, 255)
+            doc.rect(margin, yPos - rowHeight + 1, contentWidth, rowHeight + 1, 'F')
+        }
+
+        // Get correction if exists
+        const correction = correctionMap[entry.id]
 
         // Render row
+        doc.setTextColor(0, 0, 0)
+
         if (showDayNum) {
             doc.text(dayNum, colX.datum, yPos)
             doc.text(dayAbbr, colX.tag, yPos)
         }
 
-        if (isBereitschaft) {
-            // Bereitschaft columns
-            doc.text(startDecimal, colX.bAnfang, yPos)
-            doc.text(endDecimal, colX.bEnde, yPos)
-            doc.text(hoursToDecimal(hours), colX.bStunden, yPos)
-            totalBereitschaftHours += hours
+        // Dienst type (truncate if too long)
+        let displayType = shiftType
+        if (displayType && displayType.length > 12) {
+            displayType = displayType.substring(0, 10) + '..'
+        }
+        doc.text(displayType, colX.dienst, yPos)
+
+        // Work time or On-call time
+        if (!isBereitschaft) {
+            // AZ (Arbeitszeit) columns
+            if (correction?.timeChanged && correction.originalStart) {
+                drawCorrectedTime(colX.azVon, yPos, correction.originalStart, entry.actual_start)
+            } else {
+                doc.text(startDecimal, colX.azVon, yPos)
+            }
+
+            if (correction?.timeChanged && correction.originalEnd) {
+                drawCorrectedTime(colX.azBis, yPos, correction.originalEnd, entry.actual_end)
+            } else {
+                doc.text(endDecimal, colX.azBis, yPos)
+            }
         } else {
-            // Regular work columns
-            doc.text(startDecimal, colX.anfang, yPos)
-            doc.text(endDecimal, colX.ende, yPos)
+            // BZ (Bereitschaft) columns
+            if (correction?.timeChanged && correction.originalStart) {
+                drawCorrectedTime(colX.bzVon, yPos, correction.originalStart, entry.actual_start)
+            } else {
+                doc.text(startDecimal, colX.bzVon, yPos)
+            }
 
-            // Truncate long shift types
-            let displayType = shiftType
-            if (displayType.length > 12) displayType = displayType.substring(0, 10) + '..'
-            doc.text(displayType, colX.taetigkeit, yPos)
-
-            doc.text(hoursToDecimal(hours), colX.regStden, yPos)
-            totalRegularHours += hours
+            if (correction?.timeChanged && correction.originalEnd) {
+                drawCorrectedTime(colX.bzBis, yPos, correction.originalEnd, entry.actual_end)
+            } else {
+                doc.text(endDecimal, colX.bzBis, yPos)
+            }
         }
 
-        weeklyHoursSum += hours
+        // Admin note (if correction exists)
+        if (correction?.adminNote) {
+            doc.setFontSize(6)
+            doc.setTextColor(150, 100, 0)
+            doc.text(correction.adminNote.substring(0, 28), colX.anm, yPos)
+            doc.setTextColor(0, 0, 0)
+        }
 
-        yPos += 5
+        // Soft divider after row
+        doc.setDrawColor(241, 245, 249)
+        doc.setLineWidth(0.2)
+        doc.line(margin, yPos + 2, pageWidth - margin, yPos + 2)
 
-        // No separator lines between rows - they were cutting through text
+        yPos += rowHeight
+        rowIndex++
     })
 
-    // Final week subtotal
-    if (weeklyHoursSum > 0) {
-        yPos += 2
-        doc.setFont("helvetica", "normal")
-        doc.text("Wochenarbeitszeit", colX.taetigkeit, yPos)
-        doc.setFont("helvetica", "bold")
-        doc.text(hoursToDecimal(weeklyHoursSum), colX.regStden, yPos)
-        yPos += 5
+    // =========================================================================
+    // SIGNATURE BOX
+    // =========================================================================
+    yPos += 5
+    if (yPos + 35 > pageHeight - 20) {
+        doc.addPage()
+        yPos = margin
     }
 
-    // =========================================================================
-    // FOOTER SUMMARY
-    // =========================================================================
-    yPos += 5
-    doc.setDrawColor(0, 0, 0)
-    doc.setLineWidth(0.5)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 5
+    // Box background and border
+    doc.setFillColor(248, 250, 252)
+    doc.setDrawColor(203, 213, 225)
+    doc.roundedRect(margin, yPos, contentWidth, 28, 2, 2, 'FD')
 
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
+    // Box header
+    doc.setFontSize(8)
+    doc.setTextColor(15, 23, 42)
+    doc.setFont('helvetica', 'bold')
+    doc.text('DIGITAL SIGNIERT & VERIFIZIERT', margin + 5, yPos + 6)
 
-    // Left column: AT (Arbeitstage)
-    doc.text(`AT`, margin, yPos)
-    doc.setFont("helvetica", "bold")
-    doc.text(`${workDays.size}`, margin + 12, yPos)
-    doc.setFont("helvetica", "normal")
-
-    // Right column: Summary
-    const summaryX = margin + 60
-    const valueX = margin + 130
-
-    const zwischensumme = totalRegularHours
-    const bereitschaftHalf = totalBereitschaftHours / 2
-    const summeMonat = zwischensumme + bereitschaftHalf
-    const sollstunden = balanceData?.sollstunden || (weeklyHours * 4.33)
-    const saldoMonat = summeMonat - sollstunden
-    const saldoUebertrag = balanceData?.saldo_uebertrag || 0
-    const saldoNeu = saldoMonat + saldoUebertrag
-
-    doc.text("Zwischensumme", summaryX, yPos)
-    doc.text(hoursToDecimal(zwischensumme), valueX, yPos)
-
-    yPos += 4
-    doc.text("Bereitschaftsstden : 2", summaryX, yPos)
-    doc.text(hoursToDecimal(bereitschaftHalf), valueX, yPos)
-
-    yPos += 4
-    doc.text("Summe/mon", summaryX, yPos)
-    doc.setFont("helvetica", "bold")
-    doc.text(hoursToDecimal(summeMonat), valueX, yPos)
-    doc.setFont("helvetica", "normal")
-
-    yPos += 4
-    doc.text("Sollstden", summaryX, yPos)
-    doc.text(hoursToDecimal(sollstunden), valueX, yPos)
-
-    yPos += 4
-    doc.text("Saldo lfdes Monat", summaryX, yPos)
-    doc.text(hoursToDecimal(saldoMonat), valueX, yPos)
-
-    yPos += 4
-    doc.text("Saldo/Übertrag +/-", summaryX, yPos)
-    doc.text(hoursToDecimal(saldoUebertrag), valueX, yPos)
-
-    yPos += 4
-    doc.setFont("helvetica", "bold")
-    doc.text("Saldo neu", summaryX, yPos)
-    doc.text(hoursToDecimal(saldoNeu), valueX, yPos)
-    doc.setFont("helvetica", "normal")
-
-    // Bereitschaft gesamt (right side)
-    yPos += 6
-    doc.text("Bereitschaft gesamt", summaryX, yPos)
-    doc.text(hoursToDecimal(totalBereitschaftHours), valueX, yPos)
-
-    // =========================================================================
-    // DIGITAL SIGNATURE FOOTER (Compact, Font Size 6) - NO HANDWRITTEN SIGNATURES
-    // =========================================================================
-    yPos += 10
-    doc.setDrawColor(0, 0, 0)
+    // Separator line
+    doc.setDrawColor(226, 232, 240)
     doc.setLineWidth(0.3)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 3
+    doc.line(margin, yPos + 9, margin + contentWidth, yPos + 9)
 
-    doc.setFontSize(6)
-    doc.setFont("helvetica", "bold")
-    doc.setFillColor(46, 125, 50)
-    doc.rect(margin, yPos - 1, contentWidth, 5, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.text("✓ DIGITAL SIGNIERT & VERIFIZIERT", margin + 2, yPos + 2.5)
-    doc.setTextColor(0, 0, 0)
-    yPos += 6
+    // Signature content (2 columns)
+    const sigLabelStyle = () => {
+        doc.setFontSize(6)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(100, 116, 139)
+    }
 
-    // Signature details - compact single lines
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(6)
+    const sigValueStyle = () => {
+        doc.setFontSize(7)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(51, 65, 85)
+    }
 
-    // Line 1: Employee + Signature time
-    let sigLine1 = `Mitarbeiter: ${userName}`
+    const col1X = margin + 5
+    const col1ValX = margin + 28
+    const col2X = margin + 90
+    const col2ValX = margin + 115
+
+    let sigY = yPos + 14
+
+    // Row 1: Eingereicht von / Genehmigt von
+    sigLabelStyle()
+    doc.text('Eingereicht von:', col1X, sigY)
+    sigValueStyle()
+    doc.text(userName, col1ValX, sigY)
+
+    sigLabelStyle()
+    doc.text('Genehmigt von:', col2X, sigY)
+    sigValueStyle()
+    doc.text(statusData?.approver_name || 'Administrator', col2ValX, sigY)
+
+    sigY += 5
+
+    // Row 2: Eingereicht am / Genehmigt am
+    sigLabelStyle()
+    doc.text('Eingereicht am:', col1X, sigY)
+    sigValueStyle()
     if (statusData?.submitted_at) {
-        sigLine1 += ` | Signiert: ${format(parseISO(statusData.submitted_at), 'dd.MM.yyyy HH:mm')} Uhr`
-    }
-    doc.text(sigLine1, margin, yPos)
-
-    yPos += 3
-
-    // Line 2: Hash (full hash on one line)
-    if (statusData?.data_hash) {
-        doc.setFont("courier", "normal")
-        doc.text(`Hash: ${statusData.data_hash}`, margin, yPos)
+        doc.text(
+            format(parseISO(statusData.submitted_at), 'dd.MM.yyyy HH:mm') + ' Uhr',
+            col1ValX,
+            sigY
+        )
+    } else {
+        doc.text('-', col1ValX, sigY)
     }
 
-    yPos += 3
-
-    // Line 3: Approval
-    doc.setFont("helvetica", "normal")
-    if (statusData?.status === 'genehmigt' && statusData?.approved_at) {
-        const approverName = statusData.approver_name || 'Administrator'
-        doc.text(`Genehmigt von: ${approverName} | Genehmigt am: ${format(parseISO(statusData.approved_at), 'dd.MM.yyyy HH:mm')} Uhr`, margin, yPos)
-    } else if (statusData?.status === 'eingereicht') {
-        doc.setTextColor(150, 150, 150)
-        doc.text("Genehmigung ausstehend", margin, yPos)
-        doc.setTextColor(0, 0, 0)
+    sigLabelStyle()
+    doc.text('Genehmigt am:', col2X, sigY)
+    sigValueStyle()
+    if (statusData?.approved_at) {
+        doc.text(
+            format(parseISO(statusData.approved_at), 'dd.MM.yyyy HH:mm') + ' Uhr',
+            col2ValX,
+            sigY
+        )
+    } else {
+        doc.text('-', col2ValX, sigY)
     }
+
+    sigY += 5
+
+    // Row 3: Hash (Monospace)
+    sigLabelStyle()
+    doc.text('Integritäts-Hash:', col1X, sigY)
+    doc.setFont('courier', 'normal')
+    doc.setFontSize(6)
+    doc.setTextColor(51, 65, 85)
+    doc.text(statusData?.data_hash || '-', col1ValX, sigY)
 
     // =========================================================================
-    // SAVE PDF (No handwritten signature lines - fully digital)
+    // SAVE PDF
     // =========================================================================
     const filename = `Arbeitszeit_${userName.replace(/\s+/g, '_')}_${yearMonth}.pdf`
     doc.save(filename)
 
     return filename
 }
-
