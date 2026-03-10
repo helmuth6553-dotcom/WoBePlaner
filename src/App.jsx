@@ -13,6 +13,7 @@ import Datenschutz from './pages/Datenschutz'
 import { Routes, Route } from 'react-router-dom'
 import { ToastProvider } from './components/Toast'
 import OfflineIndicator from './components/OfflineIndicator'
+import ReloadPrompt from './components/ReloadPrompt'
 import { supabase } from './supabase'
 
 // Lazy load heavy components for better initial load time
@@ -150,6 +151,7 @@ function AppContent() {
     <div className="min-h-screen flex bg-gray-50">
       {/* Offline Status Banner */}
       <OfflineIndicator />
+      <ReloadPrompt />
 
       {/* Desktop Sidebar (Hidden on Mobile) */}
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} badges={badges} />

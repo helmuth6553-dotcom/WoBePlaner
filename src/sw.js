@@ -4,7 +4,12 @@ import { clientsClaim } from 'workbox-core'
 // Standard Workbox setup
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
-self.skipWaiting()
+// Handle SKIP_WAITING from frontend
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING')
+        self.skipWaiting()
+})
+
 clientsClaim()
 
 // Push Notification Listener
