@@ -38,7 +38,8 @@ export default function TimeTracking() {
         actualEnd: '',
         interruptions: [],
         newIntStart: '',
-        newIntEnd: ''
+        newIntEnd: '',
+        newIntNote: ''
     })
     const [calculatedHours, setCalculatedHours] = useState(0)
 
@@ -574,7 +575,7 @@ export default function TimeTracking() {
         const hash = await generateReportHash(comprehensiveEntries, user.id, selectedMonth)
 
         const [year, month] = selectedMonth.split('-').map(Number)
-        const { error } = await supabase.from('monthly_reports').insert({
+        const { error } = await supabase.from('monthly_reports').upsert({
             user_id: user.id,
             data_hash: hash,
             hash_version: 'v1',  // Track which hash algorithm was used
@@ -583,7 +584,7 @@ export default function TimeTracking() {
             month,
             status: 'eingereicht',
             submitted_at: new Date().toISOString()
-        })
+        }, { onConflict: 'user_id,year,month' })
         if (error) setSubmitError(error.message); else { setIsSubmitModalOpen(false); setPassword(''); fetchData() }
         setIsSubmitting(false)
     }
@@ -620,11 +621,21 @@ export default function TimeTracking() {
             return null
         }).filter(Boolean)
 
+        // Fetch full profile to ensure we have full_name for PDF
+        let pdfUser = user
+        const { data: fullProfile } = await supabase.from('profiles')
+            .select('id, full_name, email, weekly_hours')
+            .eq('id', user.id)
+            .single()
+        if (fullProfile) {
+            pdfUser = { ...user, ...fullProfile }
+        }
+
         // Lazy load PDF generator only when needed (saves ~611KB on initial load)
         const { generateTimeReportPDF } = await import('../utils/timeReportPdfGenerator')
         generateTimeReportPDF({
             yearMonth: selectedMonth,
-            user: user,
+            user: pdfUser,
             entries: entriesList,
             statusData: monthStatus,
             vacationData: null, // TODO: Add vacation data if available
@@ -873,6 +884,25 @@ export default function TimeTracking() {
                                                 <span className="text-gray-600">Stunden:</span>
                                                 <span className="font-mono font-bold text-blue-600">{isNaN(displayHours) ? displayHours : `${displayHours}h`}</span>
                                             </div>
+                                            {entry?.interruptions && entry.interruptions.length > 0 && (
+                                                <div className="mt-2 bg-blue-50 p-2 rounded border border-blue-100">
+                                                    <div className="text-xs font-bold text-blue-700 mb-1">Unterbrechungen:</div>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {entry.interruptions.map((int, idx) => {
+                                                            if (!int.start || !int.end) return null
+                                                            try {
+                                                                return (
+                                                                    <span key={idx} className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-mono">
+                                                                        {format(parseISO(int.start), 'HH:mm')} - {format(parseISO(int.end), 'HH:mm')}{int.note ? ` (${int.note})` : ''}
+                                                                    </span>
+                                                                )
+                                                            } catch {
+                                                                return null
+                                                            }
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 })()}
@@ -893,6 +923,34 @@ export default function TimeTracking() {
                                                 <span>Differenz:</span>
                                                 <span className="font-mono">{c.hoursDiff > 0 ? '+' : ''}{c.hoursDiff.toFixed(2)}h</span>
                                             </div>
+                                            {c.interruptionsChanged && (
+                                                <div className="border-t border-amber-200 pt-1.5 mt-1 space-y-1">
+                                                    <div className="text-xs font-bold text-amber-700">Unterbrechungen geändert:</div>
+                                                    {Array.isArray(c.originalInterruptions) && c.originalInterruptions.length > 0 && (
+                                                        <div className="text-gray-500 text-xs">
+                                                            <span>Vorher: </span>
+                                                            {c.originalInterruptions.map((int, i) => {
+                                                                try {
+                                                                    return <span key={i} className="font-mono">{i > 0 ? ', ' : ''}{format(parseISO(int.start), 'HH:mm')}-{format(parseISO(int.end), 'HH:mm')}</span>
+                                                                } catch { return null }
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                    {Array.isArray(c.currentInterruptions) && c.currentInterruptions.length > 0 && (
+                                                        <div className="text-green-700 text-xs font-bold">
+                                                            <span>Nachher: </span>
+                                                            {c.currentInterruptions.map((int, i) => {
+                                                                try {
+                                                                    return <span key={i} className="font-mono">{i > 0 ? ', ' : ''}{format(parseISO(int.start), 'HH:mm')}-{format(parseISO(int.end), 'HH:mm')}</span>
+                                                                } catch { return null }
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                    {Array.isArray(c.currentInterruptions) && c.currentInterruptions.length === 0 && (
+                                                        <div className="text-red-600 text-xs font-bold">Alle Unterbrechungen entfernt</div>
+                                                    )}
+                                                </div>
+                                            )}
                                             {c.adminNote && (
                                                 <div className="text-gray-600 italic border-t border-amber-200 pt-1.5 mt-1">
                                                     Grund: {c.adminNote}
@@ -961,12 +1019,29 @@ export default function TimeTracking() {
                                     <div className="bg-gray-50 border rounded-xl p-3 space-y-2">
                                         <label className="block text-xs font-bold text-gray-500 uppercase">Unterbrechung Bereitschaftszeit</label>
                                         {(formData.interruptions || []).map((int, idx) => (
-                                            <div key={idx} className="flex justify-between items-center bg-white p-2 rounded text-sm border shadow-sm">
-                                                <span className="font-mono font-medium">{int.start} - {int.end}</span>
-                                                {!isApproved && <button onClick={() => {
-                                                    const ni = [...formData.interruptions]; ni.splice(idx, 1);
-                                                    setFormData({ ...formData, interruptions: ni })
-                                                }} className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100 transition-colors"><XCircle size={16} /></button>}
+                                            <div key={idx} className="bg-white p-2 rounded text-sm border shadow-sm space-y-1">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="font-mono font-medium">{int.start} - {int.end}</span>
+                                                    {!isApproved && <button onClick={() => {
+                                                        const ni = [...formData.interruptions]; ni.splice(idx, 1);
+                                                        setFormData({ ...formData, interruptions: ni })
+                                                    }} className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100 transition-colors"><XCircle size={16} /></button>}
+                                                </div>
+                                                {isApproved ? (
+                                                    int.note && <div className="text-xs text-gray-500">Grund: {int.note}</div>
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        value={int.note || ''}
+                                                        onChange={e => {
+                                                            const updated = [...formData.interruptions]
+                                                            updated[idx] = { ...updated[idx], note: e.target.value }
+                                                            setFormData({ ...formData, interruptions: updated })
+                                                        }}
+                                                        placeholder="Grund der Unterbrechung"
+                                                        className="w-full border p-1.5 rounded text-xs"
+                                                    />
+                                                )}
                                             </div>
                                         ))}
                                         {!isApproved && (
@@ -1047,13 +1122,20 @@ export default function TimeTracking() {
                                                         </div>
                                                     </div>
                                                 </div>
+                                                <input
+                                                    type="text"
+                                                    value={formData.newIntNote}
+                                                    onChange={e => setFormData({ ...formData, newIntNote: e.target.value })}
+                                                    placeholder="Grund der Unterbrechung"
+                                                    className="w-full border p-2 rounded-lg text-sm"
+                                                />
                                                 <button
                                                     onClick={() => {
                                                         if (formData.newIntStart && formData.newIntEnd) {
                                                             setFormData({
                                                                 ...formData,
-                                                                interruptions: [...formData.interruptions, { start: formData.newIntStart, end: formData.newIntEnd, note: '' }],
-                                                                newIntStart: '', newIntEnd: ''
+                                                                interruptions: [...formData.interruptions, { start: formData.newIntStart, end: formData.newIntEnd, note: formData.newIntNote }],
+                                                                newIntStart: '', newIntEnd: '', newIntNote: ''
                                                             })
                                                         }
                                                     }}

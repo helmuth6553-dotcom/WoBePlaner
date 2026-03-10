@@ -83,22 +83,23 @@ const getDayNumber = (dateStr) => {
  */
 const buildLines = (segments) => {
     const lines = []
-    let current = { work: null, standby: null }
+    let current = { work: null, standby: null, note: '' }
 
     segments.forEach(seg => {
         if (seg.type === 'WORK') {
             // If we already have a WORK, we must have incomplete pair — flush it first
             if (current.work !== null) {
                 lines.push(current)
-                current = { work: null, standby: null }
+                current = { work: null, standby: null, note: '' }
             }
             current.work = seg
+            current.note = seg.note || ''
         } else {
             // STANDBY
             if (current.standby !== null) {
                 // Already have a STANDBY — flush pair first
                 lines.push(current)
-                current = { work: null, standby: null }
+                current = { work: null, standby: null, note: '' }
             }
             current.standby = seg
         }
@@ -140,7 +141,45 @@ const buildPdfRows = (entries, correctionMap) => {
             )
             const lines = buildLines(segments)
 
+            // Build original segment lines for comparison if interruptions were corrected
+            let origLines = null
+            if (correction?.interruptionsChanged && Array.isArray(correction.originalInterruptions)) {
+                const origSegments = getShiftSegments(
+                    correction.originalStart || entry.actual_start,
+                    correction.originalEnd || entry.actual_end,
+                    shiftType, correction.originalInterruptions
+                )
+                origLines = buildLines(origSegments)
+            }
+
             lines.forEach((line, lineIdx) => {
+                // For interruption rows (WORK segments within readiness), show the note
+                const intNote = line.note || ''
+
+                // Check if this WORK line has a corresponding original with different times
+                let intCorrection = null
+                if (origLines && line.work) {
+                    // Find matching original WORK line by index among WORK-only lines
+                    const origWorkLine = origLines[lineIdx]
+                    if (origWorkLine?.work) {
+                        const origAzVon = timeToDecimal(origWorkLine.work.start.toISOString())
+                        const origAzBis = timeToDecimal(origWorkLine.work.end.toISOString())
+                        const curAzVon = timeToDecimal(line.work.start.toISOString())
+                        const curAzBis = timeToDecimal(line.work.end.toISOString())
+                        if (origAzVon !== curAzVon || origAzBis !== curAzBis) {
+                            intCorrection = {
+                                originalStart: origWorkLine.work.start.toISOString(),
+                                originalEnd: origWorkLine.work.end.toISOString(),
+                                currentStart: line.work.start.toISOString(),
+                                currentEnd: line.work.end.toISOString()
+                            }
+                        }
+                    } else if (!origWorkLine?.work) {
+                        // New interruption that didn't exist before — mark as added
+                        intCorrection = { isNew: true }
+                    }
+                }
+
                 rows.push({
                     datum:    lineIdx === 0 ? getDayNumber(dayStr) : '',
                     tag:      lineIdx === 0 ? getDayAbbr(dayStr) : '',
@@ -153,6 +192,8 @@ const buildPdfRows = (entries, correctionMap) => {
                     anm:           lineIdx === 0 && correction?.adminNote
                                        ? correction.adminNote.substring(0, 28)
                                        : '',
+                    intNote,
+                    intCorrection,
                 })
             })
         } else {
@@ -228,7 +269,7 @@ export const generateTimeReportPDF = ({
     doc.setFontSize(18)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(30, 41, 59)
-    doc.text('Arbeitszeitaufzeichnung', margin, yPos + 6)
+    doc.text('Arbeitszeitaufzeichnung Chill Out', margin, yPos + 6)
     yPos += 14
 
     // =========================================================================
@@ -397,16 +438,20 @@ export const generateTimeReportPDF = ({
         const startChanged = row.correction?.originalStart && row.correction.originalStart !== row.correction.currentStart
         const endChanged = row.correction?.originalEnd && row.correction.originalEnd !== row.correction.currentEnd
 
-        // AZ Von (Arbeitszeit)
+        // AZ Von (Arbeitszeit) — check entry-level correction OR interruption-level correction
         if (startChanged && row.azVon) {
             drawCorrectedTime(colX.azVon, textY, row.correction.originalStart, row.correction.currentStart)
+        } else if (row.intCorrection && !row.intCorrection.isNew && row.azVon) {
+            drawCorrectedTime(colX.azVon, textY, row.intCorrection.originalStart, row.intCorrection.currentStart)
         } else {
             doc.text(row.azVon, colX.azVon, textY)
         }
 
-        // AZ Bis (Arbeitszeit)
+        // AZ Bis (Arbeitszeit) — check entry-level correction OR interruption-level correction
         if (endChanged && row.azBis) {
             drawCorrectedTime(colX.azBis, textY, row.correction.originalEnd, row.correction.currentEnd)
+        } else if (row.intCorrection && !row.intCorrection.isNew && row.azBis) {
+            drawCorrectedTime(colX.azBis, textY, row.intCorrection.originalEnd, row.intCorrection.currentEnd)
         } else {
             doc.text(row.azBis, colX.azBis, textY)
         }
@@ -415,11 +460,17 @@ export const generateTimeReportPDF = ({
         doc.text(row.bzVon, colX.bzVon, textY)
         doc.text(row.bzBis, colX.bzBis, textY)
 
-        // Admin note (only on first row of entry)
+        // Admin note (only on first row of entry) or interruption note
         if (row.anm) {
             doc.setFontSize(8)
             doc.setTextColor(150, 100, 0)
             doc.text(row.anm, colX.anm, textY)
+            doc.setTextColor(0, 0, 0)
+            doc.setFontSize(9)
+        } else if (row.intNote) {
+            doc.setFontSize(7)
+            doc.setTextColor(80, 80, 80)
+            doc.text(row.intNote.substring(0, 24), colX.anm, textY)
             doc.setTextColor(0, 0, 0)
             doc.setFontSize(9)
         }

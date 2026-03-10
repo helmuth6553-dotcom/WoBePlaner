@@ -34,7 +34,8 @@ export default function AdminTimeTracking() {
         interruptions: [],
         adminNote: '',
         newIntStart: '',
-        newIntEnd: ''
+        newIntEnd: '',
+        newIntNote: ''
     })
     const [calculatedHours, setCalculatedHours] = useState(0)
 
@@ -1022,7 +1023,7 @@ export default function AdminTimeTracking() {
                                             try {
                                                 return (
                                                     <span key={idx} className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-mono">
-                                                        {format(parseISO(int.start), 'HH:mm')} - {format(parseISO(int.end), 'HH:mm')}
+                                                        {format(parseISO(int.start), 'HH:mm')} - {format(parseISO(int.end), 'HH:mm')}{int.note ? ` (${int.note})` : ''}
                                                     </span>
                                                 )
                                             } catch {
@@ -1285,12 +1286,35 @@ export default function AdminTimeTracking() {
                                 <div className="bg-white border rounded-lg p-3 space-y-2">
                                     <label className="block text-xs font-bold text-gray-500 uppercase">Unterbrechung Bereitschaftszeit</label>
                                     {formData.interruptions.map((int, idx) => (
-                                        <div key={idx} className="flex justify-between items-center bg-gray-50 p-2 rounded text-sm border">
-                                            <span className="font-mono">{int.start} - {int.end}</span>
-                                            <button onClick={() => {
-                                                const ni = [...formData.interruptions]; ni.splice(idx, 1);
-                                                setFormData({ ...formData, interruptions: ni })
-                                            }} className="text-red-500 hover:text-red-700 bg-white border rounded p-1"><XCircle size={14} /></button>
+                                        <div key={idx} className="bg-gray-50 p-2 rounded text-sm border space-y-1">
+                                            <div className="flex gap-2 items-center">
+                                                <input type="time" value={int.start} onChange={e => {
+                                                    const updated = [...formData.interruptions]
+                                                    updated[idx] = { ...updated[idx], start: e.target.value }
+                                                    setFormData({ ...formData, interruptions: updated })
+                                                }} className="border p-1.5 rounded text-sm text-center bg-white font-mono flex-1" />
+                                                <span className="text-gray-300">-</span>
+                                                <input type="time" value={int.end} onChange={e => {
+                                                    const updated = [...formData.interruptions]
+                                                    updated[idx] = { ...updated[idx], end: e.target.value }
+                                                    setFormData({ ...formData, interruptions: updated })
+                                                }} className="border p-1.5 rounded text-sm text-center bg-white font-mono flex-1" />
+                                                <button onClick={() => {
+                                                    const ni = [...formData.interruptions]; ni.splice(idx, 1);
+                                                    setFormData({ ...formData, interruptions: ni })
+                                                }} className="text-red-500 hover:text-red-700 bg-white border rounded p-1"><XCircle size={14} /></button>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={int.note || ''}
+                                                onChange={e => {
+                                                    const updated = [...formData.interruptions]
+                                                    updated[idx] = { ...updated[idx], note: e.target.value }
+                                                    setFormData({ ...formData, interruptions: updated })
+                                                }}
+                                                placeholder="Grund der Unterbrechung"
+                                                className="w-full border p-1.5 rounded text-xs"
+                                            />
                                         </div>
                                     ))}
                                     <div className="flex gap-2 items-center mt-2">
@@ -1302,8 +1326,8 @@ export default function AdminTimeTracking() {
                                                 if (formData.newIntStart && formData.newIntEnd) {
                                                     setFormData({
                                                         ...formData,
-                                                        interruptions: [...formData.interruptions, { start: formData.newIntStart, end: formData.newIntEnd }],
-                                                        newIntStart: '', newIntEnd: ''
+                                                        interruptions: [...formData.interruptions, { start: formData.newIntStart, end: formData.newIntEnd, note: formData.newIntNote }],
+                                                        newIntStart: '', newIntEnd: '', newIntNote: ''
                                                     })
                                                 }
                                             }}
@@ -1313,6 +1337,13 @@ export default function AdminTimeTracking() {
                                             +
                                         </button>
                                     </div>
+                                    <input
+                                        type="text"
+                                        value={formData.newIntNote}
+                                        onChange={e => setFormData({ ...formData, newIntNote: e.target.value })}
+                                        placeholder="Grund der Unterbrechung"
+                                        className="w-full border p-2 rounded text-sm"
+                                    />
                                 </div>
                             )}
 

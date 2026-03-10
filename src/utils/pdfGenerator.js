@@ -33,8 +33,8 @@ export const calculateCorrection = (snapEntry, entry) => {
         originalEnd: snapEntry.actual_end,
         currentStart: entry.actual_start,
         currentEnd: entry.actual_end,
-        originalInterruptions: (snapEntry.interruptions || []).length,
-        currentInterruptions: (entry.interruptions || []).length,
+        originalInterruptions: snapEntry.interruptions || [],
+        currentInterruptions: entry.interruptions || [],
         adminNote: entry.admin_note,
         timeChanged: startChanged || endChanged,
         interruptionsChanged: intChanged
@@ -61,7 +61,8 @@ const renderCorrectionBox = (doc, correction, y, margin, pageWidth, safeFormatTi
     doc.setTextColor(100, 100, 100)
     const origStart = correction.originalStart ? safeFormatTime(correction.originalStart) : '--:--'
     const origEnd = correction.originalEnd ? safeFormatTime(correction.originalEnd) : '--:--'
-    const origPausen = correction.originalInterruptions === 1 ? '1 Pause' : `${correction.originalInterruptions} Pausen`
+    const origIntCount = Array.isArray(correction.originalInterruptions) ? correction.originalInterruptions.length : correction.originalInterruptions
+    const origPausen = origIntCount === 1 ? '1 Pause' : `${origIntCount} Pausen`
     doc.text(`Eingereicht: ${origStart}-${origEnd}, ${origPausen} = ${correction.originalHours.toFixed(2)}h`, boxX + boxPadding, boxY)
 
     // Row 2: Current (Genehmigt)
@@ -69,7 +70,8 @@ const renderCorrectionBox = (doc, correction, y, margin, pageWidth, safeFormatTi
     doc.setTextColor(0, 100, 0)
     const currStart = correction.currentStart ? safeFormatTime(correction.currentStart) : '--:--'
     const currEnd = correction.currentEnd ? safeFormatTime(correction.currentEnd) : '--:--'
-    const currPausen = correction.currentInterruptions === 1 ? '1 Pause' : `${correction.currentInterruptions} Pausen`
+    const currIntCount = Array.isArray(correction.currentInterruptions) ? correction.currentInterruptions.length : correction.currentInterruptions
+    const currPausen = currIntCount === 1 ? '1 Pause' : `${currIntCount} Pausen`
     doc.text(`Genehmigt:   ${currStart}-${currEnd}, ${currPausen} = ${correction.currentHours.toFixed(2)}h`, boxX + boxPadding, boxY)
 
     // Row 3: Diff + Note

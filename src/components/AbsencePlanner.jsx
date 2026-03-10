@@ -284,65 +284,75 @@ export default function AbsencePlanner({ initialDate }) {
         }
     }
 
-    // PDF Download for approved vacation requests
-    const handleDownloadVacationPDF = async (request, days) => {
+    // PDF Download for approved vacation requests — uses same generator as Admin
+    const handleDownloadVacationPDF = async (request, _days) => {
         try {
-            const { jsPDF } = await import('jspdf')
-            const doc = new jsPDF()
+            const { generateVacationRequestPDF } = await import('../utils/vacationPdfGenerator')
+            const { differenceInBusinessDays } = await import('date-fns')
 
-            const userName = user?.full_name || user?.email || 'Mitarbeiter'
-            const startDate = format(parseISO(request.start_date), 'dd.MM.yyyy')
-            const endDate = format(parseISO(request.end_date), 'dd.MM.yyyy')
-            const approvedDate = request.approved_at ? format(parseISO(request.approved_at), 'dd.MM.yyyy HH:mm') : 'N/A'
+            // Fetch signature
+            const { data: signature } = await supabase
+                .from('signatures')
+                .select('*')
+                .eq('request_id', request.id)
+                .eq('role', 'applicant')
+                .single()
 
-            // Header
-            doc.setFontSize(20)
-            doc.setFont("helvetica", "bold")
-            doc.text("Urlaubsbestätigung", 20, 30)
-
-            // Status Badge
-            doc.setFillColor(220, 255, 220)
-            doc.setDrawColor(0, 150, 0)
-            doc.roundedRect(150, 22, 40, 10, 2, 2, 'FD')
-            doc.setFontSize(10)
-            doc.setTextColor(0, 100, 0)
-            doc.text("GENEHMIGT", 155, 29)
-
-            // Reset color
-            doc.setTextColor(0, 0, 0)
-            doc.setFontSize(12)
-            doc.setFont("helvetica", "normal")
-
-            // Content
-            let y = 50
-            doc.text(`Mitarbeiter: ${userName}`, 20, y); y += 10
-            doc.text(`Zeitraum: ${startDate} - ${endDate}`, 20, y); y += 10
-            doc.setFont("helvetica", "bold")
-            doc.text(`Urlaubstage: ${days} ${days === 1 ? 'Tag' : 'Tage'}`, 20, y); y += 10
-            doc.setFont("helvetica", "normal")
-            doc.text(`Genehmigt am: ${approvedDate}`, 20, y); y += 20
-
-            // Signature Section
-            doc.setFillColor(245, 245, 245)
-            doc.rect(20, y, 170, 35, 'F')
-            doc.setFontSize(9)
-            doc.setTextColor(100, 100, 100)
-            y += 8
-            doc.text("Digitale Signatur (FES)", 25, y); y += 8
-
-            if (request.data_hash) {
-                doc.setFont("helvetica", "bold")
-                doc.text(`Hash: ${request.data_hash}`, 25, y); y += 8
-                doc.setFont("helvetica", "normal")
+            // Fetch approver name
+            let approverName = 'Administrator'
+            if (request.approved_by) {
+                const { data: approver } = await supabase
+                    .from('profiles')
+                    .select('full_name, email')
+                    .eq('id', request.approved_by)
+                    .single()
+                if (approver) approverName = approver.full_name || approver.email
             }
-            doc.text(`Antrag-ID: ${request.id}`, 25, y)
 
-            // Footer
-            doc.setFontSize(8)
-            doc.setTextColor(150, 150, 150)
-            doc.text("Dieses Dokument wurde digital signiert und ist ohne Unterschrift gültig.", 20, 280)
+            // Fetch full profile for name and vacation entitlement
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('full_name, email, vacation_days_per_year, facility, department')
+                .eq('id', user.id)
+                .single()
 
-            doc.save(`Urlaubsbestätigung_${userName.replace(/\s/g, '_')}_${startDate.replace(/\./g, '')}.pdf`)
+            const employeeName = profile?.full_name || user?.full_name || user?.email || 'Mitarbeiter'
+            const yearlyEntitlement = profile?.vacation_days_per_year || 25
+            const facilityName = profile?.facility || profile?.department || 'Chill Out'
+
+            // Calculate vacation balance
+            const year = new Date(request.start_date).getFullYear()
+            const { data: allVacations } = await supabase
+                .from('absences')
+                .select('start_date, end_date')
+                .eq('user_id', user.id)
+                .eq('status', 'genehmigt')
+                .eq('type', 'Urlaub')
+                .gte('start_date', `${year}-01-01`)
+                .lte('start_date', `${year}-12-31`)
+
+            let daysUsedTotal = 0
+            if (allVacations) {
+                allVacations.forEach(v => {
+                    daysUsedTotal += differenceInBusinessDays(new Date(v.end_date), new Date(v.start_date)) + 1
+                })
+            }
+            const remaining = yearlyEntitlement - daysUsedTotal
+
+            generateVacationRequestPDF({
+                request,
+                employeeName,
+                facilityName,
+                vacationAccount: {
+                    entitlement: yearlyEntitlement,
+                    remaining
+                },
+                signature: signature || null,
+                approval: {
+                    approverName,
+                    approvedAt: request.approved_at
+                }
+            })
         } catch (e) {
             console.error('PDF Error:', e)
             setAlertConfig({ isOpen: true, title: 'Fehler', message: 'PDF konnte nicht erstellt werden.', type: 'error' })

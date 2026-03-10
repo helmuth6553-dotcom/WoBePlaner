@@ -1,11 +1,12 @@
 /**
  * =========================================================================
  * Vacation Request PDF Generator
- * 
- * Generates legally binding "Urlaubsansuchen / -Meldung" PDFs
- * Based on the official DOWAS template
- * 
+ *
+ * Generates "Urlaubsansuchen / Meldung" PDFs
+ * Corporate Identity matching the Arbeitszeitaufzeichnung design
+ *
  * Features:
+ * - Modern CI design with slate tones
  * - Digital signature verification with hash
  * - Admin approval display
  * - Holiday-aware return date calculation
@@ -28,11 +29,10 @@ export const getFirstWorkingDayAfter = (date) => {
     let returnDate = new Date(date)
     returnDate.setDate(returnDate.getDate() + 1)
 
-    // Skip weekends and holidays
     while (
-        returnDate.getDay() === 0 || // Sunday
-        returnDate.getDay() === 6 || // Saturday
-        allHolidays.some(h => isSameDay(h.date, returnDate)) // Holiday
+        returnDate.getDay() === 0 ||
+        returnDate.getDay() === 6 ||
+        allHolidays.some(h => isSameDay(h.date, returnDate))
     ) {
         returnDate.setDate(returnDate.getDate() + 1)
     }
@@ -42,13 +42,13 @@ export const getFirstWorkingDayAfter = (date) => {
 
 /**
  * Generate Vacation Request PDF
- * 
+ *
  * @param {Object} params
  * @param {Object} params.request - The absence request from database
  * @param {string} params.employeeName - Full name of employee
  * @param {string} params.facilityName - Name of facility/department
- * @param {Object} params.vacationAccount - { entitlement, usedBefore, requested, remaining }
- * @param {Object} params.signature - Signature data { image_data, signed_at, hash }
+ * @param {Object} params.vacationAccount - { entitlement, remaining }
+ * @param {Object} params.signature - Signature data { signed_at, hash }
  * @param {Object} params.approval - { approverName, approvedAt }
  */
 export const generateVacationRequestPDF = ({
@@ -59,264 +59,265 @@ export const generateVacationRequestPDF = ({
     signature,
     approval
 }) => {
-    const doc = new jsPDF()
+    const doc = new jsPDF('p', 'mm', 'a4')
 
     const startDate = new Date(request.start_date)
     const endDate = new Date(request.end_date)
     const returnDate = getFirstWorkingDayAfter(endDate)
-    const isSingleDay = request.start_date === request.end_date
     const durationDays = differenceInBusinessDays(endDate, startDate) + 1
 
-    // Page settings
-    const pageWidth = 210
-    const _pageHeight = 297 // Kept for potential future page-break logic
-    const margin = 15
-    let yPos = 15
+    const margin = 20
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const contentWidth = pageWidth - 2 * margin
+
+    doc.setFont('helvetica')
 
     // =========================================================================
-    // HEADER - DOWAS Briefkopf
+    // HEADER (ORG INFO)
     // =========================================================================
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(11)
-    doc.setTextColor(0, 0, 0)
+    let yPos = 20
+    doc.setFontSize(12)
+    doc.setFont(undefined, 'bold')
+    doc.setTextColor(30, 41, 59) // slate-800
+    doc.text('DOWAS Chill Out', margin, yPos)
 
-    // Left side - Organization name
-    doc.text("Verein zur Förderung des DOWAS", margin, yPos)
-    // Right side - Address
-    doc.text("6020 Innsbruck, Leopoldstraße 18", pageWidth - margin, yPos, { align: 'right' })
-
+    doc.setFontSize(12)
+    doc.setFont(undefined, 'normal')
+    doc.setTextColor(100, 116, 139) // slate-500
+    yPos += 6
+    doc.text('Heiliggeiststraße 8a, 6020 Innsbruck', margin, yPos)
     yPos += 5
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(9)
-    doc.text("Durchgangsort für Wohnungs- und Arbeitssuchende", margin, yPos)
-    doc.text("Tel.: (0512) 572343 - Fax 572343-23", pageWidth - margin, yPos, { align: 'right' })
+    doc.text('Tel.: 0512 57 21 21 | E-Mail: chillout@dowas.org', margin, yPos)
 
-    yPos += 4
-    doc.text("ZVR: 112151993", margin, yPos)
-    doc.text("e-mail: ikb@dowas.org", pageWidth - margin, yPos, { align: 'right' })
-
-    // =========================================================================
-    // TITLE + STATUS BADGE
-    // =========================================================================
-    yPos += 18
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(16)
-    doc.text("URLAUBSANSUCHEN / -MELDUNG", margin, yPos)
-
-    // Status Badge (top right)
-    if (request.status === 'genehmigt') {
-        doc.setFillColor(46, 125, 50) // Green
-        doc.roundedRect(pageWidth - margin - 35, yPos - 8, 35, 10, 2, 2, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(9)
-        doc.text("GENEHMIGT", pageWidth - margin - 17.5, yPos - 2, { align: 'center' })
-    } else if (request.status === 'abgelehnt') {
-        doc.setFillColor(198, 40, 40) // Red
-        doc.roundedRect(pageWidth - margin - 35, yPos - 8, 35, 10, 2, 2, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(9)
-        doc.text("ABGELEHNT", pageWidth - margin - 17.5, yPos - 2, { align: 'center' })
-    }
-    doc.setTextColor(0, 0, 0)
+    // Header separator
+    yPos += 8
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.5)
+    doc.line(margin, yPos, pageWidth - margin, yPos)
 
     // =========================================================================
-    // FORM FIELDS (filled in, not empty boxes)
-    // =========================================================================
-    yPos += 18
-    const fieldBoxHeight = 8
-    const labelWidth = 35
-    const valueBoxWidth = 120
-
-    // Helper to draw a filled form field
-    const drawFilledField = (label, value, x, y, boxWidth = valueBoxWidth) => {
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(10)
-        doc.text(label, x, y + 5.5)
-
-        doc.setDrawColor(0, 0, 0)
-        doc.setLineWidth(0.3)
-        doc.rect(x + labelWidth, y, boxWidth, fieldBoxHeight)
-
-        doc.setFont("helvetica", "normal")
-        doc.text(value || '', x + labelWidth + 3, y + 5.5)
-    }
-
-    // Name
-    drawFilledField("Name:", employeeName, margin, yPos)
-
-    yPos += 14
-    // Einrichtung
-    drawFilledField("Einrichtung:", facilityName, margin, yPos, 100)
-
-    // =========================================================================
-    // VACATION PERIOD
+    // TITLE
     // =========================================================================
     yPos += 20
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(10)
-
-    if (isSingleDay) {
-        // Single day
-        doc.text("Angesuchter Urlaub am:", margin, yPos + 5)
-        doc.setDrawColor(0, 0, 0)
-        doc.rect(margin + 52, yPos, 40, fieldBoxHeight)
-        doc.text(format(startDate, 'dd.MM.yyyy'), margin + 55, yPos + 5.5)
-    } else {
-        // Date range
-        doc.text("Angesuchter Urlaub in der Zeit von:", margin, yPos + 5)
-        doc.setDrawColor(0, 0, 0)
-        doc.rect(margin + 78, yPos, 35, fieldBoxHeight)
-        doc.text(format(startDate, 'dd.MM.yyyy'), margin + 80, yPos + 5.5)
-
-        doc.text("bis inkl.", margin + 118, yPos + 5)
-        doc.rect(margin + 135, yPos, 35, fieldBoxHeight)
-        doc.text(format(endDate, 'dd.MM.yyyy'), margin + 137, yPos + 5.5)
-    }
-
-    // Dienstantritt nach Urlaub
-    yPos += 14
-    doc.text("Dienstantritt nach dem Urlaub am:", margin, yPos + 5)
-    doc.rect(margin + 78, yPos, 40, fieldBoxHeight)
-    doc.text(format(returnDate, 'dd.MM.yyyy'), margin + 80, yPos + 5.5)
+    doc.setFontSize(18)
+    doc.setFont(undefined, 'bold')
+    doc.setTextColor(15, 23, 42)
+    doc.text('URLAUBSANSUCHEN / MELDUNG', pageWidth / 2, yPos, { align: 'center' })
 
     // =========================================================================
-    // VACATION ACCOUNT TABLE
+    // STATUS BADGE (centered)
     // =========================================================================
-    yPos += 25
-    const tableX = margin + 30
-    const valueBoxW = 25
-
-    // offener Urlaubsanspruch
-    doc.text("offener Urlaubsanspruch:", tableX, yPos + 5)
-    doc.rect(tableX + 55, yPos, valueBoxW, fieldBoxHeight)
-    doc.text(String(vacationAccount?.remaining + durationDays || ''), tableX + 57, yPos + 5.5)
-    doc.text("Arbeitstage", tableX + 85, yPos + 5)
-
     yPos += 12
-    // angesuchter Urlaub
-    doc.text("angesuchter Urlaub:", tableX, yPos + 5)
-    doc.rect(tableX + 55, yPos, valueBoxW, fieldBoxHeight)
-    doc.text(String(durationDays), tableX + 57, yPos + 5.5)
-    doc.text("Arbeitstage", tableX + 85, yPos + 5)
-
-    yPos += 12
-    // verbleibender Rest
-    doc.text("verbleibender Rest:", tableX, yPos + 5)
-    doc.rect(tableX + 55, yPos, valueBoxW, fieldBoxHeight)
-    doc.setFont("helvetica", "bold")
-    doc.text(String(vacationAccount?.remaining || ''), tableX + 57, yPos + 5.5)
-    doc.setFont("helvetica", "normal")
-    doc.text("Arbeitstage", tableX + 85, yPos + 5)
-
-    // =========================================================================
-    // DIGITAL SIGNATURE & VERIFICATION (Option C - Data only, no signature box)
-    // =========================================================================
-    yPos += 25
-    const verificationBoxHeight = 70  // Increased height for full hash display
-
-    // Main verification box
-    doc.setDrawColor(0, 0, 0)
-    doc.setLineWidth(0.5)
-    doc.rect(margin, yPos, pageWidth - 2 * margin, verificationBoxHeight)
-
-    // Header bar - Green for verified
-    doc.setFillColor(46, 125, 50)
-    doc.rect(margin, yPos, pageWidth - 2 * margin, 10, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(10)
-    doc.text("✓ DIGITAL SIGNIERT & VERIFIZIERT", margin + 5, yPos + 7)
-    doc.setTextColor(0, 0, 0)
-
-    yPos += 16
-
-    // Two-column layout for verification data
-    const col1X = margin + 5
-    const col2X = margin + 95
-    const lineSpacing = 7
-
-    // Column 1: Employee/Applicant info
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(9)
-    doc.text("Antragsteller:", col1X, yPos)
-    doc.setFont("helvetica", "normal")
-    doc.text(employeeName, col1X + 28, yPos)
-
-    yPos += lineSpacing
-    doc.setFont("helvetica", "bold")
-    doc.text("Signiert am:", col1X, yPos)
-    doc.setFont("helvetica", "normal")
-    if (signature?.signed_at) {
-        doc.text(format(new Date(signature.signed_at), 'dd.MM.yyyy') + ' um ' + format(new Date(signature.signed_at), 'HH:mm') + ' Uhr', col1X + 28, yPos)
-    } else {
-        doc.text('Bei Antragstellung', col1X + 28, yPos)
-    }
-
-    yPos += lineSpacing
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(9)
-    doc.text("Integritäts-Hash:", col1X, yPos)
-
-    yPos += lineSpacing
-    doc.setFont("courier", "normal")
-    doc.setFontSize(8)  // Larger, more readable font
-    if (signature?.hash) {
-        // Show full hash, wrap to next line if too long
-        const hash = signature.hash
-        const maxWidth = pageWidth - margin * 2 - 10
-        const hashLines = doc.splitTextToSize(hash, maxWidth)
-        doc.text(hashLines, col1X, yPos)
-        // Adjust yPos based on number of lines
-        yPos += (hashLines.length - 1) * 4
-    } else {
-        doc.setFont("helvetica", "italic")
-        doc.text('(Hash wird bei Signierung generiert)', col1X, yPos)
-    }
-
-    // Separator line
-    yPos += lineSpacing + 2
-    doc.setDrawColor(200, 200, 200)
-    doc.setLineWidth(0.3)
-    doc.line(col1X, yPos, pageWidth - margin - 5, yPos)
-
-    // Approval section
-    yPos += 6
-    doc.setFontSize(9)
-
-    if (request.status === 'genehmigt' && approval) {
-        doc.setFont("helvetica", "bold")
-        doc.text("Genehmigt von:", col1X, yPos)
-        doc.setFont("helvetica", "normal")
-        doc.text(approval.approverName || 'Administrator', col1X + 28, yPos)
-
-        doc.setFont("helvetica", "bold")
-        doc.text("Genehmigt am:", col2X, yPos)
-        doc.setFont("helvetica", "normal")
-        if (approval.approvedAt) {
-            doc.text(format(new Date(approval.approvedAt), 'dd.MM.yyyy') + ' um ' + format(new Date(approval.approvedAt), 'HH:mm') + ' Uhr', col2X + 28, yPos)
-        }
+    if (request.status === 'genehmigt') {
+        doc.setFillColor(220, 252, 231) // green-100
+        doc.setDrawColor(34, 197, 94)   // green-500
+        const statusWidth = 44
+        doc.roundedRect((pageWidth / 2) - (statusWidth / 2), yPos - 7, statusWidth, 11, 1.5, 1.5, 'FD')
+        doc.setFontSize(11)
+        doc.setFont(undefined, 'bold')
+        doc.setTextColor(21, 128, 61) // green-700
+        doc.text('GENEHMIGT', pageWidth / 2, yPos, { align: 'center' })
     } else if (request.status === 'abgelehnt') {
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(198, 40, 40)
-        doc.text("ANTRAG WURDE ABGELEHNT", col1X, yPos)
-        doc.setTextColor(0, 0, 0)
+        doc.setFillColor(254, 226, 226) // red-100
+        doc.setDrawColor(239, 68, 68)   // red-500
+        const statusWidth = 44
+        doc.roundedRect((pageWidth / 2) - (statusWidth / 2), yPos - 7, statusWidth, 11, 1.5, 1.5, 'FD')
+        doc.setFontSize(11)
+        doc.setFont(undefined, 'bold')
+        doc.setTextColor(185, 28, 28) // red-700
+        doc.text('ABGELEHNT', pageWidth / 2, yPos, { align: 'center' })
     } else {
-        doc.setFont("helvetica", "italic")
-        doc.setTextColor(150, 150, 150)
-        doc.text("Genehmigung ausstehend", col1X, yPos)
-        doc.setTextColor(0, 0, 0)
+        doc.setFillColor(254, 249, 195) // yellow-100
+        doc.setDrawColor(234, 179, 8)   // yellow-500
+        const statusWidth = 44
+        doc.roundedRect((pageWidth / 2) - (statusWidth / 2), yPos - 7, statusWidth, 11, 1.5, 1.5, 'FD')
+        doc.setFontSize(11)
+        doc.setFont(undefined, 'bold')
+        doc.setTextColor(161, 98, 7) // yellow-700
+        doc.text('AUSSTEHEND', pageWidth / 2, yPos, { align: 'center' })
     }
+
+    // =========================================================================
+    // EMPLOYEE DETAILS
+    // =========================================================================
+    yPos += 28
+    doc.setFontSize(12)
+    doc.setTextColor(100, 116, 139)
+    doc.setFont(undefined, 'normal')
+    doc.text('Name:', margin, yPos)
+    doc.text('Einrichtung:', margin, yPos + 10)
+
+    doc.setTextColor(30, 41, 59)
+    doc.setFont(undefined, 'bold')
+    doc.text(employeeName, margin + 30, yPos)
+    doc.text(facilityName, margin + 30, yPos + 10)
+
+    // =========================================================================
+    // DATES
+    // =========================================================================
+    yPos += 24
+    doc.setFontSize(12)
+    doc.setTextColor(100, 116, 139)
+    doc.setFont(undefined, 'normal')
+    doc.text('Angesuchter Urlaub in der Zeit von:', margin, yPos)
+
+    doc.setTextColor(30, 41, 59)
+    doc.setFont(undefined, 'bold')
+    doc.text(format(startDate, 'dd.MM.yyyy'), margin + 72, yPos)
+
+    doc.setTextColor(100, 116, 139)
+    doc.setFont(undefined, 'normal')
+    doc.text('bis inkl.', margin + 97, yPos)
+
+    doc.setTextColor(30, 41, 59)
+    doc.setFont(undefined, 'bold')
+    doc.text(format(endDate, 'dd.MM.yyyy'), margin + 113, yPos)
+
+    yPos += 10
+    doc.setTextColor(100, 116, 139)
+    doc.setFont(undefined, 'normal')
+    doc.text('Dienstantritt nach dem Urlaub am:', margin, yPos)
+
+    doc.setTextColor(30, 41, 59)
+    doc.setFont(undefined, 'bold')
+    doc.text(format(returnDate, 'dd.MM.yyyy'), margin + 65, yPos)
+
+    // =========================================================================
+    // CALCULATION BOX
+    // =========================================================================
+    yPos += 22
+    doc.setFillColor(248, 250, 252)
+    doc.setDrawColor(226, 232, 240)
+    doc.roundedRect(margin, yPos, contentWidth, 40, 2, 2, 'FD')
+
+    let calcY = yPos + 10
+    const rightColX = margin + contentWidth - 35
+    doc.setFontSize(12)
+
+    // Balance before
+    const balanceOld = (vacationAccount?.remaining || 0) + durationDays
+    doc.setTextColor(100, 116, 139)
+    doc.setFont(undefined, 'normal')
+    doc.text('offener Urlaubsanspruch:', margin + 5, calcY)
+    doc.setTextColor(30, 41, 59)
+    doc.text(`${balanceOld} Arbeitstage`, rightColX, calcY, { align: 'right' })
+
+    // Deduction
+    calcY += 9
+    doc.setTextColor(100, 116, 139)
+    doc.text('angesuchter Urlaub:', margin + 5, calcY)
+    doc.setTextColor(220, 38, 38) // red-600
+    doc.text(`- ${durationDays} Arbeitstage`, rightColX, calcY, { align: 'right' })
+
+    // Separator
+    calcY += 5
+    doc.setDrawColor(203, 213, 225)
+    doc.setLineWidth(0.2)
+    doc.line(margin + 5, calcY, rightColX, calcY)
+
+    // Remaining
+    calcY += 9
+    doc.setTextColor(15, 23, 42)
+    doc.setFont(undefined, 'bold')
+    doc.text('verbleibender Rest:', margin + 5, calcY)
+    doc.setTextColor(21, 128, 61) // green-700
+    doc.text(`${vacationAccount?.remaining || 0} Arbeitstage`, rightColX, calcY, { align: 'right' })
+
+    // =========================================================================
+    // SIGNATURE BOX (same style as Arbeitszeitaufzeichnung)
+    // =========================================================================
+    yPos = 210 // Fixed position near bottom
+    if (yPos + 45 > pageHeight - 20) {
+        doc.addPage()
+        yPos = margin
+    }
+
+    doc.setFillColor(248, 250, 252)
+    doc.setDrawColor(203, 213, 225)
+    doc.roundedRect(margin, yPos, contentWidth, 38, 2, 2, 'FD')
+
+    // Header
+    doc.setFontSize(10)
+    doc.setTextColor(15, 23, 42)
+    doc.setFont(undefined, 'bold')
+    doc.text('DIGITAL SIGNIERT & VERIFIZIERT', margin + 5, yPos + 7)
+
+    // Separator
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.3)
+    doc.line(margin, yPos + 11, margin + contentWidth, yPos + 11)
+
+    // Helper styles
+    const drawSigLabel = (txt, x, y) => {
+        doc.setFontSize(8)
+        doc.setFont(undefined, 'normal')
+        doc.setTextColor(100, 116, 139)
+        doc.text(txt, x, y)
+    }
+    const drawSigValue = (txt, x, y) => {
+        doc.setFontSize(9)
+        doc.setFont(undefined, 'bold')
+        doc.setTextColor(51, 65, 85)
+        doc.text(txt || '-', x, y)
+    }
+
+    const col1X = margin + 5
+    const col1ValX = margin + 34
+    const col2X = margin + 92
+    const col2ValX = margin + 120
+
+    let sigY = yPos + 16
+
+    // Row 1: Eingereicht von / Genehmigt von
+    drawSigLabel('Eingereicht von:', col1X, sigY)
+    drawSigValue(employeeName, col1ValX, sigY)
+    drawSigLabel('Genehmigt von:', col2X, sigY)
+    drawSigValue(approval?.approverName || 'Administrator', col2ValX, sigY)
+
+    sigY += 7
+
+    // Row 2: Signiert am / Genehmigt am
+    drawSigLabel('Signiert am:', col1X, sigY)
+    if (signature?.signed_at) {
+        drawSigValue(format(new Date(signature.signed_at), 'dd.MM.yyyy HH:mm') + ' Uhr', col1ValX, sigY)
+    } else {
+        drawSigValue('Bei Antragstellung', col1ValX, sigY)
+    }
+    drawSigLabel('Genehmigt am:', col2X, sigY)
+    if (approval?.approvedAt) {
+        drawSigValue(format(new Date(approval.approvedAt), 'dd.MM.yyyy HH:mm') + ' Uhr', col2ValX, sigY)
+    } else {
+        drawSigValue('-', col2ValX, sigY)
+    }
+
+    sigY += 7
+
+    // Row 3: Hash
+    drawSigLabel('Integritäts-Hash:', col1X, sigY)
+    doc.setFontSize(8)
+    doc.setFont('courier', 'normal')
+    doc.setTextColor(71, 85, 105)
+    doc.text(signature?.hash || request.data_hash || '-', col1ValX + 2, sigY)
+    doc.setFont('helvetica', 'normal')
 
     // =========================================================================
     // FOOTER
     // =========================================================================
-    doc.setTextColor(150, 150, 150)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(7)
-    doc.text(`Verein zur Förderung des DOWAS - Internes Dokument - REF-ID: #${request.id}`, pageWidth / 2, 282, { align: 'center' })
-    doc.text(`Erstellt am ${format(new Date(), 'dd.MM.yyyy')} um ${format(new Date(), 'HH:mm')} Uhr`, pageWidth / 2, 287, { align: 'center' })
+    const footerY = pageHeight - 15
+    doc.setFontSize(9)
+    doc.setTextColor(148, 163, 184)
+    doc.text(`DOWAS Chill Out - Internes Dokument - REF-ID #${request.id || 'N/A'}`, margin, footerY)
+    doc.text(
+        `Erstellt am ${format(new Date(), 'dd.MM.yyyy')} um ${format(new Date(), 'HH:mm')} Uhr`,
+        pageWidth - margin,
+        footerY,
+        { align: 'right' }
+    )
 
-    // Save PDF
+    // =========================================================================
+    // SAVE
+    // =========================================================================
     const filename = `Urlaubsantrag_${employeeName.replace(/\s+/g, '_')}_${request.start_date}.pdf`
     doc.save(filename)
 

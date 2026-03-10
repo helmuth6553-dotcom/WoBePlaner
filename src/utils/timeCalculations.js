@@ -335,7 +335,7 @@ export const getShiftSegments = (startIso, endIso, type, interruptions = []) => 
                     // Any work after 06:00 is handled by step 3.
                     const effectiveEnd = min([inflatedEnd, readOverlapEnd])
 
-                    rawIntervals.push({ start: iOverlapStart, end: effectiveEnd })
+                    rawIntervals.push({ start: iOverlapStart, end: effectiveEnd, note: int.note || '' })
                 }
             })
 
@@ -348,6 +348,10 @@ export const getShiftSegments = (startIso, endIso, type, interruptions = []) => 
                     let cur = rawIntervals[i]
                     if (cur.start < last.end) {
                         last.end = max([last.end, cur.end])
+                        // Combine notes on merge
+                        if (cur.note && cur.note !== last.note) {
+                            last.note = last.note ? `${last.note}, ${cur.note}` : cur.note
+                        }
                     } else {
                         merged.push(cur)
                     }
@@ -364,7 +368,7 @@ export const getShiftSegments = (startIso, endIso, type, interruptions = []) => 
                 segments.push({ start: new Date(cursor), end: new Date(int.start), type: 'STANDBY' })
             }
             // The interruption (WORK)
-            segments.push({ start: new Date(int.start), end: new Date(int.end), type: 'WORK' })
+            segments.push({ start: new Date(int.start), end: new Date(int.end), type: 'WORK', note: int.note || '' })
             cursor = new Date(int.end)
         })
         // Remaining Standby after last interruption
@@ -396,8 +400,8 @@ export const getShiftSegments = (startIso, endIso, type, interruptions = []) => 
 
         if (isBefore(s, sMidnight) && isBefore(sMidnight, e)) {
             // Split!
-            finalSegments.push({ start: s, end: sMidnight, type: seg.type })
-            finalSegments.push({ start: sMidnight, end: e, type: seg.type })
+            finalSegments.push({ start: s, end: sMidnight, type: seg.type, note: seg.note })
+            finalSegments.push({ start: sMidnight, end: e, type: seg.type, note: seg.note })
         } else {
             finalSegments.push(seg)
         }

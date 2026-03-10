@@ -29,7 +29,8 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
         actualEnd: '',
         interruptions: [],
         newIntStart: '',
-        newIntEnd: ''
+        newIntEnd: '',
+        newIntNote: ''
     })
 
     // Initialize form data when item changes
@@ -137,10 +138,11 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
                 ...formData,
                 interruptions: [
                     ...formData.interruptions,
-                    { start: formData.newIntStart, end: formData.newIntEnd, note: '' }
+                    { start: formData.newIntStart, end: formData.newIntEnd, note: formData.newIntNote }
                 ],
                 newIntStart: '',
-                newIntEnd: ''
+                newIntEnd: '',
+                newIntNote: ''
             })
         }
     }
@@ -201,15 +203,32 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
 
                             {/* Existing interruptions */}
                             {formData.interruptions.map((int, idx) => (
-                                <div key={idx} className="flex justify-between items-center bg-white p-2 rounded text-sm border shadow-sm">
-                                    <span className="font-mono font-medium">{int.start} - {int.end}</span>
-                                    {!isApproved && (
-                                        <button
-                                            onClick={() => removeInterruption(idx)}
-                                            className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100 transition-colors"
-                                        >
-                                            <XCircle size={16} />
-                                        </button>
+                                <div key={idx} className="bg-white p-2 rounded text-sm border shadow-sm space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-mono font-medium">{int.start} - {int.end}</span>
+                                        {!isApproved && (
+                                            <button
+                                                onClick={() => removeInterruption(idx)}
+                                                className="text-red-500 bg-red-50 p-1 rounded hover:bg-red-100 transition-colors"
+                                            >
+                                                <XCircle size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {isApproved ? (
+                                        int.note && <div className="text-xs text-gray-500">Grund: {int.note}</div>
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            value={int.note || ''}
+                                            onChange={e => {
+                                                const updated = [...formData.interruptions]
+                                                updated[idx] = { ...updated[idx], note: e.target.value }
+                                                setFormData({ ...formData, interruptions: updated })
+                                            }}
+                                            placeholder="Grund der Unterbrechung"
+                                            className="w-full border p-1.5 rounded text-xs"
+                                        />
                                     )}
                                 </div>
                             ))}
@@ -238,6 +257,13 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
                                             />
                                         </div>
                                     </div>
+                                    <input
+                                        type="text"
+                                        value={formData.newIntNote}
+                                        onChange={e => setFormData({ ...formData, newIntNote: e.target.value })}
+                                        placeholder="Grund der Unterbrechung"
+                                        className="w-full border p-2 rounded-lg text-sm"
+                                    />
                                     <button
                                         onClick={addInterruption}
                                         disabled={!formData.newIntStart || !formData.newIntEnd}

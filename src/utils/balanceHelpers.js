@@ -250,7 +250,16 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
     // Initial balance from profile (for migrated employees with existing hour balances)
     // This is added to carryover because it represents historical balance before app usage
     const initialBalanceMinutes = (profile.initial_balance || 0) * 60
-    const totalCarryoverMinutes = carryoverMinutes + initialBalanceMinutes
+
+    // Past month corrections — must be included in carryover so they carry forward
+    const pastCorrections = corrections.filter(c => {
+        if (!c.effective_month) return false
+        const effectiveMonth = new Date(c.effective_month)
+        return effectiveMonth < monthStart
+    })
+    const pastCorrectionMinutes = pastCorrections.reduce((sum, c) => sum + (parseFloat(c.correction_hours) || 0) * 60, 0)
+
+    const totalCarryoverMinutes = carryoverMinutes + initialBalanceMinutes + pastCorrectionMinutes
 
     // Admin corrections for the current month - ADDED TO ACTUAL (Ist)
     // This makes corrections affect the "worked hours" and thus also the carryover for next month
