@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { format, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { User, Check, Moon, Sun, CalendarOff, Users, Clock, AlertCircle, Thermometer, Plus, BookOpen, GraduationCap, MessageCircle, MoreHorizontal } from 'lucide-react'
+import { User, Check, Moon, Sun, CalendarOff, Users, Clock, AlertCircle, Thermometer, Plus, BookOpen, GraduationCap, MessageCircle, MoreHorizontal, EyeOff } from 'lucide-react'
 import ActionSheet from './ActionSheet'
 import CoverageVotingPanel from './CoverageVotingPanel'
 import { calculateWorkHours } from '../utils/timeCalculations'
+import { PRIVATE_SHIFT_TYPES } from '../contexts/ShiftTemplateContext'
 
 const getUserColor = (name) => {
     const colors = [
@@ -186,7 +187,14 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                         {icon}
                     </div>
                     <div className="min-w-0">
-                        <div className="font-bold text-sm text-gray-900">{label}</div>
+                        <div className="font-bold text-sm text-gray-900 flex items-center gap-1">
+                            {label}
+                            {isAdmin && PRIVATE_SHIFT_TYPES.includes(shift.type) && (
+                                <span title="Nur für eingetragene Mitarbeiter:innen sichtbar">
+                                    <EyeOff size={13} className="text-gray-400" />
+                                </span>
+                            )}
+                        </div>
                         {shift.title && <div className="text-xs font-bold text-gray-600 truncate">{shift.title}</div>}
                         <div className="text-xs text-gray-500 flex items-center gap-1 font-medium mt-0.5">
                             <Clock size={10} />
@@ -388,6 +396,16 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                         {shift.title && <p className="text-indigo-600 font-bold text-sm mt-1">{shift.title}</p>}
                     </div>
                 </div>
+
+                {PRIVATE_SHIFT_TYPES.includes(shift.type) && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                        <EyeOff size={16} className="shrink-0" />
+                        <span>{isAdmin
+                            ? 'Dieser Dienst ist nur für eingetragene Mitarbeiter:innen sichtbar. Kolleg:innen ohne Eintragung sehen ihn nicht.'
+                            : 'Dieser Termin ist vertraulich. Deine Kolleg:innen können nicht sehen, dass du hier eingetragen bist.'
+                        }</span>
+                    </div>
+                )}
 
                 {isSpecialOptIn && !isAdmin && (
                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
@@ -679,6 +697,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                                     `}
                                     >
                                         {specialLabel[type] || type}
+                                        {PRIVATE_SHIFT_TYPES.includes(type) && <span className="block text-[9px] text-gray-400 font-normal">(privat)</span>}
                                     </button>
                                 )
                             })}

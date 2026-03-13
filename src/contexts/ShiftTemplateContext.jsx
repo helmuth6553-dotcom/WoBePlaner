@@ -112,6 +112,7 @@ const SHIFT_TEMPLATES = [
         color: '#f97316',
         has_standby: false,
         weekday_rules: {},
+        private: true,
     },
     {
         code: 'SONSTIGES',
@@ -124,6 +125,9 @@ const SHIFT_TEMPLATES = [
         weekday_rules: {},
     },
 ]
+
+// Shift types that are only visible to assigned participants and admins
+export const PRIVATE_SHIFT_TYPES = SHIFT_TEMPLATES.filter(t => t.private).map(t => t.code)
 
 export function ShiftTemplateProvider({ children }) {
     /**
@@ -186,11 +190,17 @@ export function ShiftTemplateProvider({ children }) {
         return { start, end }
     }
 
+    const isPrivateType = (code) => {
+        if (!code) return false
+        return PRIVATE_SHIFT_TYPES.includes(code.toUpperCase())
+    }
+
     // Memoize the value to prevent unnecessary re-renders
     const value = useMemo(() => ({
         templates: SHIFT_TEMPLATES,
         getTemplate,
         getDefaultTimes,
+        isPrivateType,
     }), [])
 
     return (
