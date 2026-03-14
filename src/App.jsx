@@ -15,6 +15,7 @@ import { ToastProvider } from './components/Toast'
 import OfflineIndicator from './components/OfflineIndicator'
 import ReloadPrompt from './components/ReloadPrompt'
 import { supabase } from './supabase'
+import { debounce } from './utils/debounce'
 
 // Lazy load heavy components for better initial load time
 const AbsencePlanner = lazy(() => import('./components/AbsencePlanner'))
@@ -74,12 +75,13 @@ function AppContent() {
 
     fetchBadgeCounts()
 
-    // Subscribe to realtime updates
+    // Subscribe to realtime updates (debounced to avoid cascade fetches)
+    const debouncedBadgeFetch = debounce(fetchBadgeCounts, 1000)
     const channel = supabase
       .channel('badge-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, fetchBadgeCounts)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, fetchBadgeCounts)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, fetchBadgeCounts)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedBadgeFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, debouncedBadgeFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, debouncedBadgeFetch)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -126,10 +128,11 @@ function AppContent() {
 
     refreshCoverageCount()
 
+    const debouncedCoverageFetch = debounce(refreshCoverageCount, 1000)
     const channel = supabase
       .channel('coverage-banner')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, refreshCoverageCount)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_votes' }, refreshCoverageCount)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, debouncedCoverageFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_votes' }, debouncedCoverageFetch)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }

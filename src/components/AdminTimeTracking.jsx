@@ -168,7 +168,7 @@ export default function AdminTimeTracking() {
         // Also get direct assignments (backwards compatibility)
         const { data: personalShifts } = await supabase
             .from('shifts')
-            .select('*')
+            .select('id, start_time, end_time, type, assigned_to')
             .eq('assigned_to', selectedUserId)
             .gte('start_time', startIso)
             .lte('start_time', endIso)
@@ -189,7 +189,7 @@ export default function AdminTimeTracking() {
 
         const { data: teamShifts } = await supabase
             .from('shifts')
-            .select('*')
+            .select('id, start_time, end_time, type')
             .eq('type', 'TEAM')
             .gte('start_time', startIso)
             .lte('start_time', endIso)
@@ -442,9 +442,9 @@ export default function AdminTimeTracking() {
             supabase.from('shifts').select('id, start_time, end_time, type, assigned_to').gte('start_time', oneYearAgo.toISOString()),
             supabase.from('shift_interests').select('shift_id, shifts(*)').eq('user_id', selectedUserId),
             supabase.from('shifts').select('id, start_time, end_time, type').eq('type', 'TEAM').gte('start_time', oneYearAgo.toISOString()),
-            supabase.from('absences').select('*').eq('user_id', selectedUserId).eq('status', 'genehmigt'),
-            supabase.from('time_entries').select('*').eq('user_id', selectedUserId),
-            supabase.from('balance_corrections').select('*').eq('user_id', selectedUserId)
+            supabase.from('absences').select('user_id, start_date, end_date, type, planned_hours, status').eq('user_id', selectedUserId).eq('status', 'genehmigt'),
+            supabase.from('time_entries').select('shift_id, calculated_hours').eq('user_id', selectedUserId),
+            supabase.from('balance_corrections').select('user_id, correction_hours, effective_month').eq('user_id', selectedUserId)
         ])
 
         // Build confirmed shifts using same logic as TimeTracking:

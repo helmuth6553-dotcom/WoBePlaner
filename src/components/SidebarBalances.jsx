@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { Users } from 'lucide-react'
+import { debounce } from '../utils/debounce'
 
 /**
  * SidebarBalances - Admin Widget
@@ -16,14 +17,15 @@ export default function SidebarBalances() {
     useEffect(() => {
         fetchBalances()
 
-        // Realtime subscription for live updates
+        // Realtime subscription for live updates (short debounce to batch rapid changes)
+        const debouncedFetch = debounce(fetchBalances, 500)
         const channel = supabase
             .channel('sidebar-balances')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, () => fetchBalances())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => fetchBalances())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, () => fetchBalances())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, () => fetchBalances())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchBalances())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, debouncedFetch)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, debouncedFetch)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedFetch)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, debouncedFetch)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debouncedFetch)
             .subscribe()
 
         return () => { supabase.removeChannel(channel) }
@@ -100,7 +102,7 @@ export default function SidebarBalances() {
             // 3. Fetch absences
             const { data: allAbsencesHistory } = await supabase
                 .from('absences')
-                .select('*')
+                .select('user_id, start_date, end_date, type, planned_hours, status')
                 .eq('status', 'genehmigt')
 
             // 4. Fetch time entries

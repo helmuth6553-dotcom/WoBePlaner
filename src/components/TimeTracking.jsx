@@ -220,7 +220,7 @@ export default function TimeTracking() {
         // Also get shifts directly assigned (for backwards compatibility)
         const { data: assignments } = await supabase
             .from('shifts')
-            .select('*')
+            .select('id, start_time, end_time, type, assigned_to')
             .eq('assigned_to', user.id)
             .gte('start_time', startIso)
             .lte('start_time', endIso)
@@ -252,7 +252,7 @@ export default function TimeTracking() {
         // Shifts marked as 'TEAM' are mandatory for everyone and don't require individual assignment.
         const { data: teamShifts } = await supabase
             .from('shifts')
-            .select('*')
+            .select('id, start_time, end_time, type')
             .eq('type', 'TEAM')
             .gte('start_time', startIso)
             .lte('start_time', endIso)

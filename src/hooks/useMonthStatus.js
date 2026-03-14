@@ -34,7 +34,7 @@ export function useMonthStatus(userId, selectedMonth) {
 
             const { data, error: fetchError } = await supabase
                 .from('monthly_reports')
-                .select('*')
+                .select('id, user_id, year, month, status, data_hash, hash_version, submitted_at')
                 .eq('user_id', userId)
                 .eq('year', year)
                 .eq('month', month)

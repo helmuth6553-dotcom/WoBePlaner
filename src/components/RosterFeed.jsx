@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
 import DayCard from './DayCard'
@@ -23,6 +23,7 @@ import PullToRefresh from './PullToRefresh'
 import { downloadICalFile } from '../utils/calendarExport'
 import { calculateAllFairnessIndices } from '../utils/fairnessIndex'
 import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
+import { debounce } from '../utils/debounce'
 
 export default function RosterFeed({ onCoverageVoteChanged }) {
 
@@ -52,6 +53,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     // For Transparency View & Admin Assignment
     const [isBalanceExpanded, setIsBalanceExpanded] = useState(false)
     const [allProfiles, setAllProfiles] = useState([])
+    const allProfilesRef = useRef([])
     const [allShiftsHistory, setAllShiftsHistory] = useState([])
     const [allTeamShiftsHistory, setAllTeamShiftsHistory] = useState([]) // TEAM shifts apply to all employees
     const [allAbsencesHistory, setAllAbsencesHistory] = useState([])
@@ -77,7 +79,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         if (profile) setMyProfile(profile)
 
         const { data: allProfs } = await supabase.from('profiles').select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year, initial_balance').or('is_active.eq.true,is_active.is.null').order('full_name')
-        if (allProfs) setAllProfiles(allProfs)
+        if (allProfs) { setAllProfiles(allProfs); allProfilesRef.current = allProfs }
 
         const { data: myInterests } = await supabase
             .from('shift_interests')
@@ -118,7 +120,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         })
         setAllMyShifts(allMyShiftsCombined)
 
-        const { data: myEntries } = await supabase.from('time_entries').select('*').eq('user_id', user?.id)
+        const { data: myEntries } = await supabase.from('time_entries').select('shift_id, calculated_hours').eq('user_id', user?.id)
         if (myEntries) setAllMyTimeEntries(myEntries)
 
         const { data: myHistoryAbsences } = await supabase.from('absences').select('start_date, end_date, user_id, status, type, planned_hours').eq('user_id', user?.id).eq('status', 'genehmigt')
@@ -143,13 +145,13 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         // Fetch coverage data
         const { data: coverageReqs } = await supabase
             .from('coverage_requests')
-            .select('*')
+            .select('id, shift_id, status, created_at')
             .eq('status', 'open')
         setCoverageRequests(coverageReqs || [])
 
         const { data: covVotes } = await supabase
             .from('coverage_votes')
-            .select('*')
+            .select('id, shift_id, user_id, was_eligible, responded, availability_preference')
         setCoverageVotes(covVotes || [])
 
         // Fetch flex history (is_flex interests) for Fairness-Index
@@ -265,24 +267,66 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         // Unique channel name per user session to avoid conflicts
         const channelName = `roster-updates-${user.id}-${Date.now()}`
 
+        const debouncedFetch = debounce(fetchData, 2000)
+
         const channel = supabase
             .channel(channelName)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, () => {
-                fetchData()
+            // shift_interests: Direct state update for instant UI feedback + background refetch for balances
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, (payload) => {
+                console.log('[Realtime] shift_interests:', payload.eventType, payload.new || payload.old)
+                if (payload.eventType === 'INSERT' && payload.new) {
+                    const { shift_id, user_id } = payload.new
+                    setShifts(prev => prev.map(s => {
+                        if (s.id !== shift_id) return s
+                        if (s.interests?.some(i => i.user_id === user_id)) return s
+                        const profile = allProfilesRef.current.find(p => p.id === user_id)
+                        return { ...s, interests: [...(s.interests || []), { ...payload.new, user_id, profiles: profile }] }
+                    }))
+                } else if (payload.eventType === 'DELETE' && payload.old) {
+                    const { shift_id, user_id, id: interestId } = payload.old
+                    console.log('[Realtime] shift_interests DELETE:', { shift_id, user_id, interestId })
+                    setShifts(prev => prev.map(s => {
+                        if (shift_id && s.id !== shift_id) return s
+                        return { ...s, interests: (s.interests || []).filter(i => {
+                            if (user_id && i.user_id === user_id && (!shift_id || s.id === shift_id)) return false
+                            if (interestId && i.id === interestId) return false
+                            return true
+                        })}
+                    }))
+                }
+                // Always refetch in background to update balances/history data
+                debouncedFetch()
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => {
-                fetchData()
+            // shifts: Direct state update for instant UI feedback + background refetch for balances
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => {
+                console.log('[Realtime] shifts:', payload.eventType, payload.new || payload.old)
+                if (payload.eventType === 'INSERT' && payload.new) {
+                    const newShift = { ...payload.new, interests: [], assigned_profile: null }
+                    setShifts(prev => [...prev, newShift].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')))
+                } else if (payload.eventType === 'UPDATE' && payload.new) {
+                    // Only merge raw table columns, preserve joined data (interests, assigned_profile)
+                    const { interests, assigned_profile, ...tableColumns } = payload.new
+                    setShifts(prev => prev.map(s => s.id === payload.new.id ? { ...s, ...tableColumns } : s))
+                } else if (payload.eventType === 'DELETE' && payload.old) {
+                    setShifts(prev => prev.filter(s => s.id !== payload.old.id))
+                }
+                // Always refetch in background to update balances/history data
+                debouncedFetch()
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_months' }, () => fetchData())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, () => fetchData())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, () => fetchData())
-            .subscribe()
+            // Other tables: debounced refetch (change infrequently, complex calculations)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_months' }, debouncedFetch)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debouncedFetch)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedFetch)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, debouncedFetch)
+            .subscribe((status, err) => {
+                if (status === 'SUBSCRIBED') console.log('[Realtime] ✓ Connected to', channelName)
+                if (status === 'CHANNEL_ERROR') console.error('[Realtime] ✗ Channel error:', err)
+                if (status === 'TIMED_OUT') console.warn('[Realtime] ⚠ Timed out')
+                if (status === 'CLOSED') console.warn('[Realtime] Channel closed')
+            })
 
-        // Backup polling every 3 seconds (in case realtime fails on mobile)
-        const pollInterval = setInterval(() => {
-            fetchData()
-        }, 3000)
+        // Fallback polling every 30s (Realtime delivers instant updates; this catches missed events)
+        const pollInterval = setInterval(debouncedFetch, 30000)
 
         return () => {
             supabase.removeChannel(channel)
@@ -409,7 +453,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                     // Add interest
                     newInterests.push({
                         user_id: actingUserId,
-                        profiles: allProfiles.find(p => p.id === actingUserId)
+                        profiles: allProfilesRef.current.find(p => p.id === actingUserId)
                     })
                 }
                 return { ...s, interests: newInterests }
@@ -662,7 +706,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         if (shiftsInRange) {
 
             for (const shift of shiftsInRange) {
-                const myInterest = shift.interests.find(i => i.user_id === user.id)
+                const myInterest = (shift.interests || []).find(i => i.user_id === user.id)
                 if (myInterest || shift.assigned_to === user.id) {
                     // Delete interest first
                     if (myInterest) await supabase.from('shift_interests').delete().eq('id', myInterest.id)

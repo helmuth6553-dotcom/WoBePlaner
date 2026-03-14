@@ -6,8 +6,9 @@ export default function ShiftCard({ shift, userId, onToggleInterest, onAssign, i
     // Checks
     const isAssigned = !!shift.assigned_to
     const amIAssigned = shift.assigned_to === userId
-    const amIInterested = shift.interests.some(i => i.user_id === userId)
-    const interestCount = shift.interests.length
+    const interests = shift.interests || []
+    const amIInterested = interests.some(i => i.user_id === userId)
+    const interestCount = interests.length
 
     // Styles basierend auf Status
     let borderColor = "border-gray-200"
@@ -44,7 +45,7 @@ export default function ShiftCard({ shift, userId, onToggleInterest, onAssign, i
 
             {/* Interessenten Liste (Avatare) */}
             <div className="flex -space-x-2 overflow-hidden my-3">
-                {shift.interests.map((interest) => (
+                {interests.map((interest) => (
                     <div key={interest.id} className="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-gray-300 flex items-center justify-center text-xs font-bold" title={interest.user_id}>
                         {/* Hier würde man Initialen anzeigen, wir nutzen Dummy Icons */}
                         <User size={14} />
@@ -67,11 +68,11 @@ export default function ShiftCard({ shift, userId, onToggleInterest, onAssign, i
                 )}
 
                 {/* ADMIN CONTROLS (Nur sichtbar wenn Admin Mode an) */}
-                {isAdmin && !isAssigned && shift.interests.length > 0 && (
+                {isAdmin && !isAssigned && interestCount > 0 && (
                     <div className="mt-2 border-t pt-2">
                         <p className="text-xs text-gray-500 mb-1">Admin: Zuweisen an:</p>
                         <div className="flex gap-2 overflow-x-auto">
-                            {shift.interests.map(i => (
+                            {interests.map(i => (
                                 <button
                                     key={i.id}
                                     onClick={() => onAssign(shift.id, i.user_id)}

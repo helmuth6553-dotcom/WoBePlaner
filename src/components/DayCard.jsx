@@ -28,7 +28,7 @@ const getUserColor = (name) => {
         'bg-rose-100 border-rose-200 text-rose-900'
     ]
     let hash = 0
-    for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i)
+    for (let i = 0; i < (name || '').length; i++) hash += name.charCodeAt(i)
     return colors[Math.abs(hash) % colors.length]
 }
 
@@ -101,10 +101,11 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
     }
 
     const getDisplayName = (profile) => {
+        if (!profile) return '?'
         // Prefer display_name (nickname) for rosters, fallback to full_name
-        const name = profile?.display_name || profile?.full_name
+        const name = profile.display_name || profile.full_name
         if (name) return name.trim().split(' ')[0]
-        return profile?.email?.split('@')[0]
+        return profile.email?.split('@')[0] || '?'
     }
 
     const handleShiftClick = (shift, label, icon) => {
