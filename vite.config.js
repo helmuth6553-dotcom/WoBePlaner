@@ -30,7 +30,7 @@ export default defineConfig({
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-date': ['date-fns'],
           'vendor-ui': ['lucide-react'],
-          'vendor-pdf': ['jspdf', 'html2canvas', 'dompurify'],
+          'vendor-pdf': ['jspdf'],
           'vendor-sentry': ['@sentry/react']
         }
       }

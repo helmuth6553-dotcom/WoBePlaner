@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
+import { debounce } from '../utils/debounce'
 import { useAuth } from '../AuthContext'
 import {
     format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
@@ -72,10 +73,17 @@ export default function AbsencePlanner({ initialDate }) {
     useEffect(() => {
         fetchAbsences()
 
+        let wasConnected = false
+        const debouncedAbsenceFetch = debounce(fetchAbsences, 500)
         const channel = supabase
             .channel('absences-updates')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, () => fetchAbsences())
-            .subscribe()
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedAbsenceFetch)
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    if (wasConnected) fetchAbsences()
+                    wasConnected = true
+                }
+            })
 
         return () => { supabase.removeChannel(channel) }
         // eslint-disable-next-line react-hooks/exhaustive-deps

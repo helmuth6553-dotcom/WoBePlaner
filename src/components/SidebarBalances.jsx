@@ -19,6 +19,7 @@ export default function SidebarBalances() {
 
         // Realtime subscription for live updates (short debounce to batch rapid changes)
         const debouncedFetch = debounce(fetchBalances, 500)
+        let wasConnected = false
         const channel = supabase
             .channel('sidebar-balances')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, debouncedFetch)
@@ -26,7 +27,12 @@ export default function SidebarBalances() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedFetch)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, debouncedFetch)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debouncedFetch)
-            .subscribe()
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    if (wasConnected) fetchBalances()
+                    wasConnected = true
+                }
+            })
 
         return () => { supabase.removeChannel(channel) }
     }, [])

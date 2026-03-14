@@ -354,7 +354,44 @@ export default function AdminTimeTracking() {
             })
             .sort((a, b) => a.sortDate - b.sortDate)
 
-        setEntries(sorted)
+        // Merge TD1+TD2 on same day into single "TD" entry (no handover when same person)
+        const merged = []
+        const mergedIds = new Set()
+        for (const entry of sorted) {
+            if (mergedIds.has(entry.id)) continue
+            const entryType = entry.shifts?.type?.toUpperCase()
+            if (entryType === 'TD1' || entryType === 'TAGDIENST') {
+                const entryDate = entry.entry_date || (entry.actual_start ? format(new Date(entry.actual_start), 'yyyy-MM-dd') : null)
+                const td2 = sorted.find(e => {
+                    if (mergedIds.has(e.id)) return false
+                    if (e.shifts?.type?.toUpperCase() !== 'TD2') return false
+                    const eDate = e.entry_date || (e.actual_start ? format(new Date(e.actual_start), 'yyyy-MM-dd') : null)
+                    return eDate === entryDate
+                })
+                if (td2) {
+                    // Calculate combined hours from shift times (not DB values which may be stale)
+                    const combinedStart = entry.actual_start || entry.shifts?.start_time
+                    const combinedEnd = td2.actual_end || td2.shifts?.end_time
+                    const combinedHours = calculateWorkHours(combinedStart, combinedEnd, 'TD')
+                    merged.push({
+                        ...entry,
+                        shifts: { ...entry.shifts, type: 'TD', start_time: entry.shifts?.start_time, end_time: td2.shifts?.end_time },
+                        actual_start: entry.actual_start || entry.shifts?.start_time,
+                        actual_end: td2.actual_end || td2.shifts?.end_time,
+                        calculated_hours: combinedHours,
+                        isMerged: true,
+                        mergedIds: [entry.id, td2.id],
+                        originalEntries: [entry, td2]
+                    })
+                    mergedIds.add(entry.id)
+                    mergedIds.add(td2.id)
+                    continue
+                }
+            }
+            merged.push(entry)
+        }
+
+        setEntries(merged)
 
         // 7. Verify Hash if report exists
         // IMPORTANT: We hash the SNAPSHOT (what was signed), not the live data.

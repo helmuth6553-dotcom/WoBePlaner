@@ -1,9 +1,21 @@
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 import { clientsClaim } from 'workbox-core'
+import { registerRoute } from 'workbox-routing'
+import { StaleWhileRevalidate } from 'workbox-strategies'
+import { ExpirationPlugin } from 'workbox-expiration'
 
 // Standard Workbox setup
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
+
+// Cache Supabase REST API calls for profiles (rarely change — serve cached, revalidate in background)
+registerRoute(
+    ({ url }) => url.pathname.includes('/rest/v1/profiles'),
+    new StaleWhileRevalidate({
+        cacheName: 'supabase-profiles',
+        plugins: [new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 300 })]
+    })
+)
 // Handle SKIP_WAITING from frontend
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING')

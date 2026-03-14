@@ -392,8 +392,34 @@ export default function TimeTracking() {
             return !absenceDates.has(shiftDate) // Hide if absent
         }) || []
 
-        const allItems = [...filteredShiftItems, ...teamItems, ...absenceItems].sort((a, b) => a.sortDate - b.sortDate)
-        setItems(allItems)
+        const sortedItems = [...filteredShiftItems, ...teamItems, ...absenceItems].sort((a, b) => a.sortDate - b.sortDate)
+
+        // Merge TD1+TD2 on same day into single "TD" entry (no handover needed when same person)
+        const mergedItems = []
+        const mergedIds = new Set()
+        for (const item of sortedItems) {
+            if (mergedIds.has(item.id)) continue
+            if (item.type === 'TD1' || item.type === 'TAGDIENST') {
+                const itemDate = format(new Date(item.start_time), 'yyyy-MM-dd')
+                const td2 = sortedItems.find(s => s.type === 'TD2' && format(new Date(s.start_time), 'yyyy-MM-dd') === itemDate && !mergedIds.has(s.id))
+                if (td2) {
+                    mergedItems.push({
+                        ...item,
+                        type: 'TD',
+                        end_time: td2.end_time,
+                        isMerged: true,
+                        mergedIds: [item.id, td2.id],
+                        mergedOriginals: [item, td2]
+                    })
+                    mergedIds.add(item.id)
+                    mergedIds.add(td2.id)
+                    continue
+                }
+            }
+            mergedItems.push(item)
+        }
+
+        setItems(mergedItems)
 
         // 4. Get Actual Time Entries (Optimized with Date Range)
         // We fetch entries slightly outside the month (buffer) to handle edge cases (night shifts spanning months).
@@ -434,6 +460,25 @@ export default function TimeTracking() {
             shiftItems.forEach(shift => {
                 const entry = allTimeEntries.find(e => e.shift_id === shift.id)
                 if (entry) entriesMap[shift.id] = entry
+            })
+
+            // Map merged TD items: combine hours from both original entries
+            mergedItems.filter(i => i.isMerged).forEach(merged => {
+                const entries = merged.mergedIds.map(id => allTimeEntries.find(e => e.shift_id === id)).filter(Boolean)
+                if (entries.length > 0) {
+                    // Calculate from combined shift times (not DB values which may be stale)
+                    const combinedStart = entries[0].actual_start || merged.mergedOriginals[0].start_time
+                    const combinedEnd = entries[entries.length - 1].actual_end || merged.mergedOriginals[1].end_time
+                    const combinedHours = calculateWorkHours(combinedStart, combinedEnd, 'TD')
+                    entriesMap[merged.id] = {
+                        ...entries[0],
+                        calculated_hours: combinedHours,
+                        actual_start: combinedStart,
+                        actual_end: combinedEnd,
+                        isMergedEntry: true,
+                        originalEntries: entries
+                    }
+                }
             })
 
             // Also map TEAM shifts
@@ -490,6 +535,30 @@ export default function TimeTracking() {
         let query = supabase.from('time_entries')
 
         if (editingItem.itemType === 'shift') {
+            if (editingItem.isMerged) {
+                // Merged TD1+TD2: save entry for each original shift
+                for (const origId of editingItem.mergedIds) {
+                    const origPayload = { ...payload, shift_id: origId }
+                    const { data: existing } = await supabase
+                        .from('time_entries')
+                        .select('id')
+                        .eq('user_id', user.id)
+                        .eq('shift_id', origId)
+                        .maybeSingle()
+                    if (existing) {
+                        await supabase.from('time_entries').update(origPayload).eq('id', existing.id)
+                    } else {
+                        await supabase.from('time_entries').insert(origPayload)
+                    }
+                }
+                // Skip the normal query flow
+                setEditingItem(null)
+                setFormData({ actualStart: '', actualEnd: '', interruptions: [] })
+                setCalculatedHours(null)
+                fetchData()
+                return
+            }
+
             payload.shift_id = editingItem.id
 
             // Check Live DB state to avoid duplicates if onConflict fails

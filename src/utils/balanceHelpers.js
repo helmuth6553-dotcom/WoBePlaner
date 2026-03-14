@@ -88,6 +88,11 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
                 : calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
 
             actualMinutes += (td1Hours + td2Hours) * 60
+            // Eliminate handover overlap when same person works both TD1+TD2
+            const td1End = new Date(td1.end_time)
+            const td2Start = new Date(td2.start_time)
+            const overlapMs = Math.max(0, td1End - td2Start)
+            actualMinutes -= overlapMs / (1000 * 60)
             processedShiftIds.add(td1.id)
             processedShiftIds.add(td2.id)
         }
@@ -211,6 +216,11 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
                     : calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
 
                 pastActual += (td1Hours + td2Hours) * 60
+                // Eliminate handover overlap when same person works both TD1+TD2
+                const td1End = new Date(td1.end_time)
+                const td2Start = new Date(td2.start_time)
+                const overlapMs = Math.max(0, td1End - td2Start)
+                pastActual -= overlapMs / (1000 * 60)
                 processedPastIds.add(td1.id)
                 processedPastIds.add(td2.id)
             }

@@ -77,12 +77,18 @@ function AppContent() {
 
     // Subscribe to realtime updates (debounced to avoid cascade fetches)
     const debouncedBadgeFetch = debounce(fetchBadgeCounts, 1000)
+    let badgeWasConnected = false
     const channel = supabase
       .channel('badge-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedBadgeFetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, debouncedBadgeFetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, debouncedBadgeFetch)
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          if (badgeWasConnected) fetchBadgeCounts()
+          badgeWasConnected = true
+        }
+      })
 
     return () => { supabase.removeChannel(channel) }
   }, [user, isAdmin])
@@ -129,11 +135,17 @@ function AppContent() {
     refreshCoverageCount()
 
     const debouncedCoverageFetch = debounce(refreshCoverageCount, 1000)
+    let coverageWasConnected = false
     const channel = supabase
       .channel('coverage-banner')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, debouncedCoverageFetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_votes' }, debouncedCoverageFetch)
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          if (coverageWasConnected) refreshCoverageCount()
+          coverageWasConnected = true
+        }
+      })
 
     return () => { supabase.removeChannel(channel) }
   }, [user, isAdmin])
