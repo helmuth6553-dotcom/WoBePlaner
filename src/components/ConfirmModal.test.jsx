@@ -95,7 +95,7 @@ describe('ConfirmModal', () => {
         expect(handleClose).toHaveBeenCalledTimes(1)
     })
 
-    it('applies destructive styling when isDestructive is true', () => {
+    it('marks confirm button as destructive when isDestructive is true', () => {
         render(
             <ConfirmModal
                 isOpen={true}
@@ -108,10 +108,10 @@ describe('ConfirmModal', () => {
         )
 
         const confirmButton = screen.getByRole('button', { name: 'Bestätigen' })
-        expect(confirmButton).toHaveClass('bg-red-600')
+        expect(confirmButton).toHaveAttribute('data-destructive', 'true')
     })
 
-    it('applies normal styling when isDestructive is false', () => {
+    it('does not mark confirm button as destructive by default', () => {
         render(
             <ConfirmModal
                 isOpen={true}
@@ -124,6 +124,6 @@ describe('ConfirmModal', () => {
         )
 
         const confirmButton = screen.getByRole('button', { name: 'Bestätigen' })
-        expect(confirmButton).toHaveClass('bg-black')
+        expect(confirmButton).not.toHaveAttribute('data-destructive')
     })
 })

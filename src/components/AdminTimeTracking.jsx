@@ -7,8 +7,7 @@ import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCal
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateReportHash } from '../utils/security'
 import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
-import { constructIso, constructInterruptionIso, safeFormatTime, safeFormatDate } from '../utils/timeTrackingHelpers'
-
+import { constructIso, constructInterruptionIso, safeFormatTime, safeFormatDate, isValidInterruptionTime } from '../utils/timeTrackingHelpers'
 
 export default function AdminTimeTracking() {
     const [users, setUsers] = useState([])
@@ -1354,13 +1353,93 @@ export default function AdminTimeTracking() {
                                             />
                                         </div>
                                     ))}
-                                    <div className="flex gap-2 items-center mt-2">
-                                        <input type="time" value={formData.newIntStart} onChange={e => setFormData({ ...formData, newIntStart: e.target.value })} className="border p-2 rounded text-sm flex-1 text-center bg-gray-50 font-mono" />
-                                        <span className="text-gray-300">-</span>
-                                        <input type="time" value={formData.newIntEnd} onChange={e => setFormData({ ...formData, newIntEnd: e.target.value })} className="border p-2 rounded text-sm flex-1 text-center bg-gray-50 font-mono" />
+                                    <div className="space-y-2 mt-3">
+                                        <div className="flex gap-2 items-center">
+                                            <div className="flex-1">
+                                                <label className="text-xs font-bold text-gray-500 block mb-1">Start</label>
+                                                <div className="flex gap-1">
+                                                    <select
+                                                        value={formData.newIntStart?.split(':')[0] || ''}
+                                                        onChange={e => {
+                                                            const minutes = formData.newIntStart?.split(':')[1] || '00'
+                                                            setFormData({ ...formData, newIntStart: `${e.target.value}:${minutes}` })
+                                                        }}
+                                                        className="border p-2 rounded-lg text-sm flex-1 text-center bg-white"
+                                                    >
+                                                        <option value="">--</option>
+                                                        <option value="00">00</option>
+                                                        <option value="01">01</option>
+                                                        <option value="02">02</option>
+                                                        <option value="03">03</option>
+                                                        <option value="04">04</option>
+                                                        <option value="05">05</option>
+                                                    </select>
+                                                    <span className="self-center font-bold">:</span>
+                                                    <select
+                                                        value={formData.newIntStart?.split(':')[1] || ''}
+                                                        onChange={e => {
+                                                            const hours = formData.newIntStart?.split(':')[0] || '00'
+                                                            setFormData({ ...formData, newIntStart: `${hours}:${e.target.value}` })
+                                                        }}
+                                                        className="border p-2 rounded-lg text-sm flex-1 text-center bg-white"
+                                                    >
+                                                        <option value="">--</option>
+                                                        <option value="00">00</option>
+                                                        <option value="15">15</option>
+                                                        <option value="30">30</option>
+                                                        <option value="45">45</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <span className="text-gray-300 self-end pb-2">-</span>
+                                            <div className="flex-1">
+                                                <label className="text-xs font-bold text-gray-500 block mb-1">Ende</label>
+                                                <div className="flex gap-1">
+                                                    <select
+                                                        value={formData.newIntEnd?.split(':')[0] || ''}
+                                                        onChange={e => {
+                                                            const minutes = formData.newIntEnd?.split(':')[1] || '00'
+                                                            setFormData({ ...formData, newIntEnd: `${e.target.value}:${minutes}` })
+                                                        }}
+                                                        className="border p-2 rounded-lg text-sm flex-1 text-center bg-white"
+                                                    >
+                                                        <option value="">--</option>
+                                                        <option value="00">00</option>
+                                                        <option value="01">01</option>
+                                                        <option value="02">02</option>
+                                                        <option value="03">03</option>
+                                                        <option value="04">04</option>
+                                                        <option value="05">05</option>
+                                                        <option value="06">06</option>
+                                                    </select>
+                                                    <span className="self-center font-bold">:</span>
+                                                    <select
+                                                        value={formData.newIntEnd?.split(':')[1] || ''}
+                                                        onChange={e => {
+                                                            const hours = formData.newIntEnd?.split(':')[0] || '00'
+                                                            setFormData({ ...formData, newIntEnd: `${hours}:${e.target.value}` })
+                                                        }}
+                                                        className="border p-2 rounded-lg text-sm flex-1 text-center bg-white"
+                                                    >
+                                                        <option value="">--</option>
+                                                        <option value="00">00</option>
+                                                        <option value="15">15</option>
+                                                        <option value="30">30</option>
+                                                        <option value="45">45</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={formData.newIntNote}
+                                            onChange={e => setFormData({ ...formData, newIntNote: e.target.value })}
+                                            placeholder="Grund der Unterbrechung"
+                                            className="w-full border p-2 rounded-lg text-sm"
+                                        />
                                         <button
                                             onClick={() => {
-                                                if (formData.newIntStart && formData.newIntEnd) {
+                                                if (formData.newIntStart && formData.newIntEnd && isValidInterruptionTime(formData.newIntStart, formData.newIntEnd)) {
                                                     setFormData({
                                                         ...formData,
                                                         interruptions: [...formData.interruptions, { start: formData.newIntStart, end: formData.newIntEnd, note: formData.newIntNote }],
@@ -1368,19 +1447,12 @@ export default function AdminTimeTracking() {
                                                     })
                                                 }
                                             }}
-                                            disabled={!formData.newIntStart || !formData.newIntEnd}
-                                            className="bg-black text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-gray-800 disabled:opacity-50"
+                                            disabled={!isValidInterruptionTime(formData.newIntStart, formData.newIntEnd)}
+                                            className={`w-full text-white px-4 py-2.5 rounded-lg font-bold transition-all ${isValidInterruptionTime(formData.newIntStart, formData.newIntEnd) ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed opacity-50'}`}
                                         >
-                                            +
+                                            Unterbrechung hinzufügen
                                         </button>
                                     </div>
-                                    <input
-                                        type="text"
-                                        value={formData.newIntNote}
-                                        onChange={e => setFormData({ ...formData, newIntNote: e.target.value })}
-                                        placeholder="Grund der Unterbrechung"
-                                        className="w-full border p-2 rounded text-sm"
-                                    />
                                 </div>
                             )}
 

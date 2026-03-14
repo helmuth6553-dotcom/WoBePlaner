@@ -15,7 +15,7 @@ export default function AlertModal({ isOpen, onClose, title, message, type = 'in
     return (
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-[1.5rem] p-6 w-full max-w-sm shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 scale-100 animate-in zoom-in-95 duration-200 text-center">
-                <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${Style.bg} ${Style.text}`}>
+                <div data-testid="alert-icon" data-type={type} className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${Style.bg} ${Style.text}`}>
                     <Icon size={24} />
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>

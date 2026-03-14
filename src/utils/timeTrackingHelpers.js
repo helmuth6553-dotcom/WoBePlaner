@@ -249,3 +249,31 @@ export function safeFormatDate(iso) {
         return ''
     }
 }
+
+/**
+ * Validates that an interruption is at least 30 minutes long and at most 12 hours.
+ * Automatically handles overnight interruptions (where end time < start time).
+ * Prevents invalid entries like "01:30 to 01:00" which would otherwise span 23.5 hours.
+ * 
+ * @param {string} startStr - Start time (HH:mm)
+ * @param {string} endStr - End time (HH:mm)
+ * @returns {boolean} True if valid, false otherwise
+ */
+export function isValidInterruptionTime(startStr, endStr) {
+    if (!startStr || !endStr || !startStr.includes(':') || !endStr.includes(':')) return false;
+    try {
+        const [sh, sm] = startStr.split(':').map(Number);
+        const [eh, em] = endStr.split(':').map(Number);
+        let startMins = sh * 60 + sm;
+        let endMins = eh * 60 + em;
+        
+        if (endMins < startMins) {
+            endMins += 24 * 60; // Crosses midnight
+        }
+        
+        const duration = endMins - startMins;
+        return duration >= 30 && duration <= 720; // 30 mins to 12 hours max
+    } catch {
+        return false;
+    }
+}

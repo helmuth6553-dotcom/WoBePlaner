@@ -9,7 +9,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { XCircle } from 'lucide-react'
 import { calculateWorkHours } from '../utils/timeCalculations'
-import { constructIso, constructEndIso, constructInterruptionIso } from '../utils/timeTrackingHelpers'
+import { constructIso, constructEndIso, constructInterruptionIso, isValidInterruptionTime } from '../utils/timeTrackingHelpers'
 
 /**
  * @param {Object} props
@@ -173,23 +173,23 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
                     {/* Time inputs */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-sm font-bold">Start</label>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Start</label>
                             <input
                                 type="time"
                                 value={formData.actualStart}
                                 onChange={e => setFormData({ ...formData, actualStart: e.target.value })}
                                 readOnly={isApproved}
-                                className="w-full border p-3 rounded-xl text-center"
+                                className={`w-full border-2 p-3 rounded-xl text-lg font-bold text-center transition-all outline-none ${isApproved ? 'bg-gray-100 border-gray-200 text-gray-500' : 'bg-gray-50 border-gray-200 focus:border-black focus:ring-1 focus:ring-black hover:border-gray-300'}`}
                             />
                         </div>
                         <div>
-                            <label className="text-sm font-bold">Ende</label>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Ende</label>
                             <input
                                 type="time"
                                 value={formData.actualEnd}
                                 onChange={e => setFormData({ ...formData, actualEnd: e.target.value })}
                                 readOnly={isApproved}
-                                className="w-full border p-3 rounded-xl text-center"
+                                className={`w-full border-2 p-3 rounded-xl text-lg font-bold text-center transition-all outline-none ${isApproved ? 'bg-gray-100 border-gray-200 text-gray-500' : 'bg-gray-50 border-gray-200 focus:border-black focus:ring-1 focus:ring-black hover:border-gray-300'}`}
                             />
                         </div>
                     </div>
@@ -205,7 +205,9 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
                             {formData.interruptions.map((int, idx) => (
                                 <div key={idx} className="bg-white p-2 rounded text-sm border shadow-sm space-y-1">
                                     <div className="flex justify-between items-center">
-                                        <span className="font-mono font-medium">{int.start} - {int.end}</span>
+                                        <span className="font-mono font-medium">
+                                            {typeof int.start === 'string' && int.start.includes('T') ? format(parseISO(int.start), 'HH:mm') : int.start} - {typeof int.end === 'string' && int.end.includes('T') ? format(parseISO(int.end), 'HH:mm') : int.end}
+                                        </span>
                                         {!isApproved && (
                                             <button
                                                 onClick={() => removeInterruption(idx)}
@@ -266,8 +268,8 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
                                     />
                                     <button
                                         onClick={addInterruption}
-                                        disabled={!formData.newIntStart || !formData.newIntEnd}
-                                        className="w-full bg-black text-white px-4 py-2.5 rounded-lg font-bold hover:bg-gray-800 disabled:opacity-50"
+                                        disabled={!isValidInterruptionTime(formData.newIntStart, formData.newIntEnd)}
+                                        className={`w-full text-white px-4 py-2.5 rounded-lg font-bold transition-all ${isValidInterruptionTime(formData.newIntStart, formData.newIntEnd) ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed opacity-50'}`}
                                     >
                                         Unterbrechung hinzufügen
                                     </button>
@@ -277,24 +279,32 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
                     )}
 
                     {/* Hours display */}
-                    <div className="bg-blue-50 p-4 rounded-xl flex justify-between font-bold text-blue-800">
-                        <span>Stunden:</span>
-                        <span>{Number(calculatedHours).toFixed(2)}h</span>
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm mt-4">
+                        <div className="flex justify-between items-center text-blue-900 font-bold">
+                            <span className="text-sm uppercase tracking-wider">Berechnet</span>
+                            <span className="text-2xl">{Number(calculatedHours).toFixed(2)}h</span>
+                        </div>
+                        {!isAbsence && item?.type && (
+                            <div className="flex justify-between items-center text-xs text-blue-600/80 font-medium border-t border-blue-200/50 pt-2 mt-2">
+                                <span>Geplant laut Dienstplan</span>
+                                <span>{calculateWorkHours(item.start_time, item.end_time, item.type).toFixed(2)}h</span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {/* Buttons */}
-                <div className="flex gap-3">
+                <div className="flex gap-3 mt-6">
                     <button
                         onClick={onClose}
-                        className="flex-1 py-3 bg-gray-100 rounded-xl font-bold"
+                        className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors"
                     >
                         Abbrechen
                     </button>
                     {!isApproved && (
                         <button
                             onClick={handleSave}
-                            className="flex-1 py-3 bg-black text-white rounded-xl font-bold"
+                            className="flex-1 py-3 bg-black hover:bg-gray-900 text-white shadow-lg shadow-black/20 rounded-xl font-bold transition-all"
                         >
                             Speichern
                         </button>

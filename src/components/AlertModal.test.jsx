@@ -44,7 +44,7 @@ describe('AlertModal', () => {
         expect(handleClose).toHaveBeenCalledTimes(1)
     })
 
-    it('renders info style by default', () => {
+    it('renders info type by default', () => {
         render(
             <AlertModal
                 isOpen={true}
@@ -53,12 +53,11 @@ describe('AlertModal', () => {
                 message="Info message"
             />
         )
-        // Check for blue styling (info type)
-        const iconContainer = screen.getByText('Info').parentElement?.querySelector('div')
-        expect(iconContainer).toHaveClass('bg-blue-100')
+        const icon = screen.getByTestId('alert-icon')
+        expect(icon).toHaveAttribute('data-type', 'info')
     })
 
-    it('renders error style when type is error', () => {
+    it('renders error type when type is error', () => {
         render(
             <AlertModal
                 isOpen={true}
@@ -68,11 +67,11 @@ describe('AlertModal', () => {
                 type="error"
             />
         )
-        const iconContainer = screen.getByText('Error').parentElement?.querySelector('div')
-        expect(iconContainer).toHaveClass('bg-red-100')
+        const icon = screen.getByTestId('alert-icon')
+        expect(icon).toHaveAttribute('data-type', 'error')
     })
 
-    it('renders success style when type is success', () => {
+    it('renders success type when type is success', () => {
         render(
             <AlertModal
                 isOpen={true}
@@ -82,7 +81,7 @@ describe('AlertModal', () => {
                 type="success"
             />
         )
-        const iconContainer = screen.getByText('Success').parentElement?.querySelector('div')
-        expect(iconContainer).toHaveClass('bg-green-100')
+        const icon = screen.getByTestId('alert-icon')
+        expect(icon).toHaveAttribute('data-type', 'success')
     })
 })

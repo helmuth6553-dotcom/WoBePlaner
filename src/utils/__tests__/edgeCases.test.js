@@ -1,9 +1,9 @@
 /**
  * Edge Case Tests for WoBePlaner
- * 
- * Tests critical business logic edge cases that could cause issues
- * in production if not handled correctly.
- * 
+ *
+ * Tests critical business logic edge cases using REAL functions
+ * from the codebase (not mocks).
+ *
  * Run with: npx vitest run src/utils/__tests__/edgeCases.test.js
  */
 
@@ -19,82 +19,9 @@ import {
     getMonth
 } from 'date-fns'
 
-// Import the actual holiday function
-import { getHolidays } from '../holidays'
-
-// Mock balance calculation helper
-const calculateVacationDays = (startDate, endDate, getHolidayFn) => {
-    const days = eachDayOfInterval({
-        start: parseISO(startDate),
-        end: parseISO(endDate)
-    })
-
-    return days.filter(day => {
-        const isWeekendDay = isWeekend(day)
-        const isHolidayDay = getHolidayFn ? getHolidayFn(day) : false
-        return !isWeekendDay && !isHolidayDay
-    }).length
-}
-
-// Mock sick leave calculation (based on planned shifts)
-const calculateSickLeaveHours = (startDate, endDate, plannedShifts) => {
-    const days = eachDayOfInterval({
-        start: parseISO(startDate),
-        end: parseISO(endDate)
-    })
-
-    let totalHours = 0
-
-    days.forEach(day => {
-        const dateStr = format(day, 'yyyy-MM-dd')
-        const shiftsOnDay = plannedShifts.filter(shift =>
-            shift.start_time.startsWith(dateStr)
-        )
-
-        shiftsOnDay.forEach(shift => {
-            const start = new Date(shift.start_time)
-            const end = new Date(shift.end_time)
-            let hours = (end - start) / (1000 * 60 * 60)
-
-            // ND shift adds 0.5h readiness time
-            if (shift.type === 'ND') {
-                hours += 0.5
-            }
-
-            totalHours += hours
-        })
-    })
-
-    return Math.round(totalHours * 100) / 100
-}
-
-// Mock balance calculation
-const calculateMonthlyBalance = (profile, shifts, absences, month) => {
-    const monthStart = startOfMonth(month)
-    const monthEnd = endOfMonth(month)
-
-    // Calculate target hours for the month
-    const weeklyHours = profile.weekly_hours || 38.5
-    const weeksInMonth = 4.33 // Approximate
-    const target = Math.round(weeklyHours * weeksInMonth * 100) / 100
-
-    // Calculate actual hours from shifts
-    let actual = 0
-    shifts.forEach(shift => {
-        const shiftDate = new Date(shift.start_time)
-        if (shiftDate >= monthStart && shiftDate <= monthEnd) {
-            const start = new Date(shift.start_time)
-            const end = new Date(shift.end_time)
-            actual += (end - start) / (1000 * 60 * 60)
-        }
-    })
-
-    return {
-        target: Math.round(target * 100) / 100,
-        actual: Math.round(actual * 100) / 100,
-        diff: Math.round((actual - target) * 100) / 100
-    }
-}
+import { calculateWorkHours, calculateDailyAbsenceHours } from '../timeCalculations'
+import { calculateGenericBalance } from '../balanceHelpers'
+import { getHolidays, isHoliday } from '../holidays'
 
 describe('Edge Case Tests', () => {
 
@@ -102,135 +29,160 @@ describe('Edge Case Tests', () => {
 
         it('should correctly count vacation days across year boundary', () => {
             // Vacation from Dec 30, 2025 to Jan 2, 2026
-            const startDate = '2025-12-30'
-            const endDate = '2026-01-02'
+            const absence = { reason: 'vacation', type: 'Urlaub', start_date: '2025-12-30', end_date: '2026-01-02' }
+            const profile = { weekly_hours: 38.5 }
 
-            const holidays2025 = getHolidays(2025)
-            const holidays2026 = getHolidays(2026)
+            const days = eachDayOfInterval({
+                start: parseISO('2025-12-30'),
+                end: parseISO('2026-01-02')
+            })
 
-            const isHolidayInRange = (day) => {
-                const year = getYear(day)
-                const holidays = year === 2025 ? holidays2025 : holidays2026
-                return holidays.some(h =>
-                    format(h.date, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')
-                )
-            }
+            let totalHours = 0
+            days.forEach(day => {
+                totalHours += calculateDailyAbsenceHours(day, absence, [], profile)
+            })
 
-            const days = calculateVacationDays(startDate, endDate, isHolidayInRange)
-
-            // Dec 30 (Tue), Dec 31 (Wed - Silvester, not a public holiday but often free)
-            // Jan 1 (Thu - Neujahr = Holiday), Jan 2 (Fri)
-            // Expected: Dec 30, Dec 31, Jan 2 = 3 days (Jan 1 is holiday)
-            // Note: Dec 31 is NOT a public holiday in Austria
-            expect(days).toBe(3) // Dec 30, Dec 31, Jan 2 (skipping Jan 1 holiday)
+            // Dec 30 (Tue) = 7.7h, Dec 31 (Wed) = 7.7h
+            // Jan 1 (Thu - Neujahr = Holiday) = 0h, Jan 2 (Fri) = 7.7h
+            // 3 workdays * 7.7h = 23.1h
+            const dailyHours = 38.5 / 5
+            expect(totalHours).toBeCloseTo(dailyHours * 3, 1)
         })
 
         it('should handle vacation entirely within Christmas holidays', () => {
-            // Dec 24-26 are Christmas
-            const startDate = '2025-12-24'
-            const endDate = '2025-12-26'
+            // Dec 24-26
+            const absence = { reason: 'vacation', type: 'Urlaub', start_date: '2025-12-24', end_date: '2025-12-26' }
+            const profile = { weekly_hours: 38.5 }
 
-            const holidays = getHolidays(2025)
-            const isHolidayFn = (day) => holidays.some(h =>
-                format(h.date, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd')
-            )
+            const days = eachDayOfInterval({
+                start: parseISO('2025-12-24'),
+                end: parseISO('2025-12-26')
+            })
 
-            const days = calculateVacationDays(startDate, endDate, isHolidayFn)
+            let totalHours = 0
+            days.forEach(day => {
+                totalHours += calculateDailyAbsenceHours(day, absence, [], profile)
+            })
 
-            // Dec 24 (Wed - Heiligabend, not public holiday in Austria)
-            // Dec 25 (Thu - Weihnachten = Holiday)
-            // Dec 26 (Fri - Stefanitag = Holiday)
-            // Expected: 1 day (Dec 24 only, others are holidays)
-            expect(days).toBe(1)
+            // Dec 24 (Wed - not a public holiday in Austria) = 7.7h
+            // Dec 25 (Thu - Weihnachten = Holiday) = 0h
+            // Dec 26 (Fri - Stefanitag = Holiday) = 0h
+            // Only 1 workday
+            const dailyHours = 38.5 / 5
+            expect(totalHours).toBeCloseTo(dailyHours, 1)
         })
 
         it('should handle vacation starting on Saturday', () => {
-            const startDate = '2025-12-27' // Saturday
-            const endDate = '2026-01-02'   // Thursday
+            const absence = { reason: 'vacation', type: 'Urlaub', start_date: '2025-12-27', end_date: '2026-01-02' }
+            const profile = { weekly_hours: 38.5 }
 
-            const days = calculateVacationDays(startDate, endDate, (day) => {
-                // Jan 1 is Neujahr
-                return format(day, 'yyyy-MM-dd') === '2026-01-01'
+            const days = eachDayOfInterval({
+                start: parseISO('2025-12-27'),
+                end: parseISO('2026-01-02')
             })
 
-            // Dec 27 (Sat - skip), Dec 28 (Sun - skip), Dec 29 (Mon), Dec 30 (Tue), Dec 31 (Wed)
-            // Jan 1 (Holiday - skip), Jan 2 (Fri)
-            // Expected: 4 workdays
-            expect(days).toBe(4)
+            let totalHours = 0
+            days.forEach(day => {
+                totalHours += calculateDailyAbsenceHours(day, absence, [], profile)
+            })
+
+            // Dec 27 (Sat) = 0, Dec 28 (Sun) = 0, Dec 29 (Mon) = 7.7h, Dec 30 (Tue) = 7.7h
+            // Dec 31 (Wed) = 7.7h, Jan 1 (Holiday) = 0, Jan 2 (Fri) = 7.7h
+            // 4 workdays * 7.7h = 30.8h
+            const dailyHours = 38.5 / 5
+            expect(totalHours).toBeCloseTo(dailyHours * 4, 1)
         })
     })
 
     describe('Sick Leave Edge Cases', () => {
 
-        it('should credit hours for planned shift on sick day', () => {
-            const startDate = '2025-01-15'
-            const endDate = '2025-01-15'
+        it('should credit hours for planned shift on sick day (via snapshot)', () => {
+            const absence = {
+                reason: 'sick',
+                type: 'Krank',
+                start_date: '2025-01-15',
+                end_date: '2025-01-15',
+                planned_shifts_snapshot: [
+                    {
+                        start_time: '2025-01-15T08:00:00',
+                        end_time: '2025-01-15T16:30:00',
+                        type: 'TD1'
+                    }
+                ]
+            }
 
-            const plannedShifts = [
-                {
-                    start_time: '2025-01-15T08:00:00',
-                    end_time: '2025-01-15T16:30:00',
-                    type: 'TD1'
-                }
-            ]
+            const hours = calculateDailyAbsenceHours('2025-01-15', absence, [], { weekly_hours: 38.5 })
 
-            const hours = calculateSickLeaveHours(startDate, endDate, plannedShifts)
-
-            // 08:00 to 16:30 = 8.5 hours
+            // 08:00 to 16:30 = 8.5 hours (TD1, no standby)
             expect(hours).toBe(8.5)
         })
 
-        it('should add ND readiness time for night shift sick leave', () => {
-            const startDate = '2025-01-15'
-            const endDate = '2025-01-15'
+        it('should credit ND hours for night shift sick leave (via snapshot)', () => {
+            const absence = {
+                reason: 'sick',
+                type: 'Krank',
+                start_date: '2025-01-15',
+                end_date: '2025-01-15',
+                planned_shifts_snapshot: [
+                    {
+                        start_time: '2025-01-15T19:00:00',
+                        end_time: '2025-01-16T08:00:00',
+                        type: 'ND'
+                    }
+                ]
+            }
 
-            const plannedShifts = [
-                {
-                    start_time: '2025-01-15T21:00:00',
-                    end_time: '2025-01-16T07:00:00',
-                    type: 'ND'
-                }
-            ]
+            const hours = calculateDailyAbsenceHours('2025-01-15', absence, [], { weekly_hours: 38.5 })
 
-            const hours = calculateSickLeaveHours(startDate, endDate, plannedShifts)
-
-            // 21:00 to 07:00 = 10 hours + 0.5 readiness = 10.5 hours
-            expect(hours).toBe(10.5)
+            // ND 19:00-08:00 with readiness 00:30-06:00 at 50% = 10.25h
+            expect(hours).toBe(10.25)
         })
 
         it('should handle sick leave on holiday with planned shift', () => {
             // Sick on Jan 1 (Neujahr) but shift was planned
-            const startDate = '2025-01-01'
-            const endDate = '2025-01-01'
+            const absence = {
+                reason: 'sick',
+                type: 'Krank',
+                start_date: '2025-01-01',
+                end_date: '2025-01-01',
+                planned_shifts_snapshot: [
+                    {
+                        start_time: '2025-01-01T08:00:00',
+                        end_time: '2025-01-01T16:30:00',
+                        type: 'TD1'
+                    }
+                ]
+            }
 
-            const plannedShifts = [
-                {
-                    start_time: '2025-01-01T08:00:00',
-                    end_time: '2025-01-01T16:30:00',
-                    type: 'TD1'
-                }
-            ]
+            const hours = calculateDailyAbsenceHours('2025-01-01', absence, [], { weekly_hours: 38.5 })
 
-            const hours = calculateSickLeaveHours(startDate, endDate, plannedShifts)
-
-            // Should still count the planned hours even on holiday
+            // Sick leave uses planned hours regardless of holiday
             expect(hours).toBe(8.5)
         })
 
         it('should return 0 for sick leave with no planned shifts', () => {
-            const startDate = '2025-01-15'
-            const endDate = '2025-01-15'
+            const absence = {
+                reason: 'sick',
+                type: 'Krank',
+                start_date: '2025-01-15',
+                end_date: '2025-01-15',
+                planned_shifts_snapshot: []
+            }
 
-            const plannedShifts = [] // No shifts planned
+            const hours = calculateDailyAbsenceHours('2025-01-15', absence, [], { weekly_hours: 38.5 })
 
-            const hours = calculateSickLeaveHours(startDate, endDate, plannedShifts)
-
+            // No shifts planned = 0h sick credit
             expect(hours).toBe(0)
         })
 
-        it('should handle multi-day sick leave with varying shifts', () => {
-            const startDate = '2025-01-13' // Monday
-            const endDate = '2025-01-15'   // Wednesday
+        it('should handle multi-day sick leave with varying shifts via live shifts fallback', () => {
+            const absence = {
+                reason: 'sick',
+                type: 'Krank',
+                start_date: '2025-01-13',
+                end_date: '2025-01-15'
+                // No snapshot - falls back to live planned shifts
+            }
 
             const plannedShifts = [
                 { start_time: '2025-01-13T08:00:00', end_time: '2025-01-13T16:30:00', type: 'TD1' }, // 8.5h
@@ -238,92 +190,108 @@ describe('Edge Case Tests', () => {
                 // No shift on Jan 15
             ]
 
-            const hours = calculateSickLeaveHours(startDate, endDate, plannedShifts)
+            let totalHours = 0
+            const days = eachDayOfInterval({ start: parseISO('2025-01-13'), end: parseISO('2025-01-15') })
+            days.forEach(day => {
+                totalHours += calculateDailyAbsenceHours(day, absence, plannedShifts, { weekly_hours: 38.5 })
+            })
 
-            expect(hours).toBe(17) // 8.5 + 8.5
+            expect(totalHours).toBe(17) // 8.5 + 8.5 + 0
         })
     })
 
-    describe('Negative Balance Edge Cases', () => {
+    describe('Balance Calculation Edge Cases', () => {
 
-        it('should correctly display negative balances', () => {
+        it('should show negative diff when no shifts worked', () => {
             const profile = { weekly_hours: 38.5, start_date: '2024-01-01' }
-            const shifts = [] // No shifts worked
+            const shifts = []
             const absences = []
-            const month = new Date('2025-01-15')
 
-            const balance = calculateMonthlyBalance(profile, shifts, absences, month)
+            const balance = calculateGenericBalance(profile, shifts, absences, [], new Date('2025-01-15'))
 
             expect(balance.diff).toBeLessThan(0)
             expect(balance.actual).toBe(0)
+            expect(balance.target).toBeGreaterThan(0)
         })
 
-        it('should handle balance carryover correctly', () => {
-            // Previous month had -10 hours
-            const previousBalance = -10
+        it('should return null for invalid start date', () => {
+            const profile = { weekly_hours: 38.5, start_date: 'not-a-date' }
 
-            // This month worked exactly target
-            const currentBalance = {
-                target: 166.7,
-                actual: 166.7,
-                diff: 0
-            }
+            const balance = calculateGenericBalance(profile, [], [], [], new Date('2025-01-15'))
 
-            const total = previousBalance + currentBalance.diff
-
-            expect(total).toBe(-10)
+            expect(balance).toBeNull()
         })
 
         it('should handle initial_balance from profile', () => {
             const profile = {
                 weekly_hours: 38.5,
-                start_date: '2024-01-01',
-                initial_balance: 20 // Started with 20h credit
+                start_date: '2025-01-01',
+                initial_balance: 20
             }
 
-            const monthlyDiff = -5 // Worked 5h less than target
-            const total = profile.initial_balance + monthlyDiff
+            const balance = calculateGenericBalance(profile, [], [], [], new Date('2025-01-15'))
 
-            expect(total).toBe(15)
+            // Carryover should include the initial balance
+            expect(balance.carryover).toBe(20) // No past months yet, just initial
+        })
+
+        it('should apply corrections to correct month only', () => {
+            const profile = { weekly_hours: 38.5, start_date: '2025-01-01' }
+            const corrections = [
+                { effective_month: '2025-01-01', correction_hours: 5 },
+                { effective_month: '2025-02-01', correction_hours: -3 }
+            ]
+
+            const janBalance = calculateGenericBalance(profile, [], [], [], new Date('2025-01-15'), corrections)
+            const febBalance = calculateGenericBalance(profile, [], [], [], new Date('2025-02-15'), corrections)
+
+            expect(janBalance.correction).toBe(5)
+            expect(febBalance.correction).toBe(-3)
+        })
+
+        it('should sum multiple corrections in same month', () => {
+            const profile = { weekly_hours: 38.5, start_date: '2025-01-01' }
+            const corrections = [
+                { effective_month: '2025-01-01', correction_hours: 5 },
+                { effective_month: '2025-01-01', correction_hours: 2 },
+                { effective_month: '2025-01-01', correction_hours: -1 }
+            ]
+
+            const balance = calculateGenericBalance(profile, [], [], [], new Date('2025-01-15'), corrections)
+
+            expect(balance.correction).toBe(6) // 5 + 2 - 1
         })
     })
 
     describe('DST (Daylight Saving Time) Edge Cases', () => {
 
-        it('should handle shift on DST spring forward (March)', () => {
+        it('should handle ND shift on DST spring forward (March)', () => {
             // In Austria, DST starts last Sunday of March
             // 2025: March 30, 2:00 AM -> 3:00 AM (lose 1 hour)
+            // ND shift spanning the transition
+            const hours = calculateWorkHours(
+                '2025-03-29T19:00:00',
+                '2025-03-30T08:00:00',
+                'ND'
+            )
 
-            const nightShiftStart = new Date('2025-03-29T21:00:00')
-            const nightShiftEnd = new Date('2025-03-30T07:00:00')
-
-            // Actual duration should be 10 hours, but clock shows 9
-            // In JavaScript, Date arithmetic handles this automatically
-            const durationMs = nightShiftEnd - nightShiftStart
-            const durationHours = durationMs / (1000 * 60 * 60)
-
-            // This is where it gets tricky - depends on interpretation
-            // JavaScript Date arithmetic in test environment doesn't apply DST
-            // In real app, this would be 9h during spring forward
-            expect(durationHours).toBeGreaterThanOrEqual(9)
+            // The real function handles DST via date-fns differenceInMinutes
+            // Result depends on system timezone but should be reasonable
+            expect(hours).toBeGreaterThan(8)
+            expect(hours).toBeLessThan(12)
         })
 
-        it('should handle shift on DST fall back (October)', () => {
-            // In Austria, DST ends last Sunday of October
+        it('should handle ND shift on DST fall back (October)', () => {
             // 2025: October 26, 3:00 AM -> 2:00 AM (gain 1 hour)
+            const hours = calculateWorkHours(
+                '2025-10-25T19:00:00',
+                '2025-10-26T08:00:00',
+                'ND'
+            )
 
-            const nightShiftStart = new Date('2025-10-25T21:00:00')
-            const nightShiftEnd = new Date('2025-10-26T07:00:00')
-
-            const durationMs = nightShiftEnd - nightShiftStart
-            const durationHours = durationMs / (1000 * 60 * 60)
-
-            // JavaScript Date arithmetic depends on the local timezone:
-            // - In Europe/Vienna: 11 hours (DST fall back adds 1 hour)
-            // - In UTC: 10 hours (no DST)
-            // We accept both to make the test CI-compatible
-            expect(durationHours).toBeGreaterThanOrEqual(10)
-            expect(durationHours).toBeLessThanOrEqual(11)
+            // Should be reasonable regardless of system timezone
+            expect(hours).toBeGreaterThan(9)
+            expect(hours).toBeLessThan(13)
         })
     })
 
@@ -331,165 +299,91 @@ describe('Edge Case Tests', () => {
 
         it('should handle shift spanning midnight on month boundary', () => {
             // Night shift from Jan 31 to Feb 1
-            const shift = {
-                start_time: '2025-01-31T21:00:00',
-                end_time: '2025-02-01T07:00:00',
-                type: 'ND'
-            }
+            const hours = calculateWorkHours(
+                '2025-01-31T21:00:00',
+                '2025-02-01T07:00:00',
+                'ND'
+            )
 
-            const shiftStartMonth = getMonth(new Date(shift.start_time))
-            const shiftEndMonth = getMonth(new Date(shift.end_time))
-
-            expect(shiftStartMonth).toBe(0) // January
-            expect(shiftEndMonth).toBe(1)   // February
-
-            // Business rule: Shift should count for the starting date's month
-            expect(shiftStartMonth).toBe(0)
+            // ND shift 21:00-07:00 = 10h base
+            // Readiness 00:30-06:00 (5.5h at 50% = 2.75h)
+            // Active: 21:00-00:30 (3.5h) + 06:00-07:00 (1h) = 4.5h
+            // Total: 4.5 + 2.75 = 7.25h
+            expect(hours).toBeGreaterThan(0)
+            expect(hours).toBeCloseTo(7.25, 1)
         })
 
         it('should correctly count shifts in February of leap year', () => {
             // 2024 was a leap year (Feb 29)
-            const feb2024Start = new Date('2024-02-01')
-            const feb2024End = new Date('2024-02-29')
-
-            const days = eachDayOfInterval({ start: feb2024Start, end: feb2024End })
-
+            const days = eachDayOfInterval({
+                start: new Date('2024-02-01'),
+                end: new Date('2024-02-29')
+            })
             expect(days.length).toBe(29)
         })
 
         it('should correctly count shifts in February of non-leap year', () => {
-            // 2025 is not a leap year
-            const feb2025Start = new Date('2025-02-01')
-            const feb2025End = new Date('2025-02-28')
-
-            const days = eachDayOfInterval({ start: feb2025Start, end: feb2025End })
-
+            const days = eachDayOfInterval({
+                start: new Date('2025-02-01'),
+                end: new Date('2025-02-28')
+            })
             expect(days.length).toBe(28)
         })
     })
 
     describe('Employee Start Date Edge Cases', () => {
 
-        it('should not credit hours before employee start date', () => {
+        it('should pro-rate target for mid-month start', () => {
             const profile = {
                 weekly_hours: 38.5,
                 start_date: '2025-02-15' // Started mid-February
             }
 
-            const month = new Date('2025-02-01')
-            const monthEnd = endOfMonth(month)
+            const balance = calculateGenericBalance(profile, [], [], [], new Date('2025-02-20'))
 
-            // Calculate pro-rated target
-            const startDate = parseISO(profile.start_date)
-            const workingDays = eachDayOfInterval({ start: startDate, end: monthEnd })
-                .filter(d => !isWeekend(d)).length
+            // Target should be pro-rated (fewer work days)
+            const fullMonthTarget = balance.target
+            const dailyHours = 38.5 / 5
 
-            const _totalWorkingDaysInMonth = eachDayOfInterval({
-                start: startOfMonth(month),
-                end: monthEnd
-            }).filter(d => !isWeekend(d)).length
-
-            const proRatedTarget = (profile.weekly_hours / 5) * workingDays
-
-            // Feb 15-28 = approx 10 working days
-            // Should be less than full month
-            expect(proRatedTarget).toBeLessThan(profile.weekly_hours * 4)
+            // Feb 15-28 has ~10 workdays, full month ~20 workdays
+            // Pro-rated target should be roughly half
+            expect(fullMonthTarget).toBeLessThan(dailyHours * 20)
+            expect(fullMonthTarget).toBeGreaterThan(0)
         })
 
-        it('should handle employee starting on weekend', () => {
+        it('should return 0 target for future start date', () => {
             const profile = {
                 weekly_hours: 38.5,
-                start_date: '2025-02-15' // This is a Saturday in 2025
+                start_date: '2026-01-01' // Starts next year
             }
 
-            const startDate = parseISO(profile.start_date)
-            const isStartOnWeekend = isWeekend(startDate)
+            const balance = calculateGenericBalance(profile, [], [], [], new Date('2025-02-15'))
 
-            // Employee can start on weekend, first workday is Monday
-            expect(typeof isStartOnWeekend).toBe('boolean')
+            // Future employee - no target
+            expect(balance.target).toBe(0)
         })
     })
 
     describe('Shift Type Edge Cases', () => {
 
-        it('should handle TEAM shift applying to all employees', () => {
-            const _teamShift = {
-                type: 'TEAM',
-                start_time: '2025-01-15T09:00:00',
-                end_time: '2025-01-15T12:00:00'
-            }
-
-            const allEmployees = ['user1', 'user2', 'user3']
-
-            // TEAM shifts should credit all employees
-            const creditsForAll = allEmployees.map(userId => ({
-                userId,
-                hours: 3 // 09:00 - 12:00
-            }))
-
-            expect(creditsForAll.length).toBe(3)
-            expect(creditsForAll.every(c => c.hours === 3)).toBe(true)
+        it('should calculate TD1 shift correctly', () => {
+            const hours = calculateWorkHours('2025-01-15T08:00:00', '2025-01-15T16:30:00', 'TD1')
+            expect(hours).toBe(8.5)
         })
 
-        it('should handle FORTBILDUNG shift not requiring coverage', () => {
-            const fortbildungShift = {
-                type: 'FORTBILDUNG',
-                start_time: '2025-01-15T08:00:00',
-                end_time: '2025-01-15T16:00:00',
-                title: 'Erste Hilfe Kurs'
-            }
-
-            // FORTBILDUNG doesn't need urgent coverage when sick
-            const requiresCoverage = fortbildungShift.type !== 'TEAM' &&
-                fortbildungShift.type !== 'FORTBILDUNG'
-
-            expect(requiresCoverage).toBe(false)
+        it('should calculate FORTBILDUNG as regular shift (no standby)', () => {
+            const hours = calculateWorkHours('2025-01-15T08:00:00', '2025-01-15T16:00:00', 'FORTBILDUNG')
+            expect(hours).toBe(8)
         })
 
-        it('should handle DBD (Dauer-Bereitschaftsdienst) correctly', () => {
-            const dbdShift = {
-                type: 'DBD',
-                start_time: '2025-01-15T07:00:00',
-                end_time: '2025-01-16T07:00:00' // 24 hours
-            }
-
-            const start = new Date(dbdShift.start_time)
-            const end = new Date(dbdShift.end_time)
-            const hours = (end - start) / (1000 * 60 * 60)
-
+        it('should calculate DBD (24h shift) correctly', () => {
+            const hours = calculateWorkHours('2025-01-15T07:00:00', '2025-01-16T07:00:00', 'DBD')
             expect(hours).toBe(24)
         })
-    })
 
-    describe('Correction Edge Cases', () => {
-
-        it('should apply correction to correct month only', () => {
-            const corrections = [
-                { effective_month: '2025-01', correction_hours: 5 },
-                { effective_month: '2025-02', correction_hours: -3 }
-            ]
-
-            const currentMonth = '2025-01'
-            const applicableCorrection = corrections.find(
-                c => c.effective_month === currentMonth
-            )?.correction_hours || 0
-
-            expect(applicableCorrection).toBe(5)
-        })
-
-        it('should sum multiple corrections in same month', () => {
-            const corrections = [
-                { effective_month: '2025-01', correction_hours: 5 },
-                { effective_month: '2025-01', correction_hours: 2 },
-                { effective_month: '2025-01', correction_hours: -1 }
-            ]
-
-            const currentMonth = '2025-01'
-            const totalCorrection = corrections
-                .filter(c => c.effective_month === currentMonth)
-                .reduce((sum, c) => sum + c.correction_hours, 0)
-
-            expect(totalCorrection).toBe(6) // 5 + 2 - 1
+        it('should calculate TEAM shift as regular hours', () => {
+            const hours = calculateWorkHours('2025-01-15T09:00:00', '2025-01-15T12:00:00', 'TEAM')
+            expect(hours).toBe(3)
         })
     })
 })

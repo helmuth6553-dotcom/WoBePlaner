@@ -31,7 +31,10 @@ async function getAuthToken(page: Page, email: string, password: string): Promis
 
     // Extract token from localStorage
     const token = await page.evaluate(() => {
-        const storageData = localStorage.getItem('sb-ngmqxwwsodpuurllqsxg-auth-token');
+        // Derive storage key from Supabase URL (pattern: sb-<project-ref>-auth-token)
+        const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || '';
+        const projectRef = supabaseUrl.match(/\/\/([^.]+)\./)?.[1] || 'ngmqxwwsodpuurllqsxg';
+        const storageData = localStorage.getItem(`sb-${projectRef}-auth-token`);
         if (storageData) {
             try {
                 const parsed = JSON.parse(storageData);

@@ -24,6 +24,7 @@ export default function ConfirmModal({ isOpen, onClose, onConfirm, title, messag
                     </button>
                     <button
                         onClick={() => { onConfirm(); onClose(); }}
+                        data-destructive={isDestructive || undefined}
                         className={`flex-1 py-3 text-white rounded-xl font-bold shadow-lg transition-transform active:scale-95 ${isDestructive ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-black hover:bg-gray-800 shadow-gray-200'}`}
                     >
                         {confirmText}

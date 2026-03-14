@@ -1,324 +1,318 @@
 /**
  * Error Scenario Tests
- * 
- * Tests for graceful error handling in the WoBePlaner app.
- * These tests verify that the app handles network failures,
- * service outages, and edge cases properly.
- * 
+ *
+ * Tests the REAL error handling functions from errorHandler.js.
+ * Verifies proper error categorization, user-friendly messages,
+ * retry logic, and Supabase error formatting.
+ *
  * Run with: npx vitest run src/utils/__tests__/errorScenarios.test.js
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+import {
+    ErrorTypes,
+    categorizeError,
+    getUserFriendlyError,
+    withRetry,
+    isRecoverableError,
+    formatSupabaseError
+} from '../errorHandler'
+import { calculateWorkHours, calculateDailyAbsenceHours } from '../timeCalculations'
+import { calculateGenericBalance } from '../balanceHelpers'
 
-// Mock Supabase client
-const mockSupabaseError = {
-    data: null,
-    error: {
-        message: 'Network request failed',
-        code: 'NETWORK_ERROR'
-    }
-}
+// Mock Sentry to avoid actual error reporting in tests
+vi.mock('../../lib/sentry', () => ({
+    captureError: vi.fn(),
+    addBreadcrumb: vi.fn()
+}))
 
-const mockTimeoutError = {
-    data: null,
-    error: {
-        message: 'Request timeout',
-        code: 'PGRST116'
-    }
-}
+describe('Error Categorization', () => {
 
-const mockAuthError = {
-    data: null,
-    error: {
-        message: 'JWT expired',
-        code: 'PGRST301'
-    }
-}
-
-describe('Error Scenario Tests', () => {
-
-    describe('Network Failures', () => {
-
-        it('should handle Supabase network error gracefully', () => {
-            // Simulate what happens when Supabase returns a network error
-            const result = mockSupabaseError
-
-            expect(result.error).toBeDefined()
-            expect(result.error.message).toContain('Network')
-            expect(result.data).toBeNull()
-
-            // The app should:
-            // 1. Show a user-friendly error message
-            // 2. Log the error
-            // 3. Not crash
-        })
-
-        it('should handle timeout errors gracefully', () => {
-            const result = mockTimeoutError
-
-            expect(result.error).toBeDefined()
-            expect(result.error.message).toContain('timeout')
-        })
-
-        it('should handle auth token expiration', () => {
-            const result = mockAuthError
-
-            expect(result.error).toBeDefined()
-            expect(result.error.message).toContain('JWT')
-
-            // The app should:
-            // 1. Attempt to refresh the token
-            // 2. If refresh fails, redirect to login
-            // 3. Show notification to user
-        })
+    it('should categorize network errors', () => {
+        expect(categorizeError({ message: 'Network request failed' })).toBe(ErrorTypes.NETWORK)
+        expect(categorizeError({ message: 'Failed to fetch' })).toBe(ErrorTypes.NETWORK)
+        expect(categorizeError({ message: 'Connection refused' })).toBe(ErrorTypes.NETWORK)
     })
 
-    describe('Data Validation Edge Cases', () => {
-
-        it('should handle null/undefined user data', () => {
-            const user = null
-            const safeUser = user || { id: null, email: null }
-
-            expect(safeUser).toBeDefined()
-            expect(safeUser.id).toBeNull()
-        })
-
-        it('should handle empty arrays from database', () => {
-            const shifts = []
-            const absences = []
-
-            // Calculate should not crash with empty data
-            const totalHours = shifts.reduce((sum, s) => sum + (s.hours || 0), 0)
-            expect(totalHours).toBe(0)
-
-            const absenceDays = absences.length
-            expect(absenceDays).toBe(0)
-        })
-
-        it('should handle malformed date strings', () => {
-            const invalidDate = 'not-a-date'
-
-            const parsed = new Date(invalidDate)
-            expect(isNaN(parsed.getTime())).toBe(true)
-
-            // Safe date parsing
-            const safeParseDate = (dateStr) => {
-                try {
-                    const d = new Date(dateStr)
-                    return isNaN(d.getTime()) ? null : d
-                } catch {
-                    return null
-                }
-            }
-
-            expect(safeParseDate(invalidDate)).toBeNull()
-            expect(safeParseDate('2025-01-15')).not.toBeNull()
-        })
-
-        it('should handle negative hour calculations', () => {
-            // Edge case: More interruptions than work time
-            const _workStart = new Date('2025-01-15T08:00:00')
-            const _workEnd = new Date('2025-01-15T12:00:00')
-            const _interruptions = [
-                { start: new Date('2025-01-15T08:00:00'), end: new Date('2025-01-15T13:00:00') }
-            ]
-
-            // Interruption is longer than work period - should not go negative
-            const workHours = 4 // 08:00 - 12:00
-            const interruptionHours = 5 // 08:00 - 13:00 (capped at work end)
-
-            const netHours = Math.max(0, workHours - Math.min(interruptionHours, workHours))
-            expect(netHours).toBeGreaterThanOrEqual(0)
-        })
+    it('should categorize auth/JWT errors', () => {
+        expect(categorizeError({ message: 'JWT expired', code: 'PGRST301' })).toBe(ErrorTypes.AUTH)
+        expect(categorizeError({ message: 'Token expired' })).toBe(ErrorTypes.AUTH)
+        expect(categorizeError({ code: 'pgrst301' })).toBe(ErrorTypes.AUTH)
     })
 
-    describe('Concurrent Operations', () => {
-
-        it('should handle race condition in state updates', async () => {
-            // Simulate rapid state updates
-            let counter = 0
-            const increment = () => {
-                const current = counter
-                counter = current + 1
-            }
-
-            // Simulate concurrent updates
-            await Promise.all([
-                Promise.resolve().then(increment),
-                Promise.resolve().then(increment),
-                Promise.resolve().then(increment)
-            ])
-
-            // Without proper synchronization, this might not always be 3
-            expect(counter).toBe(3)
-        })
-
-        it('should handle duplicate form submissions', () => {
-            let submissionCount = 0
-            let isSubmitting = false
-
-            const handleSubmit = () => {
-                if (isSubmitting) return false // Prevent double submit
-                isSubmitting = true
-                submissionCount++
-                return true
-            }
-
-            handleSubmit()
-            handleSubmit() // Should be blocked
-            handleSubmit() // Should be blocked
-
-            expect(submissionCount).toBe(1)
-        })
+    it('should categorize timeout errors', () => {
+        expect(categorizeError({ message: 'Request timeout' })).toBe(ErrorTypes.TIMEOUT)
+        expect(categorizeError({ code: 'timeout' })).toBe(ErrorTypes.TIMEOUT)
     })
 
-    describe('Offline Mode Handling', () => {
-
-        it('should detect online/offline status', () => {
-            // Mock navigator.onLine
-            const mockOnline = true
-            const mockOffline = false
-
-            expect(mockOnline).toBe(true)
-            expect(mockOffline).toBe(false)
-
-            // App should:
-            // 1. Queue operations when offline
-            // 2. Sync when back online
-            // 3. Show offline indicator
-        })
-
-        it('should queue operations when offline', () => {
-            const operationQueue = []
-            const isOnline = false
-
-            const performOperation = (op) => {
-                if (!isOnline) {
-                    operationQueue.push(op)
-                    return { queued: true }
-                }
-                return { executed: true }
-            }
-
-            const result = performOperation({ type: 'save_shift', data: {} })
-
-            expect(result.queued).toBe(true)
-            expect(operationQueue.length).toBe(1)
-        })
+    it('should categorize permission errors', () => {
+        expect(categorizeError({ code: '42501' })).toBe(ErrorTypes.PERMISSION)
+        expect(categorizeError({ message: 'permission denied' })).toBe(ErrorTypes.PERMISSION)
+        expect(categorizeError({ message: 'violates policy' })).toBe(ErrorTypes.PERMISSION)
     })
 
-    describe('Authorization Edge Cases', () => {
-
-        it('should handle missing role gracefully', () => {
-            const user = { id: '123', email: 'test@test.com' }
-            const role = null // Role fetch failed
-
-            const isAdmin = role === 'admin'
-            const canAccessAdmin = isAdmin && !!user
-
-            expect(canAccessAdmin).toBe(false)
-            // App should show error or redirect, not crash
-        })
-
-        it('should handle RLS policy denials', () => {
-            const rlsError = {
-                code: 'PGRST116',
-                message: 'The result contains 0 rows',
-                details: null
-            }
-
-            // This is not an error, just empty result due to RLS
-            expect(rlsError.code).toBe('PGRST116')
-
-            // App should handle this as "no access" not "error"
-        })
-
-        it('should prevent accessing other users data', () => {
-            const currentUserId = 'user-123'
-            const requestedUserId = 'user-456'
-            const isAdmin = false
-
-            const canAccess = currentUserId === requestedUserId || isAdmin
-
-            expect(canAccess).toBe(false)
-        })
+    it('should categorize not-found errors', () => {
+        expect(categorizeError({ code: 'PGRST116' })).toBe(ErrorTypes.NOT_FOUND)
+        expect(categorizeError({ message: 'The result contains 0 rows' })).toBe(ErrorTypes.NOT_FOUND)
     })
 
-    describe('Form Validation Edge Cases', () => {
+    it('should categorize validation errors', () => {
+        expect(categorizeError({ code: '23505' })).toBe(ErrorTypes.VALIDATION)
+        expect(categorizeError({ message: 'validation failed' })).toBe(ErrorTypes.VALIDATION)
+    })
 
-        it('should handle extremely long input strings', () => {
-            const longString = 'a'.repeat(10000)
-            const maxLength = 500
+    it('should categorize server errors', () => {
+        expect(categorizeError({ code: '500' })).toBe(ErrorTypes.SERVER)
+        expect(categorizeError({ message: 'Internal server error' })).toBe(ErrorTypes.SERVER)
+    })
 
-            const truncated = longString.substring(0, maxLength)
-            expect(truncated.length).toBe(maxLength)
+    it('should return UNKNOWN for null/undefined errors', () => {
+        expect(categorizeError(null)).toBe(ErrorTypes.UNKNOWN)
+        expect(categorizeError(undefined)).toBe(ErrorTypes.UNKNOWN)
+    })
+
+    it('should return UNKNOWN for unrecognized errors', () => {
+        expect(categorizeError({ message: 'something weird happened' })).toBe(ErrorTypes.UNKNOWN)
+        expect(categorizeError({})).toBe(ErrorTypes.UNKNOWN)
+    })
+})
+
+describe('User-Friendly Error Messages', () => {
+
+    it('should return German-language messages for network errors', () => {
+        const result = getUserFriendlyError({ message: 'Network request failed' })
+
+        expect(result.type).toBe(ErrorTypes.NETWORK)
+        expect(result.title).toBe('Verbindungsproblem')
+        expect(result.message).toContain('Verbindung')
+        expect(result.action).toBe('Nochmal versuchen')
+    })
+
+    it('should return auth message for JWT errors', () => {
+        const result = getUserFriendlyError({ message: 'JWT expired' })
+
+        expect(result.type).toBe(ErrorTypes.AUTH)
+        expect(result.title).toBe('Anmeldung erforderlich')
+    })
+
+    it('should use error.details as message when available', () => {
+        const result = getUserFriendlyError({
+            message: 'Network error',
+            details: 'Spezifische Fehlerbeschreibung'
         })
 
-        it('should sanitize XSS attempts in inputs', () => {
-            const maliciousInput = '<script>alert("xss")</script>'
+        expect(result.message).toBe('Spezifische Fehlerbeschreibung')
+    })
 
-            const sanitize = (input) => {
-                return input.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    it('should preserve original error reference', () => {
+        const original = { message: 'test error', code: 'TEST' }
+        const result = getUserFriendlyError(original)
+
+        expect(result.originalError).toBe(original)
+    })
+
+    it('should handle all error types without throwing', () => {
+        Object.values(ErrorTypes).forEach(type => {
+            // Create an error that maps to each type
+            const errors = {
+                [ErrorTypes.NETWORK]: { message: 'network error' },
+                [ErrorTypes.AUTH]: { message: 'jwt expired' },
+                [ErrorTypes.VALIDATION]: { message: 'validation error' },
+                [ErrorTypes.PERMISSION]: { message: 'permission denied' },
+                [ErrorTypes.NOT_FOUND]: { message: 'not found' },
+                [ErrorTypes.SERVER]: { message: 'server error' },
+                [ErrorTypes.TIMEOUT]: { message: 'timeout' },
+                [ErrorTypes.UNKNOWN]: { message: 'unknown issue' }
             }
 
-            const safe = sanitize(maliciousInput)
-            expect(safe).not.toContain('<script>')
-            expect(safe).toContain('&lt;script&gt;')
-        })
-
-        it('should reject invalid time formats', () => {
-            const validTime = '08:30'
-            const invalidTime = '25:00'
-            const malformedTime = 'abc'
-
-            const isValidTime = (time) => {
-                const regex = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/
-                return regex.test(time)
-            }
-
-            expect(isValidTime(validTime)).toBe(true)
-            expect(isValidTime(invalidTime)).toBe(false)
-            expect(isValidTime(malformedTime)).toBe(false)
+            const result = getUserFriendlyError(errors[type])
+            expect(result.title).toBeTruthy()
+            expect(result.message).toBeTruthy()
+            expect(result.action).toBeTruthy()
         })
     })
 })
 
-describe('Supabase Error Recovery', () => {
+describe('Retry Logic (withRetry)', () => {
 
-    it('should retry failed requests with exponential backoff', async () => {
+    it('should succeed on first try without retrying', async () => {
         let attempts = 0
-        const maxRetries = 3
+        const result = await withRetry(() => {
+            attempts++
+            return 'success'
+        })
 
-        const fetchWithRetry = async () => {
-            for (let i = 0; i < maxRetries; i++) {
-                attempts++
-                const success = attempts >= 3 // Succeed on 3rd try
-                if (success) return { data: 'success' }
-                await new Promise(r => setTimeout(r, Math.pow(2, i) * 10)) // Exponential backoff
-            }
-            throw new Error('Max retries exceeded')
-        }
+        expect(result).toBe('success')
+        expect(attempts).toBe(1)
+    })
 
-        const result = await fetchWithRetry()
-        expect(result.data).toBe('success')
+    it('should retry on failure and succeed', async () => {
+        let attempts = 0
+        const result = await withRetry(() => {
+            attempts++
+            if (attempts < 3) throw new Error('fail')
+            return 'success'
+        }, { maxRetries: 3, baseDelay: 1 })
+
+        expect(result).toBe('success')
         expect(attempts).toBe(3)
     })
 
-    it('should handle partial data on error', () => {
-        // Simulate fetching multiple resources where one fails
-        const shifts = [{ id: 1 }, { id: 2 }]
-        const absences = null // This fetch failed
-        const users = [{ id: 'a' }]
+    it('should throw after max retries exhausted', async () => {
+        let attempts = 0
+        await expect(
+            withRetry(() => {
+                attempts++
+                throw new Error('always fails')
+            }, { maxRetries: 3, baseDelay: 1 })
+        ).rejects.toThrow('always fails')
 
-        // App should continue with available data
-        const hasShifts = shifts !== null && shifts.length > 0
-        const hasAbsences = absences !== null && absences.length > 0
-        const hasUsers = users !== null && users.length > 0
+        expect(attempts).toBe(3)
+    })
 
-        expect(hasShifts).toBe(true)
-        expect(hasAbsences).toBe(false)
-        expect(hasUsers).toBe(true)
+    it('should call onRetry callback with attempt info', async () => {
+        const retryInfos = []
+        let attempts = 0
 
-        // Should show partial data with warning, not crash
+        await withRetry(() => {
+            attempts++
+            if (attempts < 3) throw new Error('retry me')
+            return 'done'
+        }, {
+            maxRetries: 3,
+            baseDelay: 1,
+            onRetry: (info) => retryInfos.push(info)
+        })
+
+        expect(retryInfos).toHaveLength(2) // 2 retries before success
+        expect(retryInfos[0].attempt).toBe(1)
+        expect(retryInfos[1].attempt).toBe(2)
+    })
+})
+
+describe('Recoverable Error Detection', () => {
+
+    it('should mark network errors as recoverable', () => {
+        expect(isRecoverableError({ message: 'network error' })).toBe(true)
+    })
+
+    it('should mark timeout errors as recoverable', () => {
+        expect(isRecoverableError({ message: 'timeout' })).toBe(true)
+    })
+
+    it('should mark auth errors as NOT recoverable', () => {
+        expect(isRecoverableError({ message: 'jwt expired' })).toBe(false)
+    })
+
+    it('should mark permission errors as NOT recoverable', () => {
+        expect(isRecoverableError({ code: '42501' })).toBe(false)
+    })
+
+    it('should mark validation errors as NOT recoverable', () => {
+        expect(isRecoverableError({ message: 'validation error' })).toBe(false)
+    })
+})
+
+describe('Supabase Error Formatting', () => {
+
+    it('should return null for PGRST116 (empty result)', () => {
+        expect(formatSupabaseError({ code: 'PGRST116' })).toBeNull()
+    })
+
+    it('should format duplicate key error (23505)', () => {
+        const result = formatSupabaseError({ code: '23505' })
+        expect(result).toContain('existiert bereits')
+    })
+
+    it('should format foreign key error (23503)', () => {
+        const result = formatSupabaseError({ code: '23503' })
+        expect(result).toContain('verwendet')
+    })
+
+    it('should format permission error (42501)', () => {
+        const result = formatSupabaseError({ code: '42501' })
+        expect(result).toContain('Berechtigung')
+    })
+
+    it('should return error message for unknown errors', () => {
+        const result = formatSupabaseError({ message: 'Something went wrong' })
+        expect(result).toBe('Something went wrong')
+    })
+
+    it('should return generic message when no message available', () => {
+        const result = formatSupabaseError({ code: '99999' })
+        expect(result).toBe('Ein Fehler ist aufgetreten.')
+    })
+
+    it('should return null for null/undefined input', () => {
+        expect(formatSupabaseError(null)).toBeNull()
+        expect(formatSupabaseError(undefined)).toBeNull()
+    })
+})
+
+describe('Data Validation with Real Functions', () => {
+
+    it('should handle calculateWorkHours with null inputs', () => {
+        expect(calculateWorkHours(null, null, 'TD1')).toBe(0)
+        expect(calculateWorkHours(undefined, undefined, 'ND')).toBe(0)
+    })
+
+    it('should handle calculateDailyAbsenceHours with missing profile', () => {
+        const absence = { reason: 'vacation', type: 'Urlaub' }
+        // Should use default weekly_hours (40) when profile is null
+        const hours = calculateDailyAbsenceHours('2025-01-15', absence, [], null)
+
+        // Wednesday = workday, default 40/5 = 8h
+        expect(hours).toBe(8)
+    })
+
+    it('should handle calculateDailyAbsenceHours on weekend', () => {
+        const absence = { reason: 'vacation', type: 'Urlaub' }
+        // Jan 18, 2025 is a Saturday
+        const hours = calculateDailyAbsenceHours('2025-01-18', absence, [], { weekly_hours: 38.5 })
+
+        expect(hours).toBe(0)
+    })
+
+    it('should handle sick leave with no shifts and no snapshot', () => {
+        const absence = {
+            reason: 'sick',
+            type: 'Krank',
+            start_date: '2025-01-15',
+            end_date: '2025-01-15'
+            // No planned_shifts_snapshot, no planned_hours
+        }
+
+        const hours = calculateDailyAbsenceHours('2025-01-15', absence, [], { weekly_hours: 38.5 })
+
+        // No planned shifts = 0h sick credit
+        expect(hours).toBe(0)
+    })
+})
+
+describe('Balance Edge Cases with Real calculateGenericBalance', () => {
+
+    it('should return null for null profile', () => {
+        const result = calculateGenericBalance(null, [], [], [])
+        expect(result).toBeNull()
+    })
+
+    it('should handle empty data gracefully', () => {
+        const profile = { weekly_hours: 38.5, start_date: '2025-01-01' }
+        const result = calculateGenericBalance(profile, [], [], [], new Date('2025-01-15'))
+
+        expect(result).not.toBeNull()
+        expect(result.actual).toBe(0)
+        expect(result.vacation).toBe(0)
+        expect(result.target).toBeGreaterThan(0)
+    })
+
+    it('should handle profile with missing weekly_hours (defaults to 40)', () => {
+        const profile = { start_date: '2025-01-01' }
+        const result = calculateGenericBalance(profile, [], [], [], new Date('2025-01-15'))
+
+        expect(result).not.toBeNull()
+        // Default 40h/week, target should reflect that
+        expect(result.target).toBeGreaterThan(0)
     })
 })

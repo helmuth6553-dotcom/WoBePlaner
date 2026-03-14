@@ -560,36 +560,10 @@ export default function ProfileStats() {
                     </div>
                     <p className="text-xs text-gray-400 mb-4">Monatlicher Saldo der letzten 12 Monate</p>
 
-                    {/* Bar Chart */}
-                    <div className="flex items-end gap-1 h-32 mb-1">
-                        {cumulativeData.map((m) => {
-                            const barHeight = maxAbsDiff > 0 ? (Math.abs(m.diff) / maxAbsDiff) * 100 : 0
-                            const isPositive = m.diff >= 0
-                            return (
-                                <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full relative group">
-                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                        {m.diff > 0 ? '+' : ''}{m.diff}h
-                                    </div>
-                                    <div
-                                        className={`w-full rounded-t-sm transition-all ${isPositive ? 'bg-emerald-400' : 'bg-red-400'}`}
-                                        style={{ height: `${Math.max(barHeight, 3)}%` }}
-                                    />
-                                </div>
-                            )
-                        })}
-                    </div>
-                    <div className="flex gap-1 mb-4">
-                        {cumulativeData.map(m => (
-                            <div key={m.month} className="flex-1 text-center">
-                                <span className="text-[9px] text-gray-400">{m.label}</span>
-                            </div>
-                        ))}
-                    </div>
-
                     {/* Cumulative Trend Line */}
-                    <div className="border-t border-gray-100 pt-4 mt-1">
-                        <div className="flex items-center justify-between mb-3">
-                            <p className="text-xs text-gray-400">Kumulierter Gesamtsaldo</p>
+                    <div className="mt-2">
+                        <div className="flex items-center justify-between mb-6">
+                            <p className="text-xs text-gray-400">Kumulierter Gesamtsaldo am Monatsende</p>
                             <span className={`text-xs font-bold ${(cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0) >= 0 ? 'text-teal-700' : 'text-red-600'}`}>
                                 {(cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0) > 0 ? '+' : ''}
                                 {cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0}h
@@ -635,16 +609,27 @@ export default function ProfileStats() {
                                     const x = (i / (cumulativeData.length - 1 || 1)) * 480 + 10
                                     const y = 50 - (m.cumulative / maxAbsCumulative) * 40
                                     return (
-                                        <circle
-                                            key={m.month}
-                                            cx={x}
-                                            cy={y}
-                                            r="4"
-                                            fill={m.cumulative >= 0 ? '#0d9488' : '#ef4444'}
-                                            stroke="white"
-                                            strokeWidth="2"
-                                            vectorEffect="non-scaling-stroke"
-                                        />
+                                        <g key={m.month}>
+                                            <circle
+                                                cx={x}
+                                                cy={y}
+                                                r="4"
+                                                fill={m.cumulative >= 0 ? '#0d9488' : '#ef4444'}
+                                                stroke="white"
+                                                strokeWidth="2"
+                                                vectorEffect="non-scaling-stroke"
+                                            />
+                                            <text
+                                                x={x}
+                                                y={y - 8}
+                                                fontSize="10"
+                                                fill="#4b5563"
+                                                textAnchor="middle"
+                                                fontWeight="600"
+                                            >
+                                                {m.cumulative > 0 ? '+' : ''}{m.cumulative}
+                                            </text>
+                                        </g>
                                     )
                                 })}
                             </svg>
@@ -675,10 +660,15 @@ export default function ProfileStats() {
                     {flexMonths.map(m => {
                         const barHeight = maxFlex > 0 ? (m.count / maxFlex) * 100 : 0
                         return (
-                            <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full relative group">
-                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                    {m.count}×
-                                </div>
+                            <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full relative">
+                                {m.count > 0 && (
+                                    <div 
+                                        className="absolute left-1/2 -translate-x-1/2 pb-1 text-[10px] font-bold text-emerald-700 z-10"
+                                        style={{ bottom: `${Math.max(barHeight, 8)}%` }}
+                                    >
+                                        {m.count}
+                                    </div>
+                                )}
                                 {m.count > 0 ? (
                                     <div
                                         className="w-full bg-emerald-400 rounded-t-sm transition-all"
@@ -724,10 +714,15 @@ export default function ProfileStats() {
                             {interruptionMonths.map(m => {
                                 const barHeight = maxInterruptions > 0 ? (m.count / maxInterruptions) * 100 : 0
                                 return (
-                                    <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full relative group">
-                                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                            {m.count}×
-                                        </div>
+                                    <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full relative">
+                                        {m.count > 0 && (
+                                            <div 
+                                                className="absolute left-1/2 -translate-x-1/2 pb-1 text-[10px] font-bold text-orange-700 z-10"
+                                                style={{ bottom: `${Math.max(barHeight, 8)}%` }}
+                                            >
+                                                {m.count}
+                                            </div>
+                                        )}
                                         {m.count > 0 ? (
                                             <div
                                                 className="w-full bg-orange-400 rounded-t-sm transition-all"

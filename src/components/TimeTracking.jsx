@@ -3,10 +3,11 @@ import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
 import { format, parseISO, startOfMonth, endOfMonth, addDays, subDays, eachDayOfInterval, areIntervalsOverlapping } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { CheckCircle, Save, Calendar, Download, Sun, Thermometer, ChevronRight, ChevronLeft, Users, XCircle, Pencil } from 'lucide-react'
+import { CheckCircle, Save, Calendar, Download, Sun, Thermometer, ChevronRight, ChevronLeft, Users, XCircle, Pencil, TrendingUp, TrendingDown, Clock } from 'lucide-react'
 import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
+import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateReportHash } from '../utils/security'
-import { constructIso, constructInterruptionIso } from '../utils/timeTrackingHelpers'
+import { constructIso, constructInterruptionIso, isValidInterruptionTime } from '../utils/timeTrackingHelpers'
 import { findSnapshotEntry, calculateCorrection } from '../utils/pdfGenerator'
 
 // Shift types that support multiple participants (group events)
@@ -23,6 +24,7 @@ export default function TimeTracking() {
     const [editingItem, setEditingItem] = useState(null)
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'))
     const [userProfile, setUserProfile] = useState(null) // NEW: Store user profile
+    const [balanceData, setBalanceData] = useState(null)
 
     // Report State
     const [monthStatus, setMonthStatus] = useState(null)
@@ -61,14 +63,24 @@ export default function TimeTracking() {
                 setFormData({
                     actualStart: format(parseISO(entry.actual_start), 'HH:mm'),
                     actualEnd: format(parseISO(entry.actual_end), 'HH:mm'),
-                    interruptions: entry.interruptions || []
+                    interruptions: (entry.interruptions || []).map(int => ({
+                        start: typeof int.start === 'string' && int.start.includes('T') ? format(parseISO(int.start), 'HH:mm') : int.start,
+                        end: typeof int.end === 'string' && int.end.includes('T') ? format(parseISO(int.end), 'HH:mm') : int.end,
+                        note: int.note || ''
+                    })),
+                    newIntStart: '',
+                    newIntEnd: '',
+                    newIntNote: ''
                 })
             } else {
                 if (editingItem.itemType === 'shift') {
                     setFormData({
                         actualStart: format(parseISO(editingItem.start_time), 'HH:mm'),
                         actualEnd: format(parseISO(editingItem.end_time), 'HH:mm'),
-                        interruptions: []
+                        interruptions: [],
+                        newIntStart: '',
+                        newIntEnd: '',
+                        newIntNote: ''
                     })
                 } else {
                     // Absence Default: Use weekly_hours / 5 for daily hours
@@ -80,7 +92,10 @@ export default function TimeTracking() {
                     setFormData({
                         actualStart: '08:00',
                         actualEnd: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
-                        interruptions: []
+                        interruptions: [],
+                        newIntStart: '',
+                        newIntEnd: '',
+                        newIntNote: ''
                     })
                 }
             }
@@ -135,8 +150,8 @@ export default function TimeTracking() {
     }
 
     // fetchData is defined below - this is fine because JavaScript hoists function declarations
-    async function fetchData() {
-        setLoading(true)
+    async function fetchData(isSilent = false) {
+        if (!isSilent) setLoading(true)
         const start = startOfMonth(new Date(selectedMonth))
         const end = endOfMonth(new Date(selectedMonth))
         const [year, month] = selectedMonth.split('-').map(Number)
@@ -498,7 +513,74 @@ export default function TimeTracking() {
         }
 
         setEntries(entriesMap)
-        setLoading(false)
+
+        // --- 6. Calc Live Balance ---
+        // Fetch remaining global data needed for accurate balance up to this month
+        try {
+            const { data: allMyInterests } = await supabase
+                .from('shift_interests')
+                .select('shift:shifts(id, start_time, end_time, assigned_to, type)')
+                .eq('user_id', user.id)
+
+            const { data: allMyDirectShifts } = await supabase
+                .from('shifts')
+                .select('id, start_time, end_time, assigned_to, type')
+                .eq('assigned_to', user.id)
+
+            const { data: allTeamShifts } = await supabase
+                .from('shifts')
+                .select('id, start_time, end_time, type')
+                .eq('type', 'TEAM')
+
+            const rawShiftsFromInterests = allMyInterests?.map(i => i.shift).filter(Boolean) || []
+            const globalShifts = [...rawShiftsFromInterests]
+            ;(allMyDirectShifts || []).forEach(s => {
+                if (!globalShifts.some(h => h.id === s.id)) globalShifts.push(s)
+            })
+            ;(allTeamShifts || []).forEach(s => {
+                if (!globalShifts.some(h => h.id === s.id)) globalShifts.push(s)
+            })
+
+            const { data: allMyAbsences } = await supabase
+                .from('absences')
+                .select('start_date, end_date, user_id, status, type, planned_hours')
+                .eq('user_id', user.id).eq('status', 'genehmigt')
+
+            const { data: allMyEntries } = await supabase
+                .from('time_entries').select('*').eq('user_id', user.id)
+
+            const { data: allMyCorrs } = await supabase
+                .from('balance_corrections')
+                .select('correction_hours, effective_month')
+                .eq('user_id', user.id)
+
+            // Calculate balance pretending we are in the selected month
+            // We use the 15th of the month to safely avoid timezone edge cases at month boundaries
+            const targetDateForBalance = new Date(`${selectedMonth}-15T12:00:00Z`)
+            
+            // To ensure local live edits are reflected immediately without waiting for DB replication,
+            // we merge the local `allTimeEntries` (which might contain optimistic updates) into `allMyEntries`
+            const mergedEntries = [...(allMyEntries || [])]
+            allTimeEntries.forEach(localEntry => {
+               const idx = mergedEntries.findIndex(e => e.id === localEntry.id)
+               if(idx >= 0) mergedEntries[idx] = localEntry
+               else mergedEntries.push(localEntry)
+            })
+
+            const b = calculateGenericBalance(
+                currentProfile, 
+                globalShifts, 
+                allMyAbsences || [], 
+                mergedEntries, 
+                targetDateForBalance, 
+                allMyCorrs || []
+            )
+            setBalanceData(b)
+        } catch (err) {
+            console.error('Error fetching balance data in TimeTracking:', err)
+        }
+
+        if (!isSilent) setLoading(false)
     }
 
 
@@ -555,7 +637,7 @@ export default function TimeTracking() {
                 setEditingItem(null)
                 setFormData({ actualStart: '', actualEnd: '', interruptions: [] })
                 setCalculatedHours(null)
-                fetchData()
+                fetchData(true)
                 return
             }
 
@@ -596,9 +678,11 @@ export default function TimeTracking() {
                     ...prevEntries,
                     [editingItem.id]: newEntry
                 }))
+                // Re-fetch everything silently to update the balance calculation correctly
+                // This is safer than trying to mock the complex balance calculation locally
+                fetchData(true)
             }
             setEditingItem(null)
-            // No fetchData() - keeps scroll position and feels instant!
         }
     }
 
@@ -801,6 +885,40 @@ export default function TimeTracking() {
                     </button>
                 </div>
             </div>
+
+            {/* Live Balance Card */}
+            {balanceData && !loading && (
+                <div className="bg-white rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80 overflow-hidden mb-6 p-4">
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                        <Clock size={18} className="text-gray-400" />
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mein Stundenkonto</h3>
+                        <span className="text-[10px] text-gray-400 ml-auto">{format(new Date(selectedMonth + '-01'), 'MMMM yyyy', { locale: de })}</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                        <div className="bg-gray-50 rounded-lg p-1.5">
+                            <div className="text-[9px] text-gray-400 uppercase font-bold">Soll</div>
+                            <div className="font-bold text-sm text-gray-700">{balanceData.target}h</div>
+                        </div>
+                        <div className="bg-blue-50 rounded-lg p-1.5">
+                            <div className="text-[9px] text-blue-400 uppercase font-bold">Ist</div>
+                            <div className="font-bold text-sm text-blue-700">{Math.round((balanceData.actual + balanceData.vacation) * 100) / 100}h</div>
+                        </div>
+                        <div className={`rounded-lg p-1.5 ${balanceData.carryover >= 0 ? 'bg-gray-50' : 'bg-red-50'}`}>
+                            <div className={`text-[9px] uppercase font-bold ${balanceData.carryover >= 0 ? 'text-gray-400' : 'text-red-600'}`}>Übertrag</div>
+                            <div className={`font-bold text-sm ${balanceData.carryover >= 0 ? 'text-gray-700' : 'text-red-700'}`}>
+                                {balanceData.carryover > 0 ? '+' : ''}{balanceData.carryover}h
+                            </div>
+                        </div>
+                        <div className={`rounded-lg p-1.5 ${balanceData.total >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                            <div className={`text-[9px] uppercase font-bold ${balanceData.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>Gesamt</div>
+                            <div className={`font-bold text-sm ${balanceData.total >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                {balanceData.total > 0 ? '+' : ''}{balanceData.total}h
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {loading ? <div className="text-center py-10 text-gray-400">Lade...</div> : (
                 <div className="space-y-3 pb-24">
@@ -1080,8 +1198,14 @@ export default function TimeTracking() {
                             <h3 className="text-xl font-bold mb-4">{isApproved ? 'Details' : 'Erfassen'}</h3>
                             <div className="space-y-4 mb-6">
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="text-sm font-bold">Start</label><input type="time" value={formData.actualStart} onChange={e => setFormData({ ...formData, actualStart: e.target.value })} readOnly={isApproved} className="w-full border p-3 rounded-xl text-center" /></div>
-                                    <div><label className="text-sm font-bold">Ende</label><input type="time" value={formData.actualEnd} onChange={e => setFormData({ ...formData, actualEnd: e.target.value })} readOnly={isApproved} className="w-full border p-3 rounded-xl text-center" /></div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Start</label>
+                                        <input type="time" value={formData.actualStart} onChange={e => setFormData({ ...formData, actualStart: e.target.value })} readOnly={isApproved} className={`w-full border-2 p-3 rounded-xl text-lg font-bold text-center transition-all outline-none ${isApproved ? 'bg-gray-100 border-gray-200 text-gray-500' : 'bg-gray-50 border-gray-200 focus:border-black focus:ring-1 focus:ring-black hover:border-gray-300'}`} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Ende</label>
+                                        <input type="time" value={formData.actualEnd} onChange={e => setFormData({ ...formData, actualEnd: e.target.value })} readOnly={isApproved} className={`w-full border-2 p-3 rounded-xl text-lg font-bold text-center transition-all outline-none ${isApproved ? 'bg-gray-100 border-gray-200 text-gray-500' : 'bg-gray-50 border-gray-200 focus:border-black focus:ring-1 focus:ring-black hover:border-gray-300'}`} />
+                                    </div>
                                 </div>
                                 {/* Only show interruptions for night shifts */}
                                 {editingItem.type && (editingItem.type.toUpperCase() === 'ND' || editingItem.type.toLowerCase().includes('nacht')) && (
@@ -1090,7 +1214,9 @@ export default function TimeTracking() {
                                         {(formData.interruptions || []).map((int, idx) => (
                                             <div key={idx} className="bg-white p-2 rounded text-sm border shadow-sm space-y-1">
                                                 <div className="flex justify-between items-center">
-                                                    <span className="font-mono font-medium">{int.start} - {int.end}</span>
+                                                    <span className="font-mono font-medium">
+                                                        {typeof int.start === 'string' && int.start.includes('T') ? format(parseISO(int.start), 'HH:mm') : int.start} - {typeof int.end === 'string' && int.end.includes('T') ? format(parseISO(int.end), 'HH:mm') : int.end}
+                                                    </span>
                                                     {!isApproved && <button onClick={() => {
                                                         const ni = [...formData.interruptions]; ni.splice(idx, 1);
                                                         setFormData({ ...formData, interruptions: ni })
@@ -1208,8 +1334,8 @@ export default function TimeTracking() {
                                                             })
                                                         }
                                                     }}
-                                                    disabled={!formData.newIntStart || !formData.newIntEnd}
-                                                    className="w-full bg-black text-white px-4 py-2.5 rounded-lg font-bold hover:bg-gray-800 disabled:opacity-50"
+                                                    disabled={!isValidInterruptionTime(formData.newIntStart, formData.newIntEnd)}
+                                                    className={`w-full text-white px-4 py-2.5 rounded-lg font-bold transition-all ${isValidInterruptionTime(formData.newIntStart, formData.newIntEnd) ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed opacity-50'}`}
                                                 >
                                                     Unterbrechung hinzufügen
                                                 </button>
@@ -1217,11 +1343,22 @@ export default function TimeTracking() {
                                         )}
                                     </div>
                                 )}
-                                <div className="bg-blue-50 p-4 rounded-xl flex justify-between font-bold text-blue-800"><span>Stunden:</span><span>{Number(calculatedHours).toFixed(2)}h</span></div>
+                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm mt-4">
+                                    <div className="flex justify-between items-center text-blue-900 font-bold">
+                                        <span className="text-sm uppercase tracking-wider">Berechnet</span>
+                                        <span className="text-2xl">{Number(calculatedHours).toFixed(2)}h</span>
+                                    </div>
+                                    {!editingItem.absence_id && editingItem.type && (
+                                        <div className="flex justify-between items-center text-xs text-blue-600/80 font-medium border-t border-blue-200/50 pt-2 mt-2">
+                                            <span>Geplant laut Dienstplan</span>
+                                            <span>{calculateWorkHours(editingItem.start_time, editingItem.end_time, editingItem.type).toFixed(2)}h</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="flex gap-3">
-                                <button onClick={() => setEditingItem(null)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold">Abbrechen</button>
-                                {!isApproved && <button onClick={handleSave} className="flex-1 py-3 bg-black text-white rounded-xl font-bold">Speichern</button>}
+                            <div className="flex gap-3 mt-6">
+                                <button onClick={() => setEditingItem(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors">Abbrechen</button>
+                                {!isApproved && <button onClick={handleSave} className="flex-1 py-3 bg-black hover:bg-gray-900 text-white shadow-lg shadow-black/20 rounded-xl font-bold transition-all">Speichern</button>}
                             </div>
                         </div>
                     </div>
