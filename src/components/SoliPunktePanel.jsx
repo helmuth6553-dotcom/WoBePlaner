@@ -176,9 +176,9 @@ export default function SoliPunktePanel() {
 
                     {/* Labels below */}
                     <div className="flex justify-between mt-5 px-1">
-                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-red-500 uppercase">Nicht gesehen</span>
-                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-amber-500 uppercase">Mal Schauen</span>
-                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-emerald-500 uppercase">Schon wieder ich</span>
+                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-red-500 uppercase">📱 Nicht gesehen</span>
+                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-amber-500 uppercase">🤷 Mal Schauen</span>
+                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-emerald-500 uppercase">🙋 Schon wieder ich</span>
                     </div>
                 </div>
             </div>
