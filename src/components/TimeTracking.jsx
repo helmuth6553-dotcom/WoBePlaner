@@ -743,13 +743,23 @@ export default function TimeTracking() {
     }
 
     const handleDownloadPDF = async () => {
+        // Fetch flex shift IDs for this user
+        const { data: flexInterests } = await supabase
+            .from('shift_interests')
+            .select('shift_id')
+            .eq('user_id', user.id)
+            .eq('is_flex', true)
+        const flexShiftIds = new Set((flexInterests || []).map(f => f.shift_id))
+
         const entriesList = items.map(item => {
             const entry = entries[item.id]
+            const isFlex = flexShiftIds.has(item.id)
 
             // Case A: Real DB Entry exists
             if (entry) {
                 return {
                     ...entry,
+                    is_flex: isFlex,
                     shifts: item.itemType === 'shift' ? item : { start_time: item.sortDate.toISOString(), type: item.type || 'Urlaub' },
                     absences: item.itemType === 'absence' ? { type: item.type || 'Abwesend' } : null
                 }

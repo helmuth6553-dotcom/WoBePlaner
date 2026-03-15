@@ -720,15 +720,24 @@ export default function AdminTimeTracking() {
             }
         }
 
+        // Fetch flex shift IDs for this user
+        const { data: flexInterests } = await supabase
+            .from('shift_interests')
+            .select('shift_id')
+            .eq('user_id', selectedUserId)
+            .eq('is_flex', true)
+        const flexShiftIds = new Set((flexInterests || []).map(f => f.shift_id))
+
         // PDF Gen needs 'shifts' object usually, we simulate it for Absences to prevent crash
         const pdfEntries = entries.map(e => {
-            if (e.shifts) return e
+            const withFlex = { ...e, is_flex: flexShiftIds.has(e.shift_id) }
+            if (withFlex.shifts) return withFlex
             // Create virtual shift object for absence entries (required by PDF generator)
-            const isSick = e.absences?.type === 'Krank' || e.absences?.type === 'Krankenstand'
+            const isSick = withFlex.absences?.type === 'Krank' || withFlex.absences?.type === 'Krankenstand'
             return {
-                ...e,
+                ...withFlex,
                 shifts: {
-                    start_time: e.actual_start, // or entry_date
+                    start_time: withFlex.actual_start,
                     type: isSick ? 'KRANK' : 'URLAUB'
                 }
             }

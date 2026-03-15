@@ -18,6 +18,7 @@ const SHIFT_TYPE_LABELS = {
     TEAM: 'Teamsitzung',
     FORTBILDUNG: 'Fortbildung',
     EINSCHULUNG: 'Einschulung',
+    MITARBEITERGESPRAECH: 'MA-Gespräch',
 }
 
 const SHIFT_TYPE_COLORS = {
@@ -29,6 +30,7 @@ const SHIFT_TYPE_COLORS = {
     TEAM: 'bg-purple-100 text-purple-700',
     FORTBILDUNG: 'bg-fuchsia-100 text-fuchsia-700',
     EINSCHULUNG: 'bg-pink-100 text-pink-700',
+    MITARBEITERGESPRAECH: 'bg-emerald-100 text-emerald-700',
 }
 
 const ABSENCE_TYPE_COLORS = {
@@ -891,14 +893,12 @@ export default function ProfileStats() {
                                         {diffMonat > 0 ? '+' : ''}{diffMonat}h
                                     </span>
                                 </div>
-                                {balance.carryover !== 0 && (
-                                    <div className="flex items-center justify-between px-2 py-1 text-sm">
-                                        <span className="text-gray-500">Übertrag Vormonate</span>
-                                        <span className={`font-mono ${balance.carryover >= 0 ? 'text-gray-600' : 'text-red-600'}`}>
-                                            {balance.carryover > 0 ? '+' : ''}{balance.carryover}h
-                                        </span>
-                                    </div>
-                                )}
+                                <div className="flex items-center justify-between px-2 py-1 text-sm">
+                                    <span className="text-gray-500">Übertrag Vormonate</span>
+                                    <span className={`font-mono ${balance.carryover >= 0 ? 'text-gray-600' : 'text-red-600'}`}>
+                                        {balance.carryover > 0 ? '+' : ''}{balance.carryover}h
+                                    </span>
+                                </div>
                                 <div className="border-t-2 border-gray-300 mx-2" />
                                 <div className="flex items-center justify-between px-2 py-1.5">
                                     <span className="text-sm font-bold text-gray-900">Gesamtsaldo</span>

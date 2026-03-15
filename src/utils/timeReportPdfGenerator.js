@@ -126,6 +126,7 @@ const buildPdfRows = (entries, correctionMap) => {
     entries.forEach(entry => {
         const shift = entry.shifts
         const shiftType = shift?.type || entry.absences?.type || ''
+        const isFlex = entry.is_flex === true
         const isNight = shiftType?.toUpperCase() === 'ND' ||
                         shiftType?.toLowerCase().includes('nacht') ||
                         shift?.is_bereitschaft
@@ -189,8 +190,8 @@ const buildPdfRows = (entries, correctionMap) => {
                     bzVon:    line.standby ? timeToDecimal(line.standby.start.toISOString()) : '',
                     bzBis:    line.standby ? timeToDecimal(line.standby.end.toISOString()) : '',
                     correction:    lineIdx === 0 ? correction : null,
-                    anm:           lineIdx === 0 && correction?.adminNote
-                                       ? correction.adminNote.substring(0, 28)
+                    anm:           lineIdx === 0
+                                       ? [isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' ')
                                        : '',
                     intNote,
                     intCorrection,
@@ -207,7 +208,7 @@ const buildPdfRows = (entries, correctionMap) => {
                 bzVon:     '',
                 bzBis:     '',
                 correction: correction || null,
-                anm:       correction?.adminNote?.substring(0, 28) || '',
+                anm:       [isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' '),
             })
         }
     })
@@ -428,7 +429,13 @@ export const generateTimeReportPDF = ({
         // Datum, Tag, Dienst (empty for continuation rows of ND) — centered
         doc.text(row.datum, colCenter.datum, textY, { align: 'center' })
         doc.text(row.tag, colCenter.tag, textY, { align: 'center' })
-        let displayType = row.diensttyp
+        const DIENST_LABELS = {
+            MITARBEITERGESPRAECH: 'MA-Gespr.',
+            FORTBILDUNG: 'Fortbild.',
+            EINSCHULUNG: 'Einschul.',
+            TEAMSITZUNG: 'Teamsitz.',
+        }
+        let displayType = DIENST_LABELS[row.diensttyp?.toUpperCase()] || row.diensttyp
         if (displayType && displayType.length > 12) {
             displayType = displayType.substring(0, 10) + '..'
         }
