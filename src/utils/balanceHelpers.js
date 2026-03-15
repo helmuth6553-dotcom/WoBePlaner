@@ -52,10 +52,32 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         targetMinutes = workDays * dailyHours * 60
     }
 
+    // Collect absence days for current month to exclude TEAM shifts on those days
+    const absenceDays = new Set()
+    historyAbsences.forEach(abs => {
+        if (!abs.start_date || !abs.end_date) return
+        const absStart = new Date(abs.start_date)
+        const absEnd = new Date(abs.end_date)
+        if (isNaN(absStart.getTime()) || isNaN(absEnd.getTime())) return
+        const start = absStart < monthStart ? monthStart : absStart
+        const end = absEnd > monthEnd ? monthEnd : absEnd
+        if (start <= end) {
+            eachDayOfInterval({ start, end }).forEach(d => {
+                if (!isWeekend(d)) absenceDays.add(d.toISOString().split('T')[0])
+            })
+        }
+    })
+
     let currentMonthShifts = historyShifts.filter(s => {
         if (!s.start_time) return false
         const d = new Date(s.start_time)
-        return !isNaN(d.getTime()) && isSameMonth(d, currentDate) && d >= startDate
+        if (!(!isNaN(d.getTime()) && isSameMonth(d, currentDate) && d >= startDate)) return false
+        // Exclude TEAM shifts on days with absences (vacation/sick) to avoid double counting
+        if (s.type?.toUpperCase() === 'TEAM') {
+            const dateKey = d.toISOString().split('T')[0]
+            if (absenceDays.has(dateKey)) return false
+        }
+        return true
     })
 
     let actualMinutes = 0
@@ -190,6 +212,22 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         const pastWorkDays = pastDays.filter(d => !isWeekend(d) && !checkIsHoliday(d)).length
         const pastTarget = pastWorkDays * dailyHours * 60
 
+        // Collect past absence days to exclude TEAM shifts on those days
+        const pastAbsenceDays = new Set()
+        historyAbsences.forEach(abs => {
+            if (!abs.start_date || !abs.end_date) return
+            const absStart = new Date(abs.start_date)
+            const absEnd = new Date(abs.end_date)
+            if (isNaN(absStart.getTime()) || isNaN(absEnd.getTime())) return
+            const aStart = absStart < startDate ? startDate : absStart
+            const aEnd = absEnd > pastEnd ? pastEnd : absEnd
+            if (aStart <= aEnd) {
+                eachDayOfInterval({ start: aStart, end: aEnd }).forEach(d => {
+                    if (!isWeekend(d)) pastAbsenceDays.add(d.toISOString().split('T')[0])
+                })
+            }
+        })
+
         let pastActual = 0
         const pastShifts = []
         historyShifts.forEach(s => {
@@ -197,6 +235,11 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
             const start = new Date(s.start_time)
             if (isNaN(start.getTime())) return
             if (start >= startDate && start <= pastEnd) {
+                // Exclude TEAM shifts on days with absences
+                if (s.type?.toUpperCase() === 'TEAM') {
+                    const dateKey = start.toISOString().split('T')[0]
+                    if (pastAbsenceDays.has(dateKey)) return
+                }
                 pastShifts.push(s)
             }
         })

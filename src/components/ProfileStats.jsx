@@ -178,10 +178,29 @@ export default function ProfileStats() {
         const entryMap = {}
         myEntries.forEach(e => { if (e.shift_id) entryMap[e.shift_id] = e })
 
+        // Collect absence days for this month to exclude TEAM shifts on vacation/sick days
+        const myAbsenceDays = new Set()
+        myAbsences.forEach(abs => {
+            if (!abs.start_date || !abs.end_date) return
+            const absStart = new Date(abs.start_date) < mStart ? mStart : new Date(abs.start_date)
+            const absEnd = new Date(abs.end_date) > mEnd ? mEnd : new Date(abs.end_date)
+            if (absStart <= absEnd) {
+                eachDayOfInterval({ start: absStart, end: absEnd }).forEach(d => {
+                    if (!isWeekend(d)) myAbsenceDays.add(d.toISOString().split('T')[0])
+                })
+            }
+        })
+
         const currentShifts = allMyShifts.filter(s => {
             if (!s.start_time) return false
             const d = new Date(s.start_time)
-            return isSameMonth(d, targetDate)
+            if (!isSameMonth(d, targetDate)) return false
+            // Exclude TEAM shifts on days with absences
+            if (s.type?.toUpperCase() === 'TEAM') {
+                const dateKey = d.toISOString().split('T')[0]
+                if (myAbsenceDays.has(dateKey)) return false
+            }
+            return true
         })
 
         const breakdown = {}
@@ -549,6 +568,36 @@ export default function ProfileStats() {
         return sortedAbsenceTypes.reduce((sum, [, v]) => sum + v.hours, 0)
     }, [sortedAbsenceTypes])
 
+    // Kontoauszug: alle Posten mit laufender Summe
+    const ledgerRows = useMemo(() => {
+        const rows = []
+        let running = 0
+        const lastShiftIdx = sortedShiftTypes.length - 1
+        sortedShiftTypes.forEach(([type, data], i) => {
+            running = Math.round((running + data.hours) * 100) / 100
+            rows.push({ kind: 'shift', type, label: SHIFT_TYPE_LABELS[type] || type,
+                colors: SHIFT_TYPE_COLORS[type] || 'bg-gray-100 text-gray-700',
+                hours: data.hours, count: data.count, running,
+                isLastShift: i === lastShiftIdx && sortedAbsenceTypes.length === 0 && currentMonthCorrections.length === 0 })
+        })
+        const lastAbsIdx = sortedAbsenceTypes.length - 1
+        sortedAbsenceTypes.forEach(([type, data], i) => {
+            running = Math.round((running + data.hours) * 100) / 100
+            rows.push({ kind: 'absence', type,
+                colors: ABSENCE_TYPE_COLORS[type] || 'bg-gray-100 text-gray-700',
+                hours: data.hours, days: data.days, running,
+                isFirstAbsence: i === 0,
+                isLastAbsence: i === lastAbsIdx && currentMonthCorrections.length === 0 })
+        })
+        currentMonthCorrections.forEach((corr, i) => {
+            running = Math.round((running + corr.correction_hours) * 100) / 100
+            rows.push({ kind: 'correction', hours: corr.correction_hours,
+                reason: corr.reason, running, corr,
+                isFirstCorrection: i === 0 })
+        })
+        return { rows, totalGeleistet: running }
+    }, [sortedShiftTypes, sortedAbsenceTypes, currentMonthCorrections])
+
     const totalInterruptionCredit = useMemo(() => {
         // Netto-Gewinn: credited at 100% minus what passive would have been (50%)
         return Math.round(interruptionDetails.reduce((sum, d) => sum + (d.creditedMinutes - d.deductedMinutes * 0.5), 0) / 60 * 100) / 100
@@ -648,34 +697,89 @@ export default function ProfileStats() {
                         </div>
                     )}
 
-                    {detailExpanded && (
-                        <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-4">
-                            {/* Geleistete Stunden — Dienste, Unterbrechungen, Zeitkorrekturen in einer Liste */}
-                            {(sortedShiftTypes.length > 0 || interruptionDetails.length > 0 || timeAdjustments.length > 0) && (
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase mb-2">Geleistete Stunden</p>
-                                    <div className="space-y-1.5">
-                                        {/* Diensttypen */}
-                                        {sortedShiftTypes.map(([type, data]) => {
-                                            const label = SHIFT_TYPE_LABELS[type] || type
-                                            const colors = SHIFT_TYPE_COLORS[type] || 'bg-gray-100 text-gray-700'
-                                            return (
-                                                <div key={type} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-gray-50">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${colors}`}>
-                                                            {type}
-                                                        </span>
-                                                        <span className="text-sm text-gray-600">{label}</span>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <span className="text-sm font-bold text-gray-900">{data.hours}h</span>
-                                                        <span className="text-[10px] text-gray-400 ml-1">({data.count}×)</span>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
+                    {detailExpanded && balance && (() => {
+                        const monthLabel = format(selectedMonth, 'MMMM', { locale: de })
+                        const { rows, totalGeleistet } = ledgerRows
+                        const lastShiftIdx = rows.findLastIndex(r => r.kind === 'shift')
+                        const lastAbsIdx = rows.findLastIndex(r => r.kind === 'absence')
+                        const diffMonat = Math.round((totalGeleistet - balance.target) * 100) / 100
 
-                                        {/* Unterbrechungen (aufklappbar) */}
+                        return (
+                        <div className="px-5 pb-5 border-t border-gray-100 pt-4">
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-3">Stundenübersicht {monthLabel}</p>
+
+                            {/* Kontoauszug-Zeilen */}
+                            <div className="space-y-0">
+                                {rows.map((row, i) => {
+                                    const isLastShift = i === lastShiftIdx
+                                    const isLastAbs = i === lastAbsIdx
+                                    const showSeparator = row.isFirstAbsence || row.isFirstCorrection
+
+                                    return (
+                                        <div key={`${row.kind}-${row.type || i}`}>
+                                            {showSeparator && <div className="border-t border-gray-200 my-1.5" />}
+                                            <div className="flex items-center py-1.5 px-2 rounded-lg hover:bg-gray-50/50">
+                                                {/* Links: Badge + Label */}
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    {row.kind === 'shift' && (
+                                                        <>
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${row.colors}`}>
+                                                                {row.type}
+                                                            </span>
+                                                            <span className="text-sm text-gray-600 truncate">{row.label}</span>
+                                                        </>
+                                                    )}
+                                                    {row.kind === 'absence' && (
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${row.colors}`}>
+                                                            {row.type}
+                                                        </span>
+                                                    )}
+                                                    {row.kind === 'correction' && (
+                                                        <>
+                                                            <PenTool size={12} className="text-purple-500 shrink-0" />
+                                                            <span className="text-sm text-gray-600 truncate">Korrektur</span>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                {/* Mitte: Stunden + Count */}
+                                                <div className="text-right w-24 shrink-0">
+                                                    <span className="text-sm font-bold text-gray-900">{row.hours}h</span>
+                                                    {row.count != null && (
+                                                        <span className="text-[10px] text-gray-400 ml-1">({row.count}×)</span>
+                                                    )}
+                                                    {row.days != null && (
+                                                        <span className="text-[10px] text-gray-400 ml-1">({row.days}d)</span>
+                                                    )}
+                                                </div>
+
+                                                {/* Rechts: Laufende Summe */}
+                                                <div className={`text-right w-16 shrink-0 font-mono text-sm ${
+                                                    isLastShift && lastAbsIdx === -1 ? 'font-bold text-blue-700' :
+                                                    isLastShift ? 'text-gray-400' :
+                                                    isLastAbs ? 'font-bold text-gray-700' :
+                                                    'text-gray-300'
+                                                }`}>
+                                                    {row.running}h
+                                                </div>
+                                            </div>
+
+                                            {/* Korrektur-Details */}
+                                            {row.kind === 'correction' && row.corr && (
+                                                <div className="text-[10px] text-gray-400 ml-8 mb-1">
+                                                    {row.corr.reason && <span>{row.corr.reason}</span>}
+                                                    {row.corr.created_by_profile?.full_name && (
+                                                        <span> · von {row.corr.created_by_profile.full_name}</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+
+                                {/* Unterbrechungen (aufklappbar, nach den Dienst-Rows) */}
+                                {interruptionDetails.length > 0 && (
+                                    <div className="mt-1 space-y-1">
                                         {interruptionDetails.map((item, idx) => {
                                             const dateStr = format(new Date(item.date), 'dd.MM.', { locale: de })
                                             const isExpanded = expandedInterruptions[`int-${idx}`]
@@ -684,228 +788,128 @@ export default function ProfileStats() {
                                                 <div key={`int-${idx}`}>
                                                     <button
                                                         onClick={() => setExpandedInterruptions(prev => ({ ...prev, [`int-${idx}`]: !prev[`int-${idx}`] }))}
-                                                        className="w-full flex items-center justify-between py-1.5 px-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors"
+                                                        className="w-full flex items-center justify-between py-1 px-3 rounded-lg bg-orange-50/60 hover:bg-orange-100 transition-colors text-xs"
                                                     >
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-200 text-gray-700">{dateStr}</span>
-                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">ND</span>
-                                                            <span className="text-sm text-gray-600">{item.count}× Unterbrechung</span>
-                                                        </div>
                                                         <div className="flex items-center gap-1.5">
-                                                            <span className="text-sm font-bold text-orange-700">+{netGain}h</span>
-                                                            {isExpanded ? <ChevronUp size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
+                                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">{dateStr}</span>
+                                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">ND</span>
+                                                            <span className="text-gray-500">{item.count}× Unterbr.</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="font-bold text-orange-700">+{netGain}h</span>
+                                                            {isExpanded ? <ChevronUp size={10} className="text-gray-400" /> : <ChevronDown size={10} className="text-gray-400" />}
                                                         </div>
                                                     </button>
                                                     {isExpanded && (
-                                                        <div className="ml-4 mt-1 space-y-1 mb-1">
+                                                        <div className="ml-4 mt-1 space-y-0.5 mb-1">
                                                             {item.details.map((d, di) => {
                                                                 const actualH = Math.round(d.actualMinutes / 60 * 100) / 100
                                                                 const creditedH = Math.round(d.creditedMinutes / 60 * 100) / 100
                                                                 const detailNet = Math.round((d.creditedMinutes - d.actualMinutes * 0.5) / 60 * 100) / 100
                                                                 return (
-                                                                    <div key={di} className="flex items-center justify-between py-1 px-3 rounded bg-orange-50/60 text-xs">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-gray-500">
-                                                                                {format(new Date(d.start), 'HH:mm')} – {format(new Date(d.end), 'HH:mm')}
-                                                                            </span>
-                                                                            <span className="text-gray-400">({actualH}h{creditedH !== actualH ? ` → ${creditedH}h` : ''})</span>
-                                                                            {d.note && <span className="text-gray-400 italic">{d.note}</span>}
-                                                                        </div>
+                                                                    <div key={di} className="flex items-center justify-between py-0.5 px-2 text-[11px]">
+                                                                        <span className="text-gray-500">
+                                                                            {format(new Date(d.start), 'HH:mm')}–{format(new Date(d.end), 'HH:mm')}
+                                                                            <span className="text-gray-400 ml-1">({actualH}h{creditedH !== actualH ? ` → ${creditedH}h` : ''})</span>
+                                                                        </span>
                                                                         <span className="text-orange-600 font-bold">+{detailNet}h</span>
                                                                     </div>
                                                                 )
                                                             })}
-                                                            <p className="text-[10px] text-gray-400 px-3">Mind. 30 Min, 100% statt 50% Bereitschaft</p>
+                                                            <p className="text-[10px] text-gray-400 px-2">100% statt 50% Bereitschaft</p>
                                                         </div>
                                                     )}
                                                 </div>
                                             )
                                         })}
+                                    </div>
+                                )}
 
-                                        {/* Zeitkorrekturen — zusammengefasst, aufklappbar */}
-                                        {timeAdjustments.length > 0 && (() => {
-                                            const isExpanded = expandedInterruptions['adj-all']
-                                            return (
-                                                <div>
-                                                    <button
-                                                        onClick={() => setExpandedInterruptions(prev => ({ ...prev, ['adj-all']: !prev['adj-all'] }))}
-                                                        className="w-full flex items-center justify-between py-1.5 px-3 rounded-lg bg-cyan-50 hover:bg-cyan-100 transition-colors"
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-100 text-cyan-700">±</span>
-                                                            <span className="text-sm text-gray-600">Zeitkorrekturen ({timeAdjustments.length}×)</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className={`text-sm font-bold ${totalAdjustmentDiff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                                                {totalAdjustmentDiff > 0 ? '+' : ''}{totalAdjustmentDiff}h
-                                                            </span>
-                                                            {isExpanded ? <ChevronUp size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
-                                                        </div>
-                                                    </button>
-                                                    {isExpanded && (
-                                                        <div className="ml-4 mt-1 space-y-1 mb-1">
-                                                            {timeAdjustments.map((adj, idx) => {
-                                                                const dateStr = format(new Date(adj.date), 'dd.MM.', { locale: de })
-                                                                const colors = SHIFT_TYPE_COLORS[adj.shiftType] || 'bg-gray-100 text-gray-700'
-                                                                return (
-                                                                    <div key={idx} className="py-1 px-3 rounded bg-cyan-50/60 text-xs">
-                                                                        <div className="flex items-center justify-between">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">{dateStr}</span>
-                                                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${colors}`}>{adj.shiftType}</span>
-                                                                                <span className="text-gray-500">Plan: {adj.plannedHours}h → Ist: {adj.actualHours}h</span>
-                                                                            </div>
-                                                                            <span className={`font-bold ${adj.diff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                                                                {adj.diff > 0 ? '+' : ''}{adj.diff}h
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="text-[10px] text-gray-400 mt-0.5 ml-1">
-                                                                            {adj.actualStart && adj.plannedStart && format(new Date(adj.actualStart), 'HH:mm') !== format(new Date(adj.plannedStart), 'HH:mm') && (
-                                                                                <span>Start: {format(new Date(adj.plannedStart), 'HH:mm')} → {format(new Date(adj.actualStart), 'HH:mm')} </span>
-                                                                            )}
-                                                                            {adj.actualEnd && adj.plannedEnd && format(new Date(adj.actualEnd), 'HH:mm') !== format(new Date(adj.plannedEnd), 'HH:mm') && (
-                                                                                <span>Ende: {format(new Date(adj.plannedEnd), 'HH:mm')} → {format(new Date(adj.actualEnd), 'HH:mm')} </span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                )
-                                                            })}
-                                                        </div>
-                                                    )}
+                                {/* Zeitkorrekturen (aufklappbar) */}
+                                {timeAdjustments.length > 0 && (() => {
+                                    const isExpanded = expandedInterruptions['adj-all']
+                                    return (
+                                        <div className="mt-1">
+                                            <button
+                                                onClick={() => setExpandedInterruptions(prev => ({ ...prev, ['adj-all']: !prev['adj-all'] }))}
+                                                className="w-full flex items-center justify-between py-1 px-3 rounded-lg bg-cyan-50/60 hover:bg-cyan-100 transition-colors text-xs"
+                                            >
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-700">±</span>
+                                                    <span className="text-gray-500">Zeitkorrekturen ({timeAdjustments.length}×)</span>
                                                 </div>
-                                            )
-                                        })()}
-                                    </div>
-
-                                    {/* Hinweis */}
-                                    {(interruptionDetails.length > 0 || timeAdjustments.length > 0) && (
-                                        <p className="text-[10px] text-gray-400 mt-1 px-3">Unterbrechungen und Zeitkorrekturen sind bereits in den Dienststunden enthalten.</p>
-                                    )}
-
-                                    {/* Gesamt Ist ganz unten */}
-                                    <div className="flex justify-end mt-2 pr-3 border-t border-gray-100 pt-2">
-                                        <span className="text-sm font-bold text-gray-700">
-                                            Gesamt Ist: {Math.round(totalShiftHours * 100) / 100}h
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Abwesenheiten nach Typ */}
-                            {sortedAbsenceTypes.length > 0 && (
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase mb-2">Abwesenheiten</p>
-                                    <div className="space-y-1.5">
-                                        {sortedAbsenceTypes.map(([type, data]) => {
-                                            const colors = ABSENCE_TYPE_COLORS[type] || 'bg-gray-100 text-gray-700'
-                                            return (
-                                                <div key={type} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-gray-50">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${colors}`}>
-                                                            {type}
-                                                        </span>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <span className="text-sm font-bold text-gray-900">{data.hours}h</span>
-                                                        <span className="text-[10px] text-gray-400 ml-1">({data.days} Tage)</span>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                    <div className="flex justify-end mt-1.5 pr-3">
-                                        <span className="text-xs font-bold text-gray-500">
-                                            Gesamt Abwesenheit: {Math.round(totalAbsenceHours * 100) / 100}h
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Admin-Korrekturen (Detail) */}
-                            {currentMonthCorrections.length > 0 && (
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase mb-2">Admin-Korrekturen</p>
-                                    <div className="space-y-1.5">
-                                        {currentMonthCorrections.map((corr, idx) => (
-                                            <div key={idx} className="py-2 px-3 rounded-lg bg-purple-50 border border-purple-100">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <PenTool size={14} className="text-purple-600" />
-                                                        <span className="text-sm text-gray-700">Korrektur</span>
-                                                    </div>
-                                                    <span className={`text-sm font-bold ${corr.correction_hours >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                                        {corr.correction_hours > 0 ? '+' : ''}{corr.correction_hours}h
+                                                <div className="flex items-center gap-1">
+                                                    <span className={`font-bold ${totalAdjustmentDiff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                                        {totalAdjustmentDiff > 0 ? '+' : ''}{totalAdjustmentDiff}h
                                                     </span>
+                                                    {isExpanded ? <ChevronUp size={10} className="text-gray-400" /> : <ChevronDown size={10} className="text-gray-400" />}
                                                 </div>
-                                                {corr.reason && (
-                                                    <p className="text-xs text-gray-500 mt-1 ml-5">
-                                                        {corr.reason}
-                                                    </p>
-                                                )}
-                                                <div className="text-[10px] text-gray-400 mt-0.5 ml-5">
-                                                    {corr.created_by_profile?.full_name && (
-                                                        <span>von {corr.created_by_profile.full_name}</span>
-                                                    )}
-                                                    {corr.created_at && (
-                                                        <span> · {format(new Date(corr.created_at), 'dd.MM.yyyy', { locale: de })}</span>
-                                                    )}
+                                            </button>
+                                            {isExpanded && (
+                                                <div className="ml-4 mt-1 space-y-0.5 mb-1">
+                                                    {timeAdjustments.map((adj, idx) => {
+                                                        const dateStr = format(new Date(adj.date), 'dd.MM.', { locale: de })
+                                                        const colors = SHIFT_TYPE_COLORS[adj.shiftType] || 'bg-gray-100 text-gray-700'
+                                                        return (
+                                                            <div key={idx} className="flex items-center justify-between py-0.5 px-2 text-[11px]">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-gray-200 text-gray-600">{dateStr}</span>
+                                                                    <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${colors}`}>{adj.shiftType}</span>
+                                                                    <span className="text-gray-500">{adj.plannedHours}h → {adj.actualHours}h</span>
+                                                                </div>
+                                                                <span className={`font-bold ${adj.diff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                                                    {adj.diff > 0 ? '+' : ''}{adj.diff}h
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                    })}
                                                 </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                                            )}
+                                        </div>
+                                    )
+                                })()}
+
+                                {(interruptionDetails.length > 0 || timeAdjustments.length > 0) && (
+                                    <p className="text-[10px] text-gray-400 mt-1 px-2">Bereits in den Dienststunden enthalten.</p>
+                                )}
+                            </div>
 
                             {/* Saldo-Berechnung */}
-                            <div className="border-t border-gray-100 pt-3">
-                                <p className="text-xs font-bold text-gray-400 uppercase mb-2">Saldo-Berechnung</p>
-                                <div className="space-y-1">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-500">Soll</span>
-                                        <span className="font-bold text-gray-700">{balance.target}h</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-500">Ist (gearbeitet)</span>
-                                        <span className="font-bold text-blue-700">{balance.actual}h</span>
-                                    </div>
-                                    {balance.vacation > 0 && (
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-500">+ Abwesenheit (angerechnet)</span>
-                                            <span className="font-bold text-amber-700">{balance.vacation}h</span>
-                                        </div>
-                                    )}
-                                    <div className="border-t border-dashed border-gray-200 my-1"></div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-500">Differenz Monat</span>
-                                        <span className={`font-bold ${balance.diff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                            {balance.diff > 0 ? '+' : ''}{balance.diff}h
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
+                            <div className="mt-3 pt-3 border-t border-gray-200 space-y-1">
+                                <div className="flex items-center justify-between px-2 py-1 text-sm">
+                                    <span className="text-gray-500">Geleistet</span>
+                                    <span className="font-mono font-bold text-gray-700">{totalGeleistet}h</span>
+                                </div>
+                                <div className="flex items-center justify-between px-2 py-1 text-sm">
+                                    <span className="text-gray-500">Soll {monthLabel}</span>
+                                    <span className="font-mono text-gray-500">−{balance.target}h</span>
+                                </div>
+                                <div className="border-t border-dashed border-gray-200 mx-2" />
+                                <div className="flex items-center justify-between px-2 py-1 text-sm">
+                                    <span className="text-gray-500">Differenz Monat</span>
+                                    <span className={`font-mono font-bold ${diffMonat >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                        {diffMonat > 0 ? '+' : ''}{diffMonat}h
+                                    </span>
+                                </div>
+                                {balance.carryover !== 0 && (
+                                    <div className="flex items-center justify-between px-2 py-1 text-sm">
                                         <span className="text-gray-500">Übertrag Vormonate</span>
-                                        <span className={`font-bold ${balance.carryover >= 0 ? 'text-gray-700' : 'text-red-700'}`}>
+                                        <span className={`font-mono ${balance.carryover >= 0 ? 'text-gray-600' : 'text-red-600'}`}>
                                             {balance.carryover > 0 ? '+' : ''}{balance.carryover}h
                                         </span>
                                     </div>
-                                    {balance.correction !== 0 && (
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-500">Korrekturen</span>
-                                            <span className="font-bold text-purple-700">
-                                                {balance.correction > 0 ? '+' : ''}{balance.correction}h
-                                            </span>
-                                        </div>
-                                    )}
-                                    <div className="border-t border-gray-200 my-1"></div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="font-bold text-gray-900">Gesamtsaldo</span>
-                                        <span className={`font-black text-base ${balance.total >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                            {balance.total > 0 ? '+' : ''}{balance.total}h
-                                        </span>
-                                    </div>
+                                )}
+                                <div className="border-t-2 border-gray-300 mx-2" />
+                                <div className="flex items-center justify-between px-2 py-1.5">
+                                    <span className="text-sm font-bold text-gray-900">Gesamtsaldo</span>
+                                    <span className={`font-mono font-black text-base ${balance.total >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                        {balance.total > 0 ? '+' : ''}{balance.total}h
+                                    </span>
                                 </div>
                             </div>
                         </div>
-                    )}
+                        )
+                    })()}
                 </div>
             )}
 

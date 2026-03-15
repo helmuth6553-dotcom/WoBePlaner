@@ -179,7 +179,9 @@ export default function AdminOverview() {
             }
         })
         shifts?.filter(s => s.type === 'TEAM').forEach(s => {
-            totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * employees.length
+            const dateKey = new Date(s.start_time).toISOString().split('T')[0]
+            const availableCount = employees.filter(emp => !allAbsenceDaysByUser[emp.id]?.has(dateKey)).length
+            totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * availableCount
         })
         shifts?.filter(s => ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES'].includes(s.type)).forEach(s => {
             totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * monthInterests.filter(i => i.shift_id === s.id).length
@@ -192,6 +194,28 @@ export default function AdminOverview() {
         const weeksInMonth = workingDays / 5
         let totalSollHours = 0
         employees.forEach(emp => { totalSollHours += (emp.weekly_hours || 40) * weeksInMonth })
+
+        // Build per-employee absence day sets to exclude TEAM shifts on vacation/sick days
+        const empAbsenceDays = {}
+        absences?.forEach(abs => {
+            if (!abs.user_id || !abs.start_date || !abs.end_date) return
+            const absStart = new Date(abs.start_date) < start ? start : new Date(abs.start_date)
+            const absEnd = new Date(abs.end_date) > end ? end : new Date(abs.end_date)
+            if (absStart <= absEnd) {
+                if (!empAbsenceDays[abs.user_id]) empAbsenceDays[abs.user_id] = new Set()
+                eachDayOfInterval({ start: absStart, end: absEnd }).forEach(d => {
+                    if (!isWeekend(d)) empAbsenceDays[abs.user_id].add(d.toISOString().split('T')[0])
+                })
+            }
+        })
+        // Combined absence days (any employee absent) for global TEAM hour counts
+        const allAbsenceDaysByUser = empAbsenceDays
+
+        const isTeamShiftOnAbsenceDay = (entry, userId) => {
+            if (entry.shifts?.type?.toUpperCase() !== 'TEAM') return false
+            const dateKey = new Date(entry.actual_start || entry.shifts.start_time).toISOString().split('T')[0]
+            return allAbsenceDaysByUser[userId]?.has(dateKey) || false
+        }
 
         // TD1+TD2 merged detection
         const processedIds = new Set()
@@ -216,6 +240,8 @@ export default function AdminOverview() {
         entries?.forEach(entry => {
             if (processedIds.has(entry.id)) return
             if (entry.shifts && entry.calculated_hours) {
+                // Skip TEAM entries for employees on vacation/sick that day
+                if (isTeamShiftOnAbsenceDay(entry, entry.user_id)) return
                 const type = entry.shifts.type?.toUpperCase()
                 if (Object.hasOwn(shiftHours, type)) shiftHours[type] += Number(entry.calculated_hours) || 0
             }
@@ -280,13 +306,20 @@ export default function AdminOverview() {
             const wh = emp.weekly_hours || 40
             const empSoll = wh * weeksInMonth
             let worked = 0
-            entries?.forEach(e => { if (e.user_id === emp.id && e.calculated_hours) worked += Number(e.calculated_hours) || 0 })
+            entries?.forEach(e => {
+                if (e.user_id === emp.id && e.calculated_hours) {
+                    // Skip TEAM entries on days the employee has an absence
+                    if (isTeamShiftOnAbsenceDay(e, emp.id)) return
+                    worked += Number(e.calculated_hours) || 0
+                }
+            })
 
             // Per-employee shift type hours
             const empShiftHours = { TD: 0, TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0 }
             entries?.forEach(e => {
                 if (e.user_id === emp.id && e.calculated_hours && e.shifts?.type) {
                     if (processedIds.has(e.id)) return
+                    if (isTeamShiftOnAbsenceDay(e, emp.id)) return
                     const type = e.shifts.type.toUpperCase()
                     if (Object.hasOwn(empShiftHours, type)) empShiftHours[type] += Number(e.calculated_hours) || 0
                 }
@@ -1024,7 +1057,7 @@ export default function AdminOverview() {
                                             const activeTypes = shiftTypeConfig.filter(t => (emp.shiftTypeHours?.[t.key] || 0) > 0)
                                             return (
                                                 <div key={emp.id} className="flex items-center gap-2 py-0.5">
-                                                    <span className="text-[10px] font-medium text-gray-500 w-16 text-right truncate">{emp.name.split(' ')[0]?.[0]}. {emp.name.split(' ').slice(1).join(' ')}</span>
+                                                    <span className="text-[10px] font-medium text-gray-500 w-16 text-right truncate">{emp.name}</span>
                                                     <div className="flex-1 h-5 rounded-md flex overflow-hidden" style={{ background: '#f3f4f6' }}>
                                                         {activeTypes.map(t => (
                                                             <div key={t.key} className={`h-full ${t.color} transition-all duration-500`}
