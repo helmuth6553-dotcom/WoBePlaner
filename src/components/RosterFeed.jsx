@@ -121,7 +121,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         })
         setAllMyShifts(allMyShiftsCombined)
 
-        const { data: myEntries } = await supabase.from('time_entries').select('shift_id, calculated_hours').eq('user_id', user?.id)
+        const { data: myEntries } = await supabase.from('time_entries').select('shift_id, calculated_hours, actual_start, actual_end').eq('user_id', user?.id)
         if (myEntries) setAllMyTimeEntries(myEntries)
 
         const { data: myHistoryAbsences } = await supabase.from('absences').select('start_date, end_date, user_id, status, type, planned_hours').eq('user_id', user?.id).eq('status', 'genehmigt')
@@ -852,7 +852,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                     setAllAbsencesHistory(absences || [])
 
                     // 4. Entries
-                    const { data: allEntries, error: entError } = await supabase.from('time_entries').select('user_id, shift_id, calculated_hours, status')
+                    const { data: allEntries, error: entError } = await supabase.from('time_entries').select('user_id, shift_id, calculated_hours, status, actual_start, actual_end')
                     if (entError) throw new Error('Entries Error: ' + entError.message)
                     setAllTimeEntriesHistory(allEntries || [])
 

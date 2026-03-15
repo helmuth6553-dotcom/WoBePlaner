@@ -1,5 +1,135 @@
 import { describe, it, expect } from 'vitest'
-import { calculateWorkHours, calculateDailyAbsenceHours } from './timeCalculations'
+import { calculateWorkHours, calculateDailyAbsenceHours, processInterruptions } from './timeCalculations'
+
+// =============================================================================
+// PROCESS INTERRUPTIONS TESTS
+// =============================================================================
+
+describe('processInterruptions', () => {
+    // Standard readiness window: 00:30 - 06:00 on 2025-05-11
+    const readinessStart = new Date('2025-05-11T00:30:00')
+    const readinessEnd = new Date('2025-05-11T06:00:00')
+
+    it('returns empty result for no interruptions', () => {
+        const result = processInterruptions([], readinessStart, readinessEnd)
+        expect(result.creditedMinutes).toBe(0)
+        expect(result.deductedReadinessMinutes).toBe(0)
+        expect(result.rawCount).toBe(0)
+        expect(result.mergedIntervals).toEqual([])
+        expect(result.details).toEqual([])
+    })
+
+    it('returns empty result for null/undefined interruptions', () => {
+        expect(processInterruptions(null, readinessStart, readinessEnd).rawCount).toBe(0)
+        expect(processInterruptions(undefined, readinessStart, readinessEnd).rawCount).toBe(0)
+    })
+
+    it('inflates a 10-minute interruption to 30 minutes', () => {
+        const interruptions = [
+            { start: '2025-05-11T02:00:00', end: '2025-05-11T02:10:00', note: 'Anruf' }
+        ]
+        const result = processInterruptions(interruptions, readinessStart, readinessEnd)
+
+        expect(result.rawCount).toBe(1)
+        expect(result.deductedReadinessMinutes).toBe(10)
+        expect(result.creditedMinutes).toBe(30)
+        expect(result.details[0].actualMinutes).toBe(10)
+        expect(result.details[0].creditedMinutes).toBe(30)
+        expect(result.details[0].note).toBe('Anruf')
+    })
+
+    it('inflates 45 minutes to 60 minutes (CEIL rule)', () => {
+        const interruptions = [
+            { start: '2025-05-11T02:00:00', end: '2025-05-11T02:45:00' }
+        ]
+        const result = processInterruptions(interruptions, readinessStart, readinessEnd)
+
+        expect(result.deductedReadinessMinutes).toBe(45)
+        expect(result.creditedMinutes).toBe(60)
+        expect(result.details[0].actualMinutes).toBe(45)
+        expect(result.details[0].creditedMinutes).toBe(60)
+    })
+
+    it('exactly 30 minutes stays at 30 minutes', () => {
+        const interruptions = [
+            { start: '2025-05-11T03:00:00', end: '2025-05-11T03:30:00' }
+        ]
+        const result = processInterruptions(interruptions, readinessStart, readinessEnd)
+
+        expect(result.creditedMinutes).toBe(30)
+        expect(result.details[0].actualMinutes).toBe(30)
+    })
+
+    it('merges overlapping interruptions after inflation', () => {
+        // Two interruptions 15 min apart — after inflation to 30min each, they overlap
+        const interruptions = [
+            { start: '2025-05-11T02:00:00', end: '2025-05-11T02:10:00' }, // 10min → 30min (02:00-02:30)
+            { start: '2025-05-11T02:20:00', end: '2025-05-11T02:25:00' }, // 5min → 30min (02:20-02:50)
+        ]
+        const result = processInterruptions(interruptions, readinessStart, readinessEnd)
+
+        expect(result.rawCount).toBe(2)
+        // After merge: single interval 02:00-02:50 = 50 minutes
+        expect(result.mergedIntervals).toHaveLength(1)
+        expect(result.creditedMinutes).toBe(50)
+        expect(result.deductedReadinessMinutes).toBe(15) // 10 + 5 actual
+    })
+
+    it('keeps non-overlapping interruptions separate', () => {
+        const interruptions = [
+            { start: '2025-05-11T01:00:00', end: '2025-05-11T01:10:00' }, // → 30min (01:00-01:30)
+            { start: '2025-05-11T04:00:00', end: '2025-05-11T04:10:00' }, // → 30min (04:00-04:30)
+        ]
+        const result = processInterruptions(interruptions, readinessStart, readinessEnd)
+
+        expect(result.mergedIntervals).toHaveLength(2)
+        expect(result.creditedMinutes).toBe(60) // 30 + 30
+        expect(result.rawCount).toBe(2)
+    })
+
+    it('ignores interruptions outside readiness window', () => {
+        const interruptions = [
+            { start: '2025-05-11T07:00:00', end: '2025-05-11T07:30:00' } // after 06:00
+        ]
+        const result = processInterruptions(interruptions, readinessStart, readinessEnd)
+
+        expect(result.rawCount).toBe(0)
+        expect(result.creditedMinutes).toBe(0)
+    })
+
+    it('clips interruption to readiness window boundaries', () => {
+        // Interruption starts before readiness, ends inside
+        const interruptions = [
+            { start: '2025-05-11T00:00:00', end: '2025-05-11T00:50:00' }
+        ]
+        const result = processInterruptions(interruptions, readinessStart, readinessEnd)
+
+        // Only 00:30-00:50 counts = 20 min actual → 30 min credited
+        expect(result.rawCount).toBe(1)
+        expect(result.deductedReadinessMinutes).toBe(20)
+        expect(result.creditedMinutes).toBe(30)
+    })
+
+    it('skips interruptions with missing start/end', () => {
+        const interruptions = [
+            { start: '2025-05-11T02:00:00' }, // no end
+            { end: '2025-05-11T03:00:00' },   // no start
+            { start: '2025-05-11T04:00:00', end: '2025-05-11T04:15:00' }, // valid
+        ]
+        const result = processInterruptions(interruptions, readinessStart, readinessEnd)
+
+        expect(result.rawCount).toBe(1)
+        expect(result.creditedMinutes).toBe(30)
+    })
+
+    it('returns empty for null readiness window', () => {
+        const interruptions = [
+            { start: '2025-05-11T02:00:00', end: '2025-05-11T02:30:00' }
+        ]
+        expect(processInterruptions(interruptions, null, readinessEnd).rawCount).toBe(0)
+        expect(processInterruptions(interruptions, readinessStart, null).rawCount).toBe(0)
+    })
+})
 
 describe('calculateWorkHours', () => {
     it('calculates simple day shift duration', () => {

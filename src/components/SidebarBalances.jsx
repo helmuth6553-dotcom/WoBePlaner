@@ -114,7 +114,7 @@ export default function SidebarBalances() {
             // 4. Fetch time entries
             const { data: allTimeEntriesHistory } = await supabase
                 .from('time_entries')
-                .select('user_id, shift_id, calculated_hours, status')
+                .select('user_id, shift_id, calculated_hours, status, actual_start, actual_end')
 
             // 5. Fetch corrections
             const { data: allCorrections } = await supabase

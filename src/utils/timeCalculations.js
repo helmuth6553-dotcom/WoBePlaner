@@ -2,6 +2,82 @@ import { differenceInMinutes, differenceInDays, addDays, isBefore, max, min, add
 import { getHolidays, isHoliday } from './holidays'
 
 /**
+ * Process interruptions during standby: filter, inflate, merge, and calculate credit.
+ *
+ * @param {Array} interruptions - Raw interruption objects [{start, end, note?}]
+ * @param {Date} readinessStart - Start of the standby/readiness window
+ * @param {Date} readinessEnd - End of the standby/readiness window
+ * @param {number} minInterruptionMinutes - Minimum credit per interruption (default 30)
+ * @returns {{ mergedIntervals: Array, creditedMinutes: number, deductedReadinessMinutes: number, rawCount: number, details: Array }}
+ */
+export const processInterruptions = (interruptions, readinessStart, readinessEnd, minInterruptionMinutes = 30) => {
+    const empty = { mergedIntervals: [], creditedMinutes: 0, deductedReadinessMinutes: 0, rawCount: 0, details: [] }
+    if (!interruptions || !Array.isArray(interruptions) || interruptions.length === 0) return empty
+    if (!readinessStart || !readinessEnd) return empty
+
+    let deductedReadinessMinutes = 0
+    const rawIntervals = []
+    const details = [] // per-interruption detail for transparency
+
+    interruptions.forEach(int => {
+        if (!int.start || !int.end) return
+        const intStart = new Date(int.start)
+        const intEnd = new Date(int.end)
+
+        const iOverlapStart = max([intStart, readinessStart])
+        const iOverlapEnd = min([intEnd, readinessEnd])
+
+        if (isBefore(iOverlapStart, iOverlapEnd)) {
+            const actualMinutes = differenceInMinutes(iOverlapEnd, iOverlapStart)
+            deductedReadinessMinutes += actualMinutes
+
+            const roundedMinutes = Math.ceil(actualMinutes / minInterruptionMinutes) * minInterruptionMinutes
+            const inflatedEnd = addMinutes(iOverlapStart, roundedMinutes)
+            rawIntervals.push({ start: iOverlapStart, end: inflatedEnd })
+
+            details.push({
+                start: int.start,
+                end: int.end,
+                note: int.note || null,
+                actualMinutes,
+                creditedMinutes: roundedMinutes,
+            })
+        }
+    })
+
+    // Merge overlapping intervals
+    let mergedIntervals = []
+    if (rawIntervals.length > 0) {
+        rawIntervals.sort((a, b) => a.start - b.start)
+        mergedIntervals = [rawIntervals[0]]
+
+        for (let i = 1; i < rawIntervals.length; i++) {
+            const current = rawIntervals[i]
+            const last = mergedIntervals[mergedIntervals.length - 1]
+
+            if (current.start < last.end) {
+                last.end = max([last.end, current.end])
+            } else {
+                mergedIntervals.push(current)
+            }
+        }
+    }
+
+    let creditedMinutes = 0
+    mergedIntervals.forEach(interval => {
+        creditedMinutes += differenceInMinutes(interval.end, interval.start)
+    })
+
+    return {
+        mergedIntervals,
+        creditedMinutes,
+        deductedReadinessMinutes,
+        rawCount: details.length,
+        details,
+    }
+}
+
+/**
  * Core Time Calculation Logic
  * 
  * Objectives:
@@ -96,64 +172,9 @@ export const calculateWorkHours = (startIso, endIso, type, interruptions = [], t
     }
 
     // 4. Process Interruptions (Inflation + Merge)
-    let interruptionIntervals = []
-    let deductedReadinessMinutes = 0 // Sum of ACTUAL duration (not inflated)
-
-    if (interruptions && interruptions.length > 0) {
-        // A. Filter and Collect valid interruptions within readiness
-        const rawIntervals = []
-        interruptions.forEach(int => {
-            if (!int.start || !int.end) return
-            const intStart = new Date(int.start)
-            const intEnd = new Date(int.end)
-
-            // Only count interruptions overlapping with readiness
-            const iOverlapStart = max([intStart, readinessStart])
-            const iOverlapEnd = min([intEnd, readinessEnd])
-
-            if (isBefore(iOverlapStart, iOverlapEnd)) {
-                // Calculate actual duration for deduction later
-                const duration = differenceInMinutes(iOverlapEnd, iOverlapStart)
-                deductedReadinessMinutes += duration
-
-                // CEIL Rounding: Every "scratched" 30-min block counts as full 30 min
-                // Formula: Math.ceil(duration / 30) * 30
-                // Examples: 10min→30min, 31min→60min, 45min→60min, 61min→90min
-                // See: docs/SHIFT_TIMES.md - Unterbrechungen während Bereitschaft
-                const roundedDurationMinutes = Math.ceil(duration / minInterruptionMinutes) * minInterruptionMinutes
-                const inflatedEnd = addMinutes(iOverlapStart, roundedDurationMinutes)
-                rawIntervals.push({ start: iOverlapStart, end: inflatedEnd })
-            }
-        })
-
-        // B. Merge Overlapping Intervals
-        if (rawIntervals.length > 0) {
-            // Sort by start time
-            rawIntervals.sort((a, b) => a.start - b.start)
-
-            let merged = [rawIntervals[0]]
-
-            for (let i = 1; i < rawIntervals.length; i++) {
-                let current = rawIntervals[i]
-                let last = merged[merged.length - 1]
-
-                if (current.start < last.end) {
-                    // Overlap or touch -> Merge (Extend end if needed)
-                    last.end = max([last.end, current.end])
-                } else {
-                    // No overlap -> New interval
-                    merged.push(current)
-                }
-            }
-            interruptionIntervals = merged
-        }
-    }
-
-    // C. Calculate Total Credit from Merged Intervals
-    let interruptionCreditMinutes = 0
-    interruptionIntervals.forEach(interval => {
-        interruptionCreditMinutes += differenceInMinutes(interval.end, interval.start)
-    })
+    const interruptionResult = processInterruptions(interruptions, readinessStart, readinessEnd, minInterruptionMinutes)
+    const { mergedIntervals: interruptionIntervals, creditedMinutes: interruptionCreditMinutes } = interruptionResult
+    let deductedReadinessMinutes = interruptionResult.deductedReadinessMinutes
 
     // 5. Final Calculation
     // Deduct actual worked minutes from passive readiness (cannot be negative)

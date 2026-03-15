@@ -479,7 +479,7 @@ export default function AdminTimeTracking() {
             supabase.from('shift_interests').select('shift_id, shifts(*)').eq('user_id', selectedUserId),
             supabase.from('shifts').select('id, start_time, end_time, type').eq('type', 'TEAM').gte('start_time', oneYearAgo.toISOString()),
             supabase.from('absences').select('user_id, start_date, end_date, type, planned_hours, status').eq('user_id', selectedUserId).eq('status', 'genehmigt'),
-            supabase.from('time_entries').select('shift_id, calculated_hours').eq('user_id', selectedUserId),
+            supabase.from('time_entries').select('shift_id, calculated_hours, actual_start, actual_end').eq('user_id', selectedUserId),
             supabase.from('balance_corrections').select('user_id, correction_hours, effective_month').eq('user_id', selectedUserId)
         ])
 

@@ -1,15 +1,16 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
-import { Clock, TrendingUp, TrendingDown, Zap, BarChart3, CalendarClock, ChevronDown, ChevronUp, BellRing } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, isSameMonth, eachDayOfInterval, isWeekend } from 'date-fns'
+import { Clock, TrendingUp, TrendingDown, Zap, BarChart3, CalendarClock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, BellRing, PenTool, AlertCircle } from 'lucide-react'
+import { format, startOfMonth, endOfMonth, isSameMonth, eachDayOfInterval, isWeekend, addMonths, subMonths } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { calculateMonthlyHistory } from '../utils/monthlyHistory'
-import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
+import { calculateWorkHours, calculateDailyAbsenceHours, processInterruptions } from '../utils/timeCalculations'
 import { getHolidays, isHoliday } from '../utils/holidays'
 
 const SHIFT_TYPE_LABELS = {
+    TD: 'Tagdienst',
     TD1: 'Tagdienst 1',
     TD2: 'Tagdienst 2',
     ND: 'Nachtdienst',
@@ -20,6 +21,7 @@ const SHIFT_TYPE_LABELS = {
 }
 
 const SHIFT_TYPE_COLORS = {
+    TD: 'bg-blue-100 text-blue-700',
     TD1: 'bg-blue-100 text-blue-700',
     TD2: 'bg-sky-100 text-sky-700',
     ND: 'bg-indigo-100 text-indigo-700',
@@ -61,6 +63,13 @@ export default function ProfileStats() {
     const [shiftBreakdown, setShiftBreakdown] = useState({})
     const [absenceBreakdown, setAbsenceBreakdown] = useState({})
     const [interruptionsByMonth, setInterruptionsByMonth] = useState({})
+    const [interruptionDetails, setInterruptionDetails] = useState([])
+    const [timeAdjustments, setTimeAdjustments] = useState([])
+    const [currentMonthCorrections, setCurrentMonthCorrections] = useState([])
+    const [expandedInterruptions, setExpandedInterruptions] = useState({})
+    const [selectedMonth, setSelectedMonth] = useState(new Date())
+    // Raw fetched data — stored so we can recompute breakdown for any month
+    const [rawData, setRawData] = useState(null)
 
     useEffect(() => {
         if (!user) return
@@ -121,91 +130,16 @@ export default function ProfileStats() {
 
         const { data: myCorrs } = await supabase
             .from('balance_corrections')
-            .select('correction_hours, effective_month')
+            .select('correction_hours, effective_month, reason, created_at, created_by_profile:profiles!balance_corrections_created_by_fkey(full_name)')
             .eq('user_id', user.id)
 
         try {
-            const b = calculateGenericBalance(
-                profile, allMyShifts, myAbsences || [], myEntries || [], new Date(), myCorrs || []
-            )
-            setBalance(b)
-
             const history = calculateMonthlyHistory(
                 profile, allMyShifts, myAbsences || [], myEntries || [], myCorrs || [], 12
             )
             setMonthlyData(history)
 
-            // --- Compute shift breakdown for current month ---
-            const now = new Date()
-            const mStart = startOfMonth(now)
-            const mEnd = endOfMonth(now)
-            const entryMap = {}
-                ; (myEntries || []).forEach(e => { if (e.shift_id) entryMap[e.shift_id] = e })
-
-            const currentShifts = allMyShifts.filter(s => {
-                if (!s.start_time) return false
-                const d = new Date(s.start_time)
-                return isSameMonth(d, now)
-            })
-
-            const breakdown = {}
-            currentShifts.forEach(shift => {
-                const type = normalizeType(shift.type)
-                const entry = entryMap[shift.id]
-                let hours = 0
-                if (entry && (entry.calculated_hours || entry.calculated_hours === 0)) {
-                    hours = entry.calculated_hours
-                } else if (shift.start_time && shift.end_time) {
-                    hours = calculateWorkHours(shift.start_time, shift.end_time, type)
-                }
-                if (!breakdown[type]) breakdown[type] = { hours: 0, count: 0 }
-                breakdown[type].hours += hours
-                breakdown[type].count += 1
-            })
-            // Round
-            Object.keys(breakdown).forEach(k => {
-                breakdown[k].hours = Math.round(breakdown[k].hours * 100) / 100
-            })
-            setShiftBreakdown(breakdown)
-
-            // --- Compute absence breakdown for current month ---
-            const year = now.getFullYear()
-            const holidays = getHolidays(year)
-            const absBreak = {}
-                ; (myAbsences || []).forEach(abs => {
-                    if (!abs.start_date || !abs.end_date) return
-                    const absStart = new Date(abs.start_date)
-                    const absEnd = new Date(abs.end_date)
-                    const start = absStart < mStart ? mStart : absStart
-                    const end = absEnd > mEnd ? mEnd : absEnd
-                    if (start > end) return
-                    if (!(absStart <= mEnd && absEnd >= mStart)) return
-
-                    const absType = abs.type || 'Sonstige'
-                    if (!absBreak[absType]) absBreak[absType] = { hours: 0, days: 0 }
-
-                    if (abs.planned_hours && Number(abs.planned_hours) > 0) {
-                        absBreak[absType].hours += Number(abs.planned_hours)
-                        // Estimate days
-                        const days = eachDayOfInterval({ start, end })
-                        absBreak[absType].days += days.filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
-                    } else {
-                        const days = eachDayOfInterval({ start, end })
-                        days.forEach(day => {
-                            const hours = calculateDailyAbsenceHours(day, abs, allMyShifts, profile)
-                            if (hours > 0) {
-                                absBreak[absType].hours += hours
-                                absBreak[absType].days += 1
-                            }
-                        })
-                    }
-                })
-            Object.keys(absBreak).forEach(k => {
-                absBreak[k].hours = Math.round(absBreak[k].hours * 100) / 100
-            })
-            setAbsenceBreakdown(absBreak)
-
-            // --- Compute interruptions (Bereitschaft → aktiv) by month ---
+            // --- Compute interruptions (Bereitschaft → aktiv) by month (global, not month-specific) ---
             const shiftStartMap = {}
             allMyShifts.forEach(s => { if (s.id) shiftStartMap[s.id] = s.start_time })
 
@@ -220,10 +154,258 @@ export default function ProfileStats() {
                 })
             setInterruptionsByMonth(intByMonth)
 
+            // Store raw data for month-specific recomputation
+            setRawData({ profile, allMyShifts, myEntries: myEntries || [], myAbsences: myAbsences || [], myCorrs: myCorrs || [] })
+
         } catch (err) {
             console.error('ProfileStats balance error:', err)
         }
     }
+
+    // Recompute breakdown, balance, adjustments etc. when selectedMonth or rawData changes
+    useEffect(() => {
+        if (!rawData) return
+        const { profile, allMyShifts, myEntries, myAbsences, myCorrs } = rawData
+        const targetDate = selectedMonth
+
+        const b = calculateGenericBalance(
+            profile, allMyShifts, myAbsences, myEntries, targetDate, myCorrs
+        )
+        setBalance(b)
+
+        const mStart = startOfMonth(targetDate)
+        const mEnd = endOfMonth(targetDate)
+        const entryMap = {}
+        myEntries.forEach(e => { if (e.shift_id) entryMap[e.shift_id] = e })
+
+        const currentShifts = allMyShifts.filter(s => {
+            if (!s.start_time) return false
+            const d = new Date(s.start_time)
+            return isSameMonth(d, targetDate)
+        })
+
+        const breakdown = {}
+        const adjustments = []
+        const intDetails = []
+
+        // Group shifts by date to detect TD1+TD2 pairs
+        const shiftsByDate = {}
+        currentShifts.forEach(shift => {
+            const dateKey = new Date(shift.start_time).toISOString().split('T')[0]
+            if (!shiftsByDate[dateKey]) shiftsByDate[dateKey] = []
+            shiftsByDate[dateKey].push(shift)
+        })
+
+        // Identify TD1+TD2 pairs (same day) — these are merged in TimeTracking
+        const mergedTdPairs = new Set()
+        const tdPairsByDate = {}
+        Object.entries(shiftsByDate).forEach(([dateKey, dayShifts]) => {
+            const td1 = dayShifts.find(s => {
+                const t = normalizeType(s.type)
+                return t === 'TD1'
+            })
+            const td2 = dayShifts.find(s => normalizeType(s.type) === 'TD2')
+            if (td1 && td2) {
+                mergedTdPairs.add(td1.id)
+                mergedTdPairs.add(td2.id)
+                tdPairsByDate[dateKey] = { td1, td2 }
+            }
+        })
+
+        // First: handle TD1+TD2 merged pairs in breakdown
+        const processedBreakdownIds = new Set()
+        Object.values(tdPairsByDate).forEach(({ td1, td2 }) => {
+            const td1Entry = entryMap[td1.id]
+            const td2Entry = entryMap[td2.id]
+            const actualEntry = td1Entry || td2Entry
+
+            let hours = 0
+            if (actualEntry && (actualEntry.calculated_hours || actualEntry.calculated_hours === 0)) {
+                hours = actualEntry.calculated_hours
+            } else {
+                const td1Hours = calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
+                const td2Hours = calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
+                const overlapMin = Math.max(0, (new Date(td1.end_time) - new Date(td2.start_time)) / 60000)
+                hours = td1Hours + td2Hours - (overlapMin / 60)
+            }
+
+            if (!breakdown['TD']) breakdown['TD'] = { hours: 0, count: 0 }
+            breakdown['TD'].hours += hours
+            breakdown['TD'].count += 1
+            processedBreakdownIds.add(td1.id)
+            processedBreakdownIds.add(td2.id)
+        })
+
+        currentShifts.forEach(shift => {
+            if (processedBreakdownIds.has(shift.id)) return
+            const type = normalizeType(shift.type)
+            const entry = entryMap[shift.id]
+            let hours = 0
+            const plannedHours = (shift.start_time && shift.end_time)
+                ? calculateWorkHours(shift.start_time, shift.end_time, type)
+                : 0
+
+            if (entry && (entry.calculated_hours || entry.calculated_hours === 0)) {
+                hours = entry.calculated_hours
+            } else {
+                hours = plannedHours
+            }
+
+            if (!breakdown[type]) breakdown[type] = { hours: 0, count: 0 }
+            breakdown[type].hours += hours
+            breakdown[type].count += 1
+
+            // --- Unterbrechungs-Details für ND-Schichten ---
+            if (entry && entry.interruptions && entry.interruptions.length > 0 && type === 'ND') {
+                const shiftStart = new Date(entry.actual_start || shift.start_time)
+
+                let rStart = new Date(shiftStart)
+                if (shiftStart.getHours() >= 12) {
+                    rStart = new Date(rStart.getTime() + 86400000)
+                }
+                rStart.setHours(0, 30, 0, 0)
+                const rEnd = new Date(rStart)
+                rEnd.setHours(6, 0, 0, 0)
+
+                const intResult = processInterruptions(entry.interruptions, rStart, rEnd)
+                if (intResult.rawCount > 0) {
+                    intDetails.push({
+                        date: shift.start_time,
+                        shiftType: type,
+                        count: intResult.rawCount,
+                        creditedMinutes: intResult.creditedMinutes,
+                        deductedMinutes: intResult.deductedReadinessMinutes,
+                        details: intResult.details,
+                    })
+                }
+            }
+        })
+        Object.keys(breakdown).forEach(k => {
+            breakdown[k].hours = Math.round(breakdown[k].hours * 100) / 100
+        })
+        setShiftBreakdown(breakdown)
+
+        // --- Zeitkorrekturen ---
+        const processedForAdj = new Set()
+
+        Object.entries(tdPairsByDate).forEach(([, { td1, td2 }]) => {
+            const td1Entry = entryMap[td1.id]
+            const td2Entry = entryMap[td2.id]
+            if (!td1Entry && !td2Entry) return
+
+            const td1Planned = calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
+            const td2Planned = calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
+            const td1End = new Date(td1.end_time)
+            const td2Start = new Date(td2.start_time)
+            const overlapMinutes = Math.max(0, (td1End - td2Start) / 60000)
+            const combinedPlanned = td1Planned + td2Planned - (overlapMinutes / 60)
+
+            const actualEntry = td1Entry || td2Entry
+            const combinedActual = actualEntry.calculated_hours || 0
+
+            const diff = combinedActual - combinedPlanned
+            if (Math.abs(diff) > 0.01) {
+                adjustments.push({
+                    date: td1.start_time,
+                    shiftType: 'TD',
+                    plannedHours: Math.round(combinedPlanned * 100) / 100,
+                    actualHours: Math.round(combinedActual * 100) / 100,
+                    diff: Math.round(diff * 100) / 100,
+                    hasInterruptions: false,
+                    actualStart: actualEntry.actual_start,
+                    actualEnd: actualEntry.actual_end,
+                    plannedStart: td1.start_time,
+                    plannedEnd: td2.end_time,
+                })
+            }
+            processedForAdj.add(td1.id)
+            processedForAdj.add(td2.id)
+        })
+
+        currentShifts.forEach(shift => {
+            if (processedForAdj.has(shift.id)) return
+            const type = normalizeType(shift.type)
+            const entry = entryMap[shift.id]
+            if (!entry || (entry.calculated_hours !== 0 && !entry.calculated_hours)) return
+
+            const plannedH = (shift.start_time && shift.end_time)
+                ? calculateWorkHours(shift.start_time, shift.end_time, type)
+                : 0
+            let diff = entry.calculated_hours - plannedH
+
+            if (type === 'ND' && entry.interruptions && entry.interruptions.length > 0) {
+                const matchingInt = intDetails.find(d => d.date === shift.start_time)
+                if (matchingInt) {
+                    const intEffect = (matchingInt.creditedMinutes - matchingInt.deductedMinutes * 0.5) / 60
+                    diff -= intEffect
+                }
+            }
+
+            if (Math.abs(diff) > 0.01) {
+                adjustments.push({
+                    date: shift.start_time,
+                    shiftType: type,
+                    plannedHours: Math.round(plannedH * 100) / 100,
+                    actualHours: Math.round(entry.calculated_hours * 100) / 100,
+                    diff: Math.round(diff * 100) / 100,
+                    hasInterruptions: false,
+                    actualStart: entry.actual_start,
+                    actualEnd: entry.actual_end,
+                    plannedStart: shift.start_time,
+                    plannedEnd: shift.end_time,
+                })
+            }
+        })
+
+        setTimeAdjustments(adjustments)
+        setInterruptionDetails(intDetails)
+
+        // --- Absence breakdown ---
+        const year = targetDate.getFullYear()
+        const holidays = getHolidays(year)
+        const absBreak = {}
+        myAbsences.forEach(abs => {
+            if (!abs.start_date || !abs.end_date) return
+            const absStart = new Date(abs.start_date)
+            const absEnd = new Date(abs.end_date)
+            const start = absStart < mStart ? mStart : absStart
+            const end = absEnd > mEnd ? mEnd : absEnd
+            if (start > end) return
+            if (!(absStart <= mEnd && absEnd >= mStart)) return
+
+            const absType = abs.type || 'Sonstige'
+            if (!absBreak[absType]) absBreak[absType] = { hours: 0, days: 0 }
+
+            if (abs.planned_hours && Number(abs.planned_hours) > 0) {
+                absBreak[absType].hours += Number(abs.planned_hours)
+                const days = eachDayOfInterval({ start, end })
+                absBreak[absType].days += days.filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
+            } else {
+                const days = eachDayOfInterval({ start, end })
+                days.forEach(day => {
+                    const hours = calculateDailyAbsenceHours(day, abs, allMyShifts, profile)
+                    if (hours > 0) {
+                        absBreak[absType].hours += hours
+                        absBreak[absType].days += 1
+                    }
+                })
+            }
+        })
+        Object.keys(absBreak).forEach(k => {
+            absBreak[k].hours = Math.round(absBreak[k].hours * 100) / 100
+        })
+        setAbsenceBreakdown(absBreak)
+
+        // --- Admin corrections for selected month ---
+        const monthCorrs = myCorrs.filter(c => {
+            if (!c.effective_month) return false
+            return isSameMonth(new Date(c.effective_month), targetDate)
+        })
+        setCurrentMonthCorrections(monthCorrs)
+
+        // Reset expanded states when switching months
+        setExpandedInterruptions({})
+    }, [rawData, selectedMonth])
 
     const fetchFlexHistory = async () => {
         const { data: myFlex } = await supabase
@@ -367,6 +549,19 @@ export default function ProfileStats() {
         return sortedAbsenceTypes.reduce((sum, [, v]) => sum + v.hours, 0)
     }, [sortedAbsenceTypes])
 
+    const totalInterruptionCredit = useMemo(() => {
+        // Netto-Gewinn: credited at 100% minus what passive would have been (50%)
+        return Math.round(interruptionDetails.reduce((sum, d) => sum + (d.creditedMinutes - d.deductedMinutes * 0.5), 0) / 60 * 100) / 100
+    }, [interruptionDetails])
+
+    const totalInterruptionCount = useMemo(() => {
+        return interruptionDetails.reduce((sum, d) => sum + d.count, 0)
+    }, [interruptionDetails])
+
+    const totalAdjustmentDiff = useMemo(() => {
+        return Math.round(timeAdjustments.reduce((sum, a) => sum + a.diff, 0) * 100) / 100
+    }, [timeAdjustments])
+
     if (loading) {
         return (
             <div className="space-y-4">
@@ -418,9 +613,6 @@ export default function ProfileStats() {
                         <div className="flex items-center gap-2">
                             <Clock size={20} className="text-gray-700" />
                             <h3 className="font-bold text-gray-900">Stundenkonto</h3>
-                            <span className="text-xs text-gray-400">
-                                {format(new Date(), 'MMMM yyyy', { locale: de })}
-                            </span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold ${balance.total >= 0
@@ -434,13 +626,36 @@ export default function ProfileStats() {
                         </div>
                     </button>
 
+                    {/* Month navigation */}
+                    {detailExpanded && (
+                        <div className="flex items-center justify-center gap-3 px-5 pb-2">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedMonth(prev => subMonths(prev, 1)) }}
+                                className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                            >
+                                <ChevronLeft size={18} className="text-gray-500" />
+                            </button>
+                            <span className="text-sm font-medium text-gray-700 min-w-[140px] text-center">
+                                {format(selectedMonth, 'MMMM yyyy', { locale: de })}
+                            </span>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedMonth(prev => addMonths(prev, 1)) }}
+                                className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                                disabled={isSameMonth(selectedMonth, new Date())}
+                            >
+                                <ChevronRight size={18} className={isSameMonth(selectedMonth, new Date()) ? 'text-gray-200' : 'text-gray-500'} />
+                            </button>
+                        </div>
+                    )}
+
                     {detailExpanded && (
                         <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-4">
-                            {/* Geleistete Stunden nach Diensttyp */}
-                            {sortedShiftTypes.length > 0 && (
+                            {/* Geleistete Stunden — Dienste, Unterbrechungen, Zeitkorrekturen in einer Liste */}
+                            {(sortedShiftTypes.length > 0 || interruptionDetails.length > 0 || timeAdjustments.length > 0) && (
                                 <div>
                                     <p className="text-xs font-bold text-gray-400 uppercase mb-2">Geleistete Stunden</p>
                                     <div className="space-y-1.5">
+                                        {/* Diensttypen */}
                                         {sortedShiftTypes.map(([type, data]) => {
                                             const label = SHIFT_TYPE_LABELS[type] || type
                                             const colors = SHIFT_TYPE_COLORS[type] || 'bg-gray-100 text-gray-700'
@@ -459,9 +674,117 @@ export default function ProfileStats() {
                                                 </div>
                                             )
                                         })}
+
+                                        {/* Unterbrechungen (aufklappbar) */}
+                                        {interruptionDetails.map((item, idx) => {
+                                            const dateStr = format(new Date(item.date), 'dd.MM.', { locale: de })
+                                            const isExpanded = expandedInterruptions[`int-${idx}`]
+                                            const netGain = Math.round((item.creditedMinutes - item.deductedMinutes * 0.5) / 60 * 100) / 100
+                                            return (
+                                                <div key={`int-${idx}`}>
+                                                    <button
+                                                        onClick={() => setExpandedInterruptions(prev => ({ ...prev, [`int-${idx}`]: !prev[`int-${idx}`] }))}
+                                                        className="w-full flex items-center justify-between py-1.5 px-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-200 text-gray-700">{dateStr}</span>
+                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">ND</span>
+                                                            <span className="text-sm text-gray-600">{item.count}× Unterbrechung</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-sm font-bold text-orange-700">+{netGain}h</span>
+                                                            {isExpanded ? <ChevronUp size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
+                                                        </div>
+                                                    </button>
+                                                    {isExpanded && (
+                                                        <div className="ml-4 mt-1 space-y-1 mb-1">
+                                                            {item.details.map((d, di) => {
+                                                                const actualH = Math.round(d.actualMinutes / 60 * 100) / 100
+                                                                const creditedH = Math.round(d.creditedMinutes / 60 * 100) / 100
+                                                                const detailNet = Math.round((d.creditedMinutes - d.actualMinutes * 0.5) / 60 * 100) / 100
+                                                                return (
+                                                                    <div key={di} className="flex items-center justify-between py-1 px-3 rounded bg-orange-50/60 text-xs">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-gray-500">
+                                                                                {format(new Date(d.start), 'HH:mm')} – {format(new Date(d.end), 'HH:mm')}
+                                                                            </span>
+                                                                            <span className="text-gray-400">({actualH}h{creditedH !== actualH ? ` → ${creditedH}h` : ''})</span>
+                                                                            {d.note && <span className="text-gray-400 italic">{d.note}</span>}
+                                                                        </div>
+                                                                        <span className="text-orange-600 font-bold">+{detailNet}h</span>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                            <p className="text-[10px] text-gray-400 px-3">Mind. 30 Min, 100% statt 50% Bereitschaft</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+
+                                        {/* Zeitkorrekturen — zusammengefasst, aufklappbar */}
+                                        {timeAdjustments.length > 0 && (() => {
+                                            const isExpanded = expandedInterruptions['adj-all']
+                                            return (
+                                                <div>
+                                                    <button
+                                                        onClick={() => setExpandedInterruptions(prev => ({ ...prev, ['adj-all']: !prev['adj-all'] }))}
+                                                        className="w-full flex items-center justify-between py-1.5 px-3 rounded-lg bg-cyan-50 hover:bg-cyan-100 transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-100 text-cyan-700">±</span>
+                                                            <span className="text-sm text-gray-600">Zeitkorrekturen ({timeAdjustments.length}×)</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`text-sm font-bold ${totalAdjustmentDiff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                                                {totalAdjustmentDiff > 0 ? '+' : ''}{totalAdjustmentDiff}h
+                                                            </span>
+                                                            {isExpanded ? <ChevronUp size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
+                                                        </div>
+                                                    </button>
+                                                    {isExpanded && (
+                                                        <div className="ml-4 mt-1 space-y-1 mb-1">
+                                                            {timeAdjustments.map((adj, idx) => {
+                                                                const dateStr = format(new Date(adj.date), 'dd.MM.', { locale: de })
+                                                                const colors = SHIFT_TYPE_COLORS[adj.shiftType] || 'bg-gray-100 text-gray-700'
+                                                                return (
+                                                                    <div key={idx} className="py-1 px-3 rounded bg-cyan-50/60 text-xs">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">{dateStr}</span>
+                                                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${colors}`}>{adj.shiftType}</span>
+                                                                                <span className="text-gray-500">Plan: {adj.plannedHours}h → Ist: {adj.actualHours}h</span>
+                                                                            </div>
+                                                                            <span className={`font-bold ${adj.diff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                                                                {adj.diff > 0 ? '+' : ''}{adj.diff}h
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="text-[10px] text-gray-400 mt-0.5 ml-1">
+                                                                            {adj.actualStart && adj.plannedStart && format(new Date(adj.actualStart), 'HH:mm') !== format(new Date(adj.plannedStart), 'HH:mm') && (
+                                                                                <span>Start: {format(new Date(adj.plannedStart), 'HH:mm')} → {format(new Date(adj.actualStart), 'HH:mm')} </span>
+                                                                            )}
+                                                                            {adj.actualEnd && adj.plannedEnd && format(new Date(adj.actualEnd), 'HH:mm') !== format(new Date(adj.plannedEnd), 'HH:mm') && (
+                                                                                <span>Ende: {format(new Date(adj.plannedEnd), 'HH:mm')} → {format(new Date(adj.actualEnd), 'HH:mm')} </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })()}
                                     </div>
-                                    <div className="flex justify-end mt-1.5 pr-3">
-                                        <span className="text-xs font-bold text-gray-500">
+
+                                    {/* Hinweis */}
+                                    {(interruptionDetails.length > 0 || timeAdjustments.length > 0) && (
+                                        <p className="text-[10px] text-gray-400 mt-1 px-3">Unterbrechungen und Zeitkorrekturen sind bereits in den Dienststunden enthalten.</p>
+                                    )}
+
+                                    {/* Gesamt Ist ganz unten */}
+                                    <div className="flex justify-end mt-2 pr-3 border-t border-gray-100 pt-2">
+                                        <span className="text-sm font-bold text-gray-700">
                                             Gesamt Ist: {Math.round(totalShiftHours * 100) / 100}h
                                         </span>
                                     </div>
@@ -494,6 +817,41 @@ export default function ProfileStats() {
                                         <span className="text-xs font-bold text-gray-500">
                                             Gesamt Abwesenheit: {Math.round(totalAbsenceHours * 100) / 100}h
                                         </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Admin-Korrekturen (Detail) */}
+                            {currentMonthCorrections.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase mb-2">Admin-Korrekturen</p>
+                                    <div className="space-y-1.5">
+                                        {currentMonthCorrections.map((corr, idx) => (
+                                            <div key={idx} className="py-2 px-3 rounded-lg bg-purple-50 border border-purple-100">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <PenTool size={14} className="text-purple-600" />
+                                                        <span className="text-sm text-gray-700">Korrektur</span>
+                                                    </div>
+                                                    <span className={`text-sm font-bold ${corr.correction_hours >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                                        {corr.correction_hours > 0 ? '+' : ''}{corr.correction_hours}h
+                                                    </span>
+                                                </div>
+                                                {corr.reason && (
+                                                    <p className="text-xs text-gray-500 mt-1 ml-5">
+                                                        {corr.reason}
+                                                    </p>
+                                                )}
+                                                <div className="text-[10px] text-gray-400 mt-0.5 ml-5">
+                                                    {corr.created_by_profile?.full_name && (
+                                                        <span>von {corr.created_by_profile.full_name}</span>
+                                                    )}
+                                                    {corr.created_at && (
+                                                        <span> · {format(new Date(corr.created_at), 'dd.MM.yyyy', { locale: de })}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             )}
