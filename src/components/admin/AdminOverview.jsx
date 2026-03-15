@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabase'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, endOfYear } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, Thermometer, Clock, TrendingUp, ArrowLeftRight, Target, Scale, ChevronDown, ChevronUp, Plane, Calendar, User, Moon, CalendarDays, Coffee, AlertTriangle, Timer, GraduationCap, Hourglass, Maximize, Tent } from 'lucide-react'
-import { calculateWorkHours } from '../../utils/timeCalculations'
+import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, Thermometer, Clock, TrendingUp, ArrowLeftRight, Target, Scale, ChevronDown, ChevronUp, Plane, Calendar, User, Moon, CalendarDays, BellRing, AlertTriangle, GraduationCap, Hourglass, Maximize, Tent } from 'lucide-react'
+import { calculateWorkHours, processInterruptions } from '../../utils/timeCalculations'
 import { getHolidays, isHoliday } from '../../utils/holidays'
 import { eachDayOfInterval, isWeekend, getDay, differenceInDays, getYear } from 'date-fns'
 
@@ -100,7 +100,7 @@ export default function AdminOverview() {
 
             // Calculate statistics
             const shiftHours = {
-                TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0
+                TD: 0, TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0
             }
             const sickHours = {
                 TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0
@@ -148,8 +148,41 @@ export default function AdminOverview() {
                 totalSollHours += weeklyHours * weeksInMonth
             })
 
-            // Process confirmed/worked entries
+            // Process confirmed/worked entries — with TD1+TD2 merged detection
+            // Group entries by user+date to detect merged TD1+TD2 pairs
+            const processedEntryIds = new Set()
+            const entriesByUserDate = {}
             entries?.forEach(entry => {
+                if (!entry.shifts || !entry.calculated_hours) return
+                const type = entry.shifts.type?.toUpperCase()
+                if (type !== 'TD1' && type !== 'TD2') return
+                const dateKey = new Date(entry.shifts.start_time).toISOString().split('T')[0]
+                const key = `${entry.user_id}_${dateKey}`
+                if (!entriesByUserDate[key]) entriesByUserDate[key] = []
+                entriesByUserDate[key].push(entry)
+            })
+
+            // Handle merged TD1+TD2 pairs (both have identical actual_start/actual_end)
+            Object.values(entriesByUserDate).forEach(dayEntries => {
+                const td1 = dayEntries.find(e => e.shifts.type?.toUpperCase() === 'TD1')
+                const td2 = dayEntries.find(e => e.shifts.type?.toUpperCase() === 'TD2')
+                if (td1 && td2) {
+                    const isMerged = td1.actual_start && td2.actual_start
+                        && td1.actual_start === td2.actual_start
+                        && td1.actual_end === td2.actual_end
+                    if (isMerged) {
+                        // Count only once as combined TD
+                        if (!shiftHours['TD']) shiftHours['TD'] = 0
+                        shiftHours['TD'] += Number(td1.calculated_hours) || 0
+                        processedEntryIds.add(td1.id)
+                        processedEntryIds.add(td2.id)
+                    }
+                }
+            })
+
+            // Process remaining entries normally
+            entries?.forEach(entry => {
+                if (processedEntryIds.has(entry.id)) return
                 if (entry.shifts && entry.calculated_hours) {
                     const type = entry.shifts.type?.toUpperCase()
                     if (Object.hasOwn(shiftHours, type)) {
@@ -190,7 +223,7 @@ export default function AdminOverview() {
                     const absEnd = new Date(abs.end_date) > end ? end : new Date(abs.end_date)
                     if (absStart <= absEnd) {
                         const vacDays = eachDayOfInterval({ start: absStart, end: absEnd })
-                        const vacWorkDays = vacDays.filter(d => !isWeekend(d)).length
+                        const vacWorkDays = vacDays.filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
                         // Find user's daily hours
                         const userProfile = employees.find(e => e.id === abs.user_id)
                         const dailyHours = (userProfile?.weekly_hours || 40) / 5
@@ -219,19 +252,32 @@ export default function AdminOverview() {
 
             // === NEW METRICS ===
 
-            // 1. Interruptions (count and hours from time entries)
+            // 1. Interruptions — use processInterruptions() for accurate credited hours
             let totalInterruptionCount = 0
-            let totalInterruptionHours = 0
+            let totalInterruptionCreditedHours = 0
+            let totalInterruptionNetGain = 0
             entries?.forEach(entry => {
-                if (entry.interruptions && Array.isArray(entry.interruptions)) {
-                    totalInterruptionCount += entry.interruptions.length
-                    entry.interruptions.forEach(interr => {
-                        if (interr.duration) {
-                            totalInterruptionHours += Number(interr.duration) / 60 // minutes to hours
-                        }
-                    })
+                if (entry.interruptions && Array.isArray(entry.interruptions) && entry.interruptions.length > 0) {
+                    // Build readiness window (same logic as timeCalculations.js)
+                    const shiftStart = new Date(entry.actual_start || entry.shifts?.start_time)
+                    if (isNaN(shiftStart.getTime())) return
+
+                    let rStart = new Date(shiftStart)
+                    if (shiftStart.getHours() >= 12) {
+                        rStart = new Date(rStart.getTime() + 86400000)
+                    }
+                    rStart.setHours(0, 30, 0, 0)
+                    const rEnd = new Date(rStart)
+                    rEnd.setHours(6, 0, 0, 0)
+
+                    const intResult = processInterruptions(entry.interruptions, rStart, rEnd)
+                    totalInterruptionCount += intResult.rawCount
+                    totalInterruptionCreditedHours += intResult.creditedMinutes / 60
+                    totalInterruptionNetGain += (intResult.creditedMinutes - intResult.deductedReadinessMinutes * 0.5) / 60
                 }
             })
+            totalInterruptionCreditedHours = Math.round(totalInterruptionCreditedHours * 10) / 10
+            totalInterruptionNetGain = Math.round(totalInterruptionNetGain * 10) / 10
 
             // 2. Night shift distribution
             const nightShifts = shifts?.filter(s => s.type === 'ND' && s.assigned_to) || []
@@ -276,31 +322,8 @@ export default function AdminOverview() {
             })
             const avgSickDuration = sickAbsenceCount > 0 ? (totalSickDays / sickAbsenceCount).toFixed(1) : 0
 
-            // 7. Flex response time (average hours from urgent_since to first interest)
-            let totalResponseTime = 0
-            let responseCount = 0
-            urgentShifts.forEach(s => {
-                const interest = monthInterests.find(i => i.shift_id === s.id)
-                if (interest && s.urgent_since) {
-                    const urgentTime = new Date(s.urgent_since)
-                    const interestTime = new Date(interest.created_at)
-                    const hours = (interestTime - urgentTime) / (1000 * 60 * 60)
-                    if (hours >= 0 && hours < 720) { // Max 30 days
-                        totalResponseTime += hours
-                        responseCount++
-                    }
-                }
-            })
-            const avgFlexResponseHours = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : null
-
-            // 8. Unfilled shifts (past shifts without assignment)
+            // 7. Upcoming vacations (next 14 days from today)
             const now = new Date()
-            const unfilledShifts = shifts?.filter(s => {
-                const shiftDate = new Date(s.start_time)
-                return shiftDate < now && !s.assigned_to && s.type !== 'TEAM' && s.type !== 'FORTBILDUNG' && s.type !== 'EINSCHULUNG' && s.type !== 'MITARBEITERGESPRAECH' && s.type !== 'SONSTIGES'
-            }) || []
-
-            // 9. Upcoming vacations (next 14 days from today)
             const twoWeeksFromNow = new Date()
             twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14)
             const { data: upcomingVacations } = await supabase
@@ -334,10 +357,11 @@ export default function AdminOverview() {
                 employeeCount: employees.length,
                 // New metrics
                 totalInterruptionCount,
-                totalInterruptionHours: Math.round(totalInterruptionHours * 10) / 10,
+                totalInterruptionCreditedHours,
+                totalInterruptionNetGain,
                 sickByDayOfWeek,
-                avgFlexResponseHours,
-                unfilledShiftCount: unfilledShifts.length
+                nightShiftCount: nightShifts.length,
+                weekendShiftCount: weekendShifts.length
             })
 
             // Calculate per-employee stats for employee view
@@ -392,13 +416,13 @@ export default function AdminOverview() {
                             if (startOverlap <= endOverlap) {
                                 // Hours calculation based on overlap
                                 const vacDays = eachDayOfInterval({ start: startOverlap, end: endOverlap })
-                                const vacWorkDays = vacDays.filter(d => !isWeekend(d)).length
+                                const vacWorkDays = vacDays.filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
                                 const dailyHours = empWeeklyHours / 5
                                 empVacationHours += vacWorkDays * dailyHours
 
                                 // Stats (consider full absence for these metrics to be accurate about behavior)
                                 const fullVacDays = eachDayOfInterval({ start: absStart, end: absEnd })
-                                const netDays = fullVacDays.filter(d => !isWeekend(d))
+                                const netDays = fullVacDays.filter(d => !isWeekend(d) && !isHoliday(d, holidays))
                                 empVacationDaysNet += netDays.length
 
                                 // Longest block
@@ -588,295 +612,223 @@ export default function AdminOverview() {
                     {/* Team/Year View - Show aggregate statistics */}
                     {viewMode !== 'employee' && (
                         <>
-                            {/* KEY METRICS: Modern Card Layout */}
-                            <div>
-                                <div className="flex items-center gap-3 mb-4 px-1">
-                                    <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
-                                        <Scale size={20} />
-                                    </div>
+                            {/* Hero: Puffer + Stunden-Bilanz */}
+                            <div className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
+                                {/* Puffer Hero */}
+                                <div className="flex items-center justify-between mb-4">
                                     <div>
-                                        <h3 className="font-bold text-gray-800 text-lg">Monats-Bilanz</h3>
-                                        <p className="text-xs text-gray-500 font-medium">Überblick für {stats.employeeCount} Mitarbeiter</p>
+                                        <div className="text-xs text-gray-400 font-bold uppercase tracking-wider">Puffer</div>
+                                        <div className="text-xs text-gray-400">{stats.employeeCount} Mitarbeiter</div>
+                                    </div>
+                                    <div className={`text-3xl font-black tracking-tight ${stats.puffer >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                        {stats.puffer > 0 ? '+' : ''}{stats.puffer}<span className="text-lg ml-0.5">h</span>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-4 gap-3">
-                                    {/* SOLL */}
-                                    <div className="bg-white p-3 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] relative overflow-hidden group transition-all">
-                                        <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                                            <Target size={32} />
-                                        </div>
-                                        <div className="relative z-10">
-                                            <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">SOLL</div>
-                                            <div className="text-xl font-bold text-gray-800 tracking-tight">{stats.totalSollHours}<span className="text-xs text-gray-400 ml-0.5">h</span></div>
-                                            <div className="text-[10px] text-gray-400 mt-1 truncate">Vertraglich</div>
-                                        </div>
-                                    </div>
-
-                                    {/* GEPLANT */}
-                                    <div className="bg-white p-3 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] relative overflow-hidden group transition-all">
-                                        <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                                            <Clock size={32} />
-                                        </div>
-                                        <div className="relative z-10">
-                                            <div className="text-[10px] font-bold text-blue-500 tracking-wider uppercase mb-0.5">GEPLANT</div>
-                                            <div className="text-xl font-bold text-gray-800 tracking-tight">{stats.totalPlannedHours}<span className="text-xs text-gray-400 ml-0.5">h</span></div>
-                                            <div className="text-[10px] text-blue-400 mt-1 truncate">Dienstplan</div>
-                                        </div>
-                                    </div>
-
-                                    {/* IST */}
-                                    <div className="bg-white p-3 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] relative overflow-hidden group transition-all">
-                                        <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                                            <Activity size={32} />
-                                        </div>
-                                        <div className="relative z-10">
-                                            <div className="text-[10px] font-bold text-purple-500 tracking-wider uppercase mb-0.5">IST</div>
-                                            <div className="text-xl font-bold text-gray-800 tracking-tight">{stats.totalIstHours}<span className="text-xs text-gray-400 ml-0.5">h</span></div>
-                                            <div className="mt-1.5 overflow-hidden flex rounded-full h-1 bg-gray-100 w-full max-w-[60px]">
-                                                <div className="bg-blue-500 h-full" style={{ width: `${(stats.totalWorkedHours / stats.totalIstHours) * 100}%` }}></div>
-                                                <div className="bg-orange-400 h-full" style={{ width: `${(stats.totalVacationHours / stats.totalIstHours) * 100}%` }}></div>
-                                                <div className="bg-red-500 h-full" style={{ width: `${(stats.totalSickHours / stats.totalIstHours) * 100}%` }}></div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* PUFFER */}
-                                    <div className={`p-3 rounded-[1.5rem] border shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] relative overflow-hidden group transition-all ${stats.puffer >= 0
-                                        ? 'bg-emerald-50 border-emerald-100'
-                                        : 'bg-rose-50 border-rose-100'
-                                        }`}>
-                                        <div className={`absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity ${stats.puffer >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                                            }`}>
-                                            <Scale size={32} />
-                                        </div>
-                                        <div className="relative z-10">
-                                            <div className={`text-[10px] font-bold tracking-wider uppercase mb-0.5 ${stats.puffer >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                                                }`}>PUFFER</div>
-                                            <div className={`text-xl font-bold tracking-tight ${stats.puffer >= 0 ? 'text-emerald-700' : 'text-rose-700'
-                                                }`}>
-                                                {stats.puffer > 0 ? '+' : ''}{stats.puffer}<span className="text-xs opacity-60 ml-0.5">h</span>
-                                            </div>
-                                            <div className={`text-[10px] font-medium mt-1 truncate ${stats.puffer >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                                                }`}>Ist - Soll</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Summary Cards */}
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-4 rounded-xl text-white">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Clock size={16} />
-                                        <span className="text-xs font-bold uppercase opacity-80">Arbeit</span>
-                                    </div>
-                                    <div className="text-2xl font-bold">{stats.totalWorkedHours.toFixed(1)}h</div>
-                                </div>
-                                <div className="bg-gradient-to-br from-orange-400 to-orange-500 p-4 rounded-xl text-white">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Plane size={16} />
-                                        <span className="text-xs font-bold uppercase opacity-80">Urlaub</span>
-                                    </div>
-                                    <div className="text-2xl font-bold">{stats.totalVacationHours}h</div>
-                                </div>
-                                <div className="bg-gradient-to-br from-red-400 to-red-500 p-4 rounded-xl text-white">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Thermometer size={16} />
-                                        <span className="text-xs font-bold uppercase opacity-80">Krank</span>
-                                    </div>
-                                    <div className="text-2xl font-bold">{stats.totalSickHours.toFixed(1)}h</div>
-                                </div>
-                            </div>
-
-                            {/* Worked Hours by Type - Collapsible */}
-                            <div className="border border-gray-200 rounded-xl overflow-hidden">
-                                <button
-                                    onClick={() => setShowWorkedDetails(!showWorkedDetails)}
-                                    className="w-full p-4 bg-gray-50 flex justify-between items-center hover:bg-gray-100 transition-colors"
-                                >
-                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                                        <BarChart3 size={18} /> Geleistete Stunden nach Diensttyp
-                                    </h3>
-                                    {showWorkedDetails ? <ChevronUp size={20} className="text-gray-500" /> : <ChevronDown size={20} className="text-gray-500" />}
-                                </button>
-                                {showWorkedDetails && (
-                                    <div className="p-4 grid grid-cols-3 gap-2">
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
-                                            <div className="text-xs text-gray-500 font-bold">TD1</div>
-                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.TD1.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
-                                            <div className="text-xs text-gray-500 font-bold">TD2</div>
-                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.TD2.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
-                                            <div className="text-xs text-gray-500 font-bold">ND</div>
-                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.ND.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
-                                            <div className="text-xs text-gray-500 font-bold">DBD</div>
-                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.DBD.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
-                                            <div className="text-xs text-gray-500 font-bold">Teamsitzung</div>
-                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.TEAM.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
-                                            <div className="text-xs text-gray-500 font-bold">Fortbildung</div>
-                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.FORTBILDUNG.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
-                                            <div className="text-xs text-gray-500 font-bold">Einschulung</div>
-                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.EINSCHULUNG.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
-                                            <div className="text-xs text-gray-500 font-bold">MA-Gespr.</div>
-                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.MITARBEITERGESPRAECH.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 text-center">
-                                            <div className="text-xs text-gray-500 font-bold">Sonstiges</div>
-                                            <div className="text-lg font-bold text-gray-800">{stats.shiftHours.SONSTIGES.toFixed(1)}h</div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Sick Hours by Type - Collapsible */}
-                            <div className="border border-red-200 rounded-xl overflow-hidden">
-                                <button
-                                    onClick={() => setShowSickDetails(!showSickDetails)}
-                                    className="w-full p-4 bg-red-50 flex justify-between items-center hover:bg-red-100 transition-colors"
-                                >
-                                    <h3 className="font-bold text-red-700 flex items-center gap-2">
-                                        <Thermometer size={18} /> Krankstunden nach Diensttyp
-                                    </h3>
-                                    {showSickDetails ? <ChevronUp size={20} className="text-red-500" /> : <ChevronDown size={20} className="text-red-500" />}
-                                </button>
-                                {showSickDetails && (
-                                    <div className="p-4 bg-red-50/50 grid grid-cols-3 gap-2">
-                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
-                                            <div className="text-xs text-red-500 font-bold">TD1</div>
-                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.TD1.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
-                                            <div className="text-xs text-red-500 font-bold">TD2</div>
-                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.TD2.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
-                                            <div className="text-xs text-red-500 font-bold">ND</div>
-                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.ND.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
-                                            <div className="text-xs text-red-500 font-bold">DBD</div>
-                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.DBD.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
-                                            <div className="text-xs text-red-500 font-bold">Team</div>
-                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.TEAM.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
-                                            <div className="text-xs text-red-500 font-bold">Fortb.</div>
-                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.FORTBILDUNG.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
-                                            <div className="text-xs text-red-500 font-bold">Einsch.</div>
-                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.EINSCHULUNG.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
-                                            <div className="text-xs text-red-500 font-bold">MA-G.</div>
-                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.MITARBEITERGESPRAECH.toFixed(1)}h</div>
-                                        </div>
-                                        <div className="bg-white p-3 rounded-xl border border-red-100 text-center">
-                                            <div className="text-xs text-red-500 font-bold">Sonst.</div>
-                                            <div className="text-lg font-bold text-red-700">{stats.sickHours.SONSTIGES.toFixed(1)}h</div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Counts */}
-                            <div>
-                                <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                    <Activity size={18} /> Anzahl
-                                </h3>
-                                <div className="grid grid-cols-3 gap-3">
-                                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-center">
-                                        <div className="flex items-center justify-center gap-2 mb-1">
-                                            <TrendingUp size={16} className="text-amber-600" />
-                                            <span className="text-xs text-amber-600 font-bold">Flex</span>
-                                        </div>
-                                        <div className="text-2xl font-bold text-amber-700">{stats.flexCount}</div>
-                                    </div>
-                                    <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 text-center">
-                                        <div className="flex items-center justify-center gap-2 mb-1">
-                                            <ArrowLeftRight size={16} className="text-purple-600" />
-                                            <span className="text-xs text-purple-600 font-bold">Tausch</span>
-                                        </div>
-                                        <div className="text-2xl font-bold text-purple-700">{stats.swapCount}</div>
-                                    </div>
-                                    <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-center">
-                                        <div className="flex items-center justify-center gap-2 mb-1">
-                                            <Thermometer size={16} className="text-red-600" />
-                                            <span className="text-xs text-red-600 font-bold">Krank</span>
-                                        </div>
-                                        <div className="text-2xl font-bold text-red-700">{stats.sickCount}</div>
-                                    </div>
-                                    <div className="bg-teal-50 p-4 rounded-xl border border-teal-200 text-center">
-                                        <div className="flex items-center justify-center gap-2 mb-1">
-                                            <Coffee size={16} className="text-teal-600" />
-                                            <span className="text-xs text-teal-600 font-bold">Unterb.</span>
-                                        </div>
-                                        <div className="text-2xl font-bold text-teal-700">{stats.totalInterruptionCount}</div>
-                                        <div className="text-xs text-teal-500">{stats.totalInterruptionHours}h</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Krankmuster */}
-                            <div>
-                                <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                    <Thermometer size={18} /> Krankmuster
-                                </h3>
-                                <div className="bg-white p-4 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] transition-all">
-                                    <div className="text-xs text-gray-500 font-bold mb-2">Krankmeldungen nach Wochentag</div>
-                                    <div className="grid grid-cols-7 gap-1 text-center">
-                                        {['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'].map((day, i) => (
-                                            <div key={day} className="text-xs">
-                                                <div className="text-gray-400">{day}</div>
-                                                <div className={`font-bold ${stats.sickByDayOfWeek?.[i] > 0 ? 'text-red-600' : 'text-gray-300'}`}>
-                                                    {stats.sickByDayOfWeek?.[i] || 0}
+                                {/* Stacked Bar: IST vs SOLL */}
+                                {(() => {
+                                    const maxVal = Math.max(stats.totalIstHours, stats.totalSollHours, 1)
+                                    const workPct = (stats.totalWorkedHours / maxVal) * 100
+                                    const vacPct = (stats.totalVacationHours / maxVal) * 100
+                                    const sickPct = (stats.totalSickHours / maxVal) * 100
+                                    const sollPct = (stats.totalSollHours / maxVal) * 100
+                                    return (
+                                        <div className="mb-3">
+                                            <div className="relative h-5 bg-gray-100 rounded-full overflow-hidden">
+                                                <div className="absolute inset-0 flex rounded-full overflow-hidden">
+                                                    <div className="bg-blue-500 h-full" style={{ width: `${workPct}%` }} />
+                                                    <div className="bg-amber-400 h-full" style={{ width: `${vacPct}%` }} />
+                                                    <div className="bg-red-400 h-full" style={{ width: `${sickPct}%` }} />
+                                                </div>
+                                                {/* SOLL marker line */}
+                                                <div className="absolute top-0 bottom-0 w-0.5 bg-gray-800 z-10" style={{ left: `${sollPct}%` }}>
+                                                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-gray-500 whitespace-nowrap">Soll</div>
                                                 </div>
                                             </div>
-                                        ))}
+                                            {/* Legend */}
+                                            <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-400">
+                                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Arbeit</span>
+                                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Urlaub</span>
+                                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />Krank</span>
+                                            </div>
+                                        </div>
+                                    )
+                                })()}
+
+                                {/* Compact numbers row */}
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div className="bg-gray-50 rounded-lg py-1.5">
+                                        <div className="text-[10px] text-gray-400 font-medium">Soll</div>
+                                        <div className="text-sm font-bold text-gray-700">{stats.totalSollHours}h</div>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg py-1.5">
+                                        <div className="text-[10px] text-blue-400 font-medium">Geplant</div>
+                                        <div className="text-sm font-bold text-gray-700">{stats.totalPlannedHours}h</div>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg py-1.5">
+                                        <div className="text-[10px] text-purple-400 font-medium">Ist</div>
+                                        <div className="text-sm font-bold text-gray-700">{stats.totalIstHours}h</div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Effizienz */}
-                            <div>
-                                <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                    <Timer size={18} /> Effizienz
+                            {/* IST-Aufschlüsselung */}
+                            <div className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] overflow-hidden">
+                                <div className="p-4 pb-2">
+                                    <h3 className="font-bold text-gray-700 flex items-center gap-2 text-sm">
+                                        <BarChart3 size={16} /> IST-Aufschlüsselung
+                                    </h3>
+                                </div>
+                                <div className="px-4 pb-4 space-y-1">
+                                    {/* Arbeit — collapsible shift type breakdown */}
+                                    <div>
+                                        <button
+                                            onClick={() => setShowWorkedDetails(!showWorkedDetails)}
+                                            className="w-full flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <Clock size={14} className="text-blue-500" />
+                                                <span className="text-sm font-medium text-gray-700">Arbeit</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-bold text-blue-700">{stats.totalWorkedHours.toFixed(1)}h</span>
+                                                {showWorkedDetails ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+                                            </div>
+                                        </button>
+                                        {showWorkedDetails && (
+                                            <div className="ml-6 mb-1 space-y-0.5">
+                                                {Object.entries(stats.shiftHours)
+                                                    .filter(([, h]) => h > 0)
+                                                    .sort((a, b) => b[1] - a[1])
+                                                    .map(([type, hours]) => {
+                                                        const labels = { TD: 'Tagdienst', TD1: 'Tagdienst 1', TD2: 'Tagdienst 2', ND: 'Nachtdienst', DBD: 'Doppeldienst', TEAM: 'Teamsitzung', FORTBILDUNG: 'Fortbildung', EINSCHULUNG: 'Einschulung', MITARBEITERGESPRAECH: 'MA-Gespräch', SONSTIGES: 'Sonstiges' }
+                                                        return (
+                                                            <div key={type} className="flex items-center justify-between py-1 px-3 text-xs">
+                                                                <span className="text-gray-500">{labels[type] || type}</span>
+                                                                <span className="font-bold text-gray-700">{hours.toFixed(1)}h</span>
+                                                            </div>
+                                                        )
+                                                    })
+                                                }
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Urlaub */}
+                                    <div className="flex items-center justify-between py-2 px-3 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            <Plane size={14} className="text-amber-500" />
+                                            <span className="text-sm font-medium text-gray-700">Urlaub</span>
+                                        </div>
+                                        <span className="text-sm font-bold text-amber-700">{stats.totalVacationHours}h</span>
+                                    </div>
+
+                                    {/* Krank — collapsible sick type breakdown */}
+                                    <div>
+                                        <button
+                                            onClick={() => setShowSickDetails(!showSickDetails)}
+                                            className="w-full flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <Thermometer size={14} className="text-red-500" />
+                                                <span className="text-sm font-medium text-gray-700">Krank</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-bold text-red-700">{stats.totalSickHours.toFixed(1)}h</span>
+                                                {showSickDetails ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+                                            </div>
+                                        </button>
+                                        {showSickDetails && (
+                                            <div className="ml-6 mb-1 space-y-0.5">
+                                                {Object.entries(stats.sickHours)
+                                                    .filter(([, h]) => h > 0)
+                                                    .sort((a, b) => b[1] - a[1])
+                                                    .map(([type, hours]) => {
+                                                        const labels = { TD1: 'Tagdienst 1', TD2: 'Tagdienst 2', ND: 'Nachtdienst', DBD: 'Doppeldienst', TEAM: 'Teamsitzung', FORTBILDUNG: 'Fortbildung', EINSCHULUNG: 'Einschulung', MITARBEITERGESPRAECH: 'MA-Gespräch', SONSTIGES: 'Sonstiges' }
+                                                        return (
+                                                            <div key={type} className="flex items-center justify-between py-1 px-3 text-xs">
+                                                                <span className="text-red-400">{labels[type] || type}</span>
+                                                                <span className="font-bold text-red-600">{hours.toFixed(1)}h</span>
+                                                            </div>
+                                                        )
+                                                    })
+                                                }
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Unterbrechungen */}
+                                    {stats.totalInterruptionCount > 0 && (
+                                        <div className="flex items-center justify-between py-2 px-3 rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                                <BellRing size={14} className="text-orange-500" />
+                                                <span className="text-sm font-medium text-gray-700">Unterbrechungen</span>
+                                                <span className="text-[10px] text-gray-400">({stats.totalInterruptionCount}×)</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-orange-700">+{stats.totalInterruptionNetGain}h</span>
+                                        </div>
+                                    )}
+
+                                    {/* Gesamt IST */}
+                                    <div className="flex items-center justify-between py-2 px-3 border-t border-gray-100 mt-1">
+                                        <span className="text-sm font-bold text-gray-800">Gesamt IST</span>
+                                        <span className="text-sm font-bold text-purple-700">{stats.totalIstHours}h</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Betrieb — Flex, Tausch, Unbesetzt, Reaktion + Krankmuster */}
+                            <div className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-4 space-y-4">
+                                <h3 className="font-bold text-gray-700 flex items-center gap-2 text-sm">
+                                    <Activity size={16} /> Betrieb
                                 </h3>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className={`p-4 rounded-xl border ${stats.avgFlexResponseHours !== null ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-                                        <div className={`text-xs font-bold mb-1 ${stats.avgFlexResponseHours !== null ? 'text-green-600' : 'text-gray-500'}`}>
-                                            Ø Flex-Reaktion
-                                        </div>
-                                        <div className={`text-2xl font-bold ${stats.avgFlexResponseHours !== null ? 'text-green-700' : 'text-gray-400'}`}>
-                                            {stats.avgFlexResponseHours !== null ? `${stats.avgFlexResponseHours}h` : '-'}
-                                        </div>
-                                        <div className="text-xs text-gray-400">Zeit bis Übernahme</div>
+
+                                {/* Compact metrics row */}
+                                <div className="grid grid-cols-4 gap-2 text-center">
+                                    <div className="bg-gray-50 p-2 rounded-xl">
+                                        <div className="text-[10px] text-gray-400 font-medium">Flex</div>
+                                        <div className="text-lg font-bold text-gray-800">{stats.flexCount}</div>
                                     </div>
-                                    <div className={`p-4 rounded-xl border ${stats.unfilledShiftCount === 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                                        <div className={`text-xs font-bold mb-1 ${stats.unfilledShiftCount === 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                            Unbesetzte Schichten
-                                        </div>
-                                        <div className={`text-2xl font-bold ${stats.unfilledShiftCount === 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                            {stats.unfilledShiftCount}
-                                        </div>
-                                        <div className="text-xs text-gray-400">Vergangene Schichten</div>
+                                    <div className="bg-gray-50 p-2 rounded-xl">
+                                        <div className="text-[10px] text-gray-400 font-medium">Tausch</div>
+                                        <div className="text-lg font-bold text-gray-800">{stats.swapCount}</div>
                                     </div>
+                                    <div className="bg-gray-50 p-2 rounded-xl">
+                                        <div className="text-[10px] text-gray-400 font-medium">Nacht</div>
+                                        <div className="text-lg font-bold text-gray-800">{stats.nightShiftCount}</div>
+                                    </div>
+                                    <div className="bg-gray-50 p-2 rounded-xl">
+                                        <div className="text-[10px] text-gray-400 font-medium">WE</div>
+                                        <div className="text-lg font-bold text-gray-800">{stats.weekendShiftCount}</div>
+                                    </div>
+                                </div>
+
+                                {/* Krankmuster mini bar chart */}
+                                <div>
+                                    <div className="text-xs text-gray-400 font-bold mb-2">Krankmeldungen nach Wochentag</div>
+                                    {(() => {
+                                        const maxSick = Math.max(...Object.values(stats.sickByDayOfWeek || {}), 1)
+                                        return (
+                                            <div className="grid grid-cols-7 gap-1 text-center items-end" style={{ height: '60px' }}>
+                                                {['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'].map((day, i) => {
+                                                    const count = stats.sickByDayOfWeek?.[i] || 0
+                                                    const barH = count > 0 ? Math.max((count / maxSick) * 40, 4) : 0
+                                                    return (
+                                                        <div key={day} className="flex flex-col items-center justify-end h-full">
+                                                            {count > 0 && (
+                                                                <div className="text-[9px] font-bold text-red-600 mb-0.5">{count}</div>
+                                                            )}
+                                                            <div
+                                                                className={`w-full rounded-t ${count > 0 ? 'bg-red-400' : 'bg-gray-100'}`}
+                                                                style={{ height: `${count > 0 ? barH : 2}px` }}
+                                                            />
+                                                            <div className="text-[10px] text-gray-400 mt-1">{day}</div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        )
+                                    })()}
                                 </div>
                             </div>
 
@@ -893,10 +845,14 @@ export default function AdminOverview() {
                                     <User size={18} /> Mitarbeiter Details
                                 </h3>
                                 <div className="space-y-3">
-                                    {employeeStats.map(emp => (
+                                    {[...employeeStats].sort((a, b) => a.puffer - b.puffer).map(emp => {
+                                        const empMaxVal = Math.max(emp.istHours, emp.sollHours, 1)
+                                        const empIstPct = Math.min((emp.istHours / empMaxVal) * 100, 100)
+                                        const empSollPct = Math.min((emp.sollHours / empMaxVal) * 100, 100)
+                                        return (
                                         <div key={emp.id} className="bg-white p-4 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
                                             <div
-                                                className="flex justify-between items-start mb-3 cursor-pointer"
+                                                className="flex justify-between items-start mb-2 cursor-pointer"
                                                 onClick={() => toggleEmployeeExpansion(emp.id)}
                                             >
                                                 <div>
@@ -912,6 +868,12 @@ export default function AdminOverview() {
                                                     }`}>
                                                     {emp.puffer > 0 ? '+' : ''}{emp.puffer}h
                                                 </div>
+                                            </div>
+
+                                            {/* Mini IST vs SOLL bar */}
+                                            <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden mb-3 cursor-pointer" onClick={() => toggleEmployeeExpansion(emp.id)}>
+                                                <div className={`h-full rounded-full ${emp.puffer >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${empIstPct}%` }} />
+                                                <div className="absolute top-0 bottom-0 w-0.5 bg-gray-600" style={{ left: `${empSollPct}%` }} />
                                             </div>
 
                                             {/* Hours Row - Always Visible */}
@@ -980,9 +942,9 @@ export default function AdminOverview() {
                                                             <div className="font-bold text-pink-700">{emp.dbdCount}</div>
                                                         </div>
                                                         <div className="bg-gray-50 p-2 rounded-lg">
-                                                            <Coffee size={12} className="mx-auto text-teal-500 mb-0.5" />
-                                                            <div className="text-teal-400 font-medium">Unterb.</div>
-                                                            <div className="font-bold text-teal-700">{emp.interruptionCount}</div>
+                                                            <BellRing size={12} className="mx-auto text-orange-500 mb-0.5" />
+                                                            <div className="text-orange-400 font-medium">Unterb.</div>
+                                                            <div className="font-bold text-orange-700">{emp.interruptionCount}</div>
                                                         </div>
                                                         <div className="bg-gray-50 p-2 rounded-lg">
                                                             <GraduationCap size={12} className="mx-auto text-emerald-500 mb-0.5" />
@@ -1022,7 +984,7 @@ export default function AdminOverview() {
                                                 </div>
                                             )}
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             </div>
                         )
