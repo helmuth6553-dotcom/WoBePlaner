@@ -171,6 +171,21 @@ export default function AdminOverview() {
         const swapCount = monthSwaps.length
         const employees = profiles?.filter(p => p.role !== 'admin') || []
 
+        // Build per-employee absence day sets to exclude TEAM shifts on vacation/sick days
+        const empAbsenceDays = {}
+        absences?.forEach(abs => {
+            if (!abs.user_id || !abs.start_date || !abs.end_date) return
+            const absStart = new Date(abs.start_date) < start ? start : new Date(abs.start_date)
+            const absEnd = new Date(abs.end_date) > end ? end : new Date(abs.end_date)
+            if (absStart <= absEnd) {
+                if (!empAbsenceDays[abs.user_id]) empAbsenceDays[abs.user_id] = new Set()
+                eachDayOfInterval({ start: absStart, end: absEnd }).forEach(d => {
+                    if (!isWeekend(d)) empAbsenceDays[abs.user_id].add(d.toISOString().split('T')[0])
+                })
+            }
+        })
+        const allAbsenceDaysByUser = empAbsenceDays
+
         // Planned hours
         let totalPlannedHours = 0
         shifts?.forEach(s => {
@@ -194,22 +209,6 @@ export default function AdminOverview() {
         const weeksInMonth = workingDays / 5
         let totalSollHours = 0
         employees.forEach(emp => { totalSollHours += (emp.weekly_hours || 40) * weeksInMonth })
-
-        // Build per-employee absence day sets to exclude TEAM shifts on vacation/sick days
-        const empAbsenceDays = {}
-        absences?.forEach(abs => {
-            if (!abs.user_id || !abs.start_date || !abs.end_date) return
-            const absStart = new Date(abs.start_date) < start ? start : new Date(abs.start_date)
-            const absEnd = new Date(abs.end_date) > end ? end : new Date(abs.end_date)
-            if (absStart <= absEnd) {
-                if (!empAbsenceDays[abs.user_id]) empAbsenceDays[abs.user_id] = new Set()
-                eachDayOfInterval({ start: absStart, end: absEnd }).forEach(d => {
-                    if (!isWeekend(d)) empAbsenceDays[abs.user_id].add(d.toISOString().split('T')[0])
-                })
-            }
-        })
-        // Combined absence days (any employee absent) for global TEAM hour counts
-        const allAbsenceDaysByUser = empAbsenceDays
 
         const isTeamShiftOnAbsenceDay = (entry, userId) => {
             if (entry.shifts?.type?.toUpperCase() !== 'TEAM') return false
