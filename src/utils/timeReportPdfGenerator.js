@@ -13,7 +13,7 @@
  */
 
 import { jsPDF } from 'jspdf'
-import { format, parseISO, getISOWeek } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { findSnapshotEntry, calculateCorrection } from './pdfGenerator'
 import { getShiftSegments } from './timeCalculations'

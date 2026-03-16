@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabase'
-import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, endOfYear, subYears, addYears } from 'date-fns'
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, subYears, addYears } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, ChevronDown, ChevronUp, Layers, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { calculateWorkHours, processInterruptions } from '../../utils/timeCalculations'
@@ -164,6 +164,24 @@ export default function AdminOverview() {
             return d >= start && d <= end
         }) || []
 
+        // Entry-Map: shift_id → { user_id → time_entry } (2-stufig für TEAM/Fortbildung)
+        const entryMap = {}
+        entries?.forEach(e => {
+            if (e.shift_id) {
+                if (!entryMap[e.shift_id]) entryMap[e.shift_id] = {}
+                entryMap[e.shift_id][e.user_id] = e
+            }
+        })
+
+        const getShiftHours = (shift, userId) => {
+            const shiftEntries = entryMap[shift.id]
+            const entry = userId ? shiftEntries?.[userId] : Object.values(shiftEntries || {})[0]
+            if (entry && (entry.calculated_hours || entry.calculated_hours === 0)) {
+                return Number(entry.calculated_hours)
+            }
+            return calculateWorkHours(shift.start_time, shift.end_time, shift.type)
+        }
+
         const shiftHours = { TD: 0, TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0 }
         const sickHours = { TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0 }
         let flexCount = 0
@@ -210,41 +228,48 @@ export default function AdminOverview() {
         let totalSollHours = 0
         employees.forEach(emp => { totalSollHours += (emp.weekly_hours || 40) * weeksInMonth })
 
-        const isTeamShiftOnAbsenceDay = (entry, userId) => {
-            if (entry.shifts?.type?.toUpperCase() !== 'TEAM') return false
-            const dateKey = new Date(entry.actual_start || entry.shifts.start_time).toISOString().split('T')[0]
+        const isTeamShiftOnAbsenceDay = (shift, userId) => {
+            if (shift.type?.toUpperCase() !== 'TEAM') return false
+            const dateKey = new Date(shift.start_time).toISOString().split('T')[0]
             return allAbsenceDaysByUser[userId]?.has(dateKey) || false
         }
 
-        // TD1+TD2 merged detection
-        const processedIds = new Set()
-        const byUserDate = {}
-        entries?.forEach(entry => {
-            if (!entry.shifts || !entry.calculated_hours) return
-            const type = entry.shifts.type?.toUpperCase()
+        // Helper: who is assigned to a shift?
+        const getShiftUserId = (shift) => {
+            if (shift.assigned_to) return shift.assigned_to
+            const interest = monthInterests.find(i => i.shift_id === shift.id)
+            return interest?.user_id || null
+        }
+
+        // TD1+TD2 merged detection — shifts-based
+        const mergedShiftIds = new Set()
+        const shiftsByUserDate = {}
+        shifts?.forEach(s => {
+            const type = s.type?.toUpperCase()
             if (type !== 'TD1' && type !== 'TD2') return
-            const key = `${entry.user_id}_${new Date(entry.shifts.start_time).toISOString().split('T')[0]}`
-            if (!byUserDate[key]) byUserDate[key] = []
-            byUserDate[key].push(entry)
+            const userId = getShiftUserId(s)
+            if (!userId) return
+            const key = `${userId}_${new Date(s.start_time).toISOString().split('T')[0]}`
+            if (!shiftsByUserDate[key]) shiftsByUserDate[key] = []
+            shiftsByUserDate[key].push(s)
         })
-        Object.values(byUserDate).forEach(day => {
-            const td1 = day.find(e => e.shifts.type?.toUpperCase() === 'TD1')
-            const td2 = day.find(e => e.shifts.type?.toUpperCase() === 'TD2')
-            if (td1 && td2 && td1.actual_start === td2.actual_start && td1.actual_end === td2.actual_end) {
-                shiftHours['TD'] += Number(td1.calculated_hours) || 0
-                processedIds.add(td1.id)
-                processedIds.add(td2.id)
+        Object.entries(shiftsByUserDate).forEach(([key, day]) => {
+            const userId = key.split('_')[0]
+            const td1 = day.find(s => s.type?.toUpperCase() === 'TD1')
+            const td2 = day.find(s => s.type?.toUpperCase() === 'TD2')
+            if (td1 && td2) {
+                const e1 = entryMap[td1.id]?.[userId], e2 = entryMap[td2.id]?.[userId]
+                const bothTracked = e1 && e2 && e1.actual_start === e2.actual_start && e1.actual_end === e2.actual_end
+                const neitherTracked = !e1 && !e2
+                if (bothTracked || neitherTracked) {
+                    mergedShiftIds.add(td1.id)
+                    mergedShiftIds.add(td2.id)
+                }
             }
         })
-        entries?.forEach(entry => {
-            if (processedIds.has(entry.id)) return
-            if (entry.shifts && entry.calculated_hours) {
-                // Skip TEAM entries for employees on vacation/sick that day
-                if (isTeamShiftOnAbsenceDay(entry, entry.user_id)) return
-                const type = entry.shifts.type?.toUpperCase()
-                if (Object.hasOwn(shiftHours, type)) shiftHours[type] += Number(entry.calculated_hours) || 0
-            }
-        })
+
+        // Top-level shiftHours will be aggregated from per-employee stats (see below)
+        const SPECIAL_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
 
         // Sick
         absences?.forEach(abs => {
@@ -291,44 +316,109 @@ export default function AdminOverview() {
             totalInterruptionNetGain += (res.creditedMinutes - res.deductedReadinessMinutes * 0.5) / 60
         })
 
-        const nightShiftCount = shifts?.filter(s => s.type === 'ND' && s.assigned_to).length || 0
-        const weekendShiftCount = shifts?.filter(s => { const d = new Date(s.start_time); return (d.getDay() === 0 || d.getDay() === 6) && s.assigned_to }).length || 0
+        const nightShiftCount = shifts?.filter(s => s.type === 'ND' && (s.assigned_to || monthInterests.some(i => i.shift_id === s.id))).length || 0
+        const weekendShiftCount = shifts?.filter(s => { const d = new Date(s.start_time); return (d.getDay() === 0 || d.getDay() === 6) && (s.assigned_to || monthInterests.some(i => i.shift_id === s.id)) }).length || 0
         const sickByDayOfWeek = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }
         absences?.forEach(abs => { if (abs.type === 'Krank' || abs.type === 'Krankenstand') sickByDayOfWeek[new Date(abs.start_date).getDay()]++ })
 
-        const totalWorkedHours = Object.values(shiftHours).reduce((a, b) => a + b, 0)
         const totalSickHours = Object.values(sickHours).reduce((a, b) => a + b, 0)
-        const totalIstHours = totalWorkedHours + totalSickHours + totalVacationHours
 
         // Per-employee
         const empStats = employees.map(emp => {
             const wh = emp.weekly_hours || 40
             const empSoll = wh * weeksInMonth
             let worked = 0
+            const empShiftHours = { TD: 0, TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0 }
+
+            // TD1+TD2 merge detection per employee (wie balanceHelpers)
+            const mergedEntryIds = new Set()
+            const entryByDate = {}
             entries?.forEach(e => {
-                if (e.user_id === emp.id && e.calculated_hours) {
-                    // Skip TEAM entries on days the employee has an absence
-                    if (isTeamShiftOnAbsenceDay(e, emp.id)) return
-                    worked += Number(e.calculated_hours) || 0
+                if (e.user_id !== emp.id || !e.shifts?.type) return
+                const t = e.shifts.type.toUpperCase()
+                if (t !== 'TD1' && t !== 'TD2') return
+                const dateKey = new Date(e.shifts.start_time).toISOString().split('T')[0]
+                if (!entryByDate[dateKey]) entryByDate[dateKey] = {}
+                entryByDate[dateKey][t] = e
+            })
+            Object.values(entryByDate).forEach(day => {
+                if (day.TD1 && day.TD2
+                    && day.TD1.actual_start === day.TD2.actual_start
+                    && day.TD1.actual_end === day.TD2.actual_end) {
+                    mergedEntryIds.add(day.TD2.id)  // Skip TD2, count TD1 as merged "TD"
                 }
             })
 
-            // Per-employee shift type hours
-            const empShiftHours = { TD: 0, TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0 }
+            // Schritt 1: Entries-first (tatsächlich gearbeitete Stunden — user_id ist 100% zuverlässig)
+            const countedShiftIds = new Set()
             entries?.forEach(e => {
-                if (e.user_id === emp.id && e.calculated_hours && e.shifts?.type) {
-                    if (processedIds.has(e.id)) return
-                    if (isTeamShiftOnAbsenceDay(e, emp.id)) return
-                    const type = e.shifts.type.toUpperCase()
-                    if (Object.hasOwn(empShiftHours, type)) empShiftHours[type] += Number(e.calculated_hours) || 0
+                if (e.user_id !== emp.id || !e.calculated_hours || !e.shifts?.type) return
+                if (mergedEntryIds.has(e.id)) return  // Skip merged TD2
+                // Nur Entries deren Shift in diesem Monat startet (wie balanceHelpers/isSameMonth)
+                const shiftStart = new Date(e.shifts.start_time)
+                if (shiftStart < start || shiftStart > end) return
+                let type = e.shifts.type.toUpperCase()
+                if (!Object.hasOwn(empShiftHours, type)) return
+                if (type === 'TEAM' && isTeamShiftOnAbsenceDay(e.shifts, emp.id)) return
+                // Merged TD1 → categorize as TD
+                const dateKey = shiftStart.toISOString().split('T')[0]
+                if (type === 'TD1' && entryByDate[dateKey]?.TD2 && mergedEntryIds.has(entryByDate[dateKey].TD2.id)) {
+                    type = 'TD'
+                }
+                const hours = Number(e.calculated_hours) || 0
+                empShiftHours[type] += hours
+                worked += hours
+                if (e.shift_id) countedShiftIds.add(e.shift_id)
+                // Also mark the merged TD2's shift as counted
+                if (type === 'TD' && entryByDate[dateKey]?.TD2?.shift_id) {
+                    countedShiftIds.add(entryByDate[dateKey].TD2.shift_id)
                 }
             })
-            // Add merged TD hours for this employee
-            Object.values(byUserDate).forEach(day => {
-                const td1 = day.find(e => e.shifts.type?.toUpperCase() === 'TD1')
-                const td2 = day.find(e => e.shifts.type?.toUpperCase() === 'TD2')
-                if (td1 && td2 && td1.user_id === emp.id && td1.actual_start === td2.actual_start && td1.actual_end === td2.actual_end) {
-                    empShiftHours['TD'] += Number(td1.calculated_hours) || 0
+
+            // Schritt 2: Shifts-supplement (geplante Schichten ohne Entry — noch nicht gearbeitet)
+            shifts?.forEach(s => {
+                if (countedShiftIds.has(s.id)) return
+                const type = s.type?.toUpperCase()
+                if (!Object.hasOwn(empShiftHours, type)) return
+
+                let isAssigned = false
+                if (type === 'TEAM') {
+                    if (isTeamShiftOnAbsenceDay(s, emp.id)) return
+                    isAssigned = true
+                } else if (SPECIAL_TYPES.includes(type)) {
+                    isAssigned = monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
+                } else {
+                    isAssigned = s.assigned_to === emp.id
+                        || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
+                }
+                if (!isAssigned) return
+
+                const hours = calculateWorkHours(s.start_time, s.end_time, s.type)
+                empShiftHours[type] += hours
+                worked += hours
+            })
+
+            // TD1+TD2 Handover-Overlap abziehen (für geplante Paare ohne time_entries)
+            const supplementByDate = {}
+            shifts?.forEach(s => {
+                if (countedShiftIds.has(s.id)) return
+                const type = s.type?.toUpperCase()
+                if (type !== 'TD1' && type !== 'TD2' && type !== 'TAGDIENST') return
+                const isAssigned = SPECIAL_TYPES.includes(type)
+                    ? monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
+                    : s.assigned_to === emp.id || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
+                if (!isAssigned) return
+                const effType = (type === 'TAGDIENST') ? 'TD1' : type
+                const dateKey = new Date(s.start_time).toISOString().split('T')[0]
+                if (!supplementByDate[dateKey]) supplementByDate[dateKey] = {}
+                supplementByDate[dateKey][effType] = s
+            })
+            Object.values(supplementByDate).forEach(day => {
+                if (day.TD1 && day.TD2) {
+                    const overlapMs = Math.max(0, new Date(day.TD1.end_time) - new Date(day.TD2.start_time))
+                    const overlapHours = overlapMs / (1000 * 60 * 60)
+                    worked -= overlapHours
+                    empShiftHours.TD2 = (empShiftHours.TD2 || 0) - overlapHours
                 }
             })
 
@@ -366,15 +456,15 @@ export default function AdminOverview() {
             return {
                 id: emp.id, name: emp.display_name || emp.full_name || emp.email || 'Unbekannt',
                 weeklyHours: wh, sollHours: Math.round(empSoll),
-                workedHours: Math.round(worked * 10) / 10, sickHours: Math.round(empSick * 10) / 10,
-                vacationHours: Math.round(empVac * 10) / 10, istHours: Math.round(empIst),
-                puffer: Math.round((empIst - empSoll) * 10) / 10, sickCount: empSickCount,
+                workedHours: Math.round(worked * 100) / 100, sickHours: Math.round(empSick * 100) / 100,
+                vacationHours: Math.round(empVac * 100) / 100, istHours: Math.round(empIst * 100) / 100,
+                puffer: Math.round((empIst - empSoll) * 100) / 100, sickCount: empSickCount,
                 flexCount: empFlex, swapCount: empSwap,
-                nightShiftCount: shifts?.filter(s => s.type === 'ND' && s.assigned_to === emp.id).length || 0,
-                weekendShiftCount: shifts?.filter(s => { const d = new Date(s.start_time); return (d.getDay() === 0 || d.getDay() === 6) && s.assigned_to === emp.id }).length || 0,
-                dbdCount: shifts?.filter(s => s.type === 'DBD' && s.assigned_to === emp.id).length || 0,
+                nightShiftCount: shifts?.filter(s => s.type === 'ND' && (s.assigned_to === emp.id || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id))).length || 0,
+                weekendShiftCount: shifts?.filter(s => { const d = new Date(s.start_time); return (d.getDay() === 0 || d.getDay() === 6) && (s.assigned_to === emp.id || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)) }).length || 0,
+                dbdCount: shifts?.filter(s => s.type === 'DBD' && (s.assigned_to === emp.id || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id))).length || 0,
                 interruptionCount: entries?.reduce((c, e) => e.user_id === emp.id && e.interruptions?.length ? c + e.interruptions.length : c, 0) || 0,
-                trainingHours: Math.round(monthInterests.filter(i => i.user_id === emp.id && i.shifts?.type === 'FORTBILDUNG').reduce((s, i) => s + calculateWorkHours(i.shifts.start_time, i.shifts.end_time, i.shifts.type), 0) * 10) / 10,
+                trainingHours: Math.round(monthInterests.filter(i => i.user_id === emp.id && i.shifts?.type === 'FORTBILDUNG').reduce((s, i) => s + calculateWorkHours(i.shifts.start_time, i.shifts.end_time, i.shifts.type), 0) * 100) / 100,
                 vacationDaysNet: empVacDays,
                 avgLeadTime: vacCount > 0 ? Math.round(leadTime / vacCount) : 0,
                 longestVacationBlock: maxBlock,
@@ -383,18 +473,27 @@ export default function AdminOverview() {
             }
         })
 
+        // Aggregate top-level shiftHours from per-employee stats (guaranteed consistency)
+        empStats.forEach(emp => {
+            Object.entries(emp.shiftTypeHours).forEach(([type, hours]) => {
+                if (Object.hasOwn(shiftHours, type)) shiftHours[type] += hours
+            })
+        })
+        const totalWorkedHours = Object.values(shiftHours).reduce((a, b) => a + b, 0)
+        const totalIstHours = totalWorkedHours + totalSickHours + totalVacationHours
+
         return {
             stats: {
                 shiftHours, sickHours, flexCount, sickCount, swapCount,
                 totalWorkedHours, totalSickHours,
-                totalVacationHours: Math.round(totalVacationHours),
-                totalSollHours: Math.round(totalSollHours),
-                totalIstHours: Math.round(totalIstHours),
-                totalPlannedHours: Math.round(totalPlannedHours),
-                puffer: Math.round((totalIstHours - totalSollHours) * 10) / 10,
+                totalVacationHours: Math.round(totalVacationHours * 100) / 100,
+                totalSollHours: Math.round(totalSollHours * 100) / 100,
+                totalIstHours: Math.round(totalIstHours * 100) / 100,
+                totalPlannedHours: Math.round(totalPlannedHours * 100) / 100,
+                puffer: Math.round((totalIstHours - totalSollHours) * 100) / 100,
                 employeeCount: employees.length,
                 totalInterruptionCount,
-                totalInterruptionNetGain: Math.round(totalInterruptionNetGain * 10) / 10,
+                totalInterruptionNetGain: Math.round(totalInterruptionNetGain * 100) / 100,
                 sickByDayOfWeek, nightShiftCount, weekendShiftCount
             },
             employeeStats: empStats,
@@ -485,14 +584,14 @@ export default function AdminOverview() {
             agg.weekendShiftCount += s.weekendShiftCount
             Object.entries(s.sickByDayOfWeek || {}).forEach(([k, v]) => { agg.sickByDayOfWeek[k] = (agg.sickByDayOfWeek[k] || 0) + v })
         })
-        agg.puffer = Math.round((agg.totalIstHours - agg.totalSollHours) * 10) / 10
-        agg.totalWorkedHours = Math.round(agg.totalWorkedHours)
-        agg.totalSickHours = Math.round(agg.totalSickHours)
-        agg.totalVacationHours = Math.round(agg.totalVacationHours)
-        agg.totalSollHours = Math.round(agg.totalSollHours)
-        agg.totalIstHours = Math.round(agg.totalIstHours)
-        agg.totalPlannedHours = Math.round(agg.totalPlannedHours)
-        agg.totalInterruptionNetGain = Math.round(agg.totalInterruptionNetGain * 10) / 10
+        agg.puffer = Math.round((agg.totalIstHours - agg.totalSollHours) * 100) / 100
+        agg.totalWorkedHours = Math.round(agg.totalWorkedHours * 100) / 100
+        agg.totalSickHours = Math.round(agg.totalSickHours * 100) / 100
+        agg.totalVacationHours = Math.round(agg.totalVacationHours * 100) / 100
+        agg.totalSollHours = Math.round(agg.totalSollHours * 100) / 100
+        agg.totalIstHours = Math.round(agg.totalIstHours * 100) / 100
+        agg.totalPlannedHours = Math.round(agg.totalPlannedHours * 100) / 100
+        agg.totalInterruptionNetGain = Math.round(agg.totalInterruptionNetGain * 100) / 100
 
         // Aggregate employee stats
         const empMap = {}
@@ -503,11 +602,11 @@ export default function AdminOverview() {
                 } else {
                     const m = empMap[e.id]
                     m.sollHours += e.sollHours
-                    m.workedHours = Math.round((m.workedHours + e.workedHours) * 10) / 10
-                    m.sickHours = Math.round((m.sickHours + e.sickHours) * 10) / 10
-                    m.vacationHours = Math.round((m.vacationHours + e.vacationHours) * 10) / 10
+                    m.workedHours = Math.round((m.workedHours + e.workedHours) * 100) / 100
+                    m.sickHours = Math.round((m.sickHours + e.sickHours) * 100) / 100
+                    m.vacationHours = Math.round((m.vacationHours + e.vacationHours) * 100) / 100
                     m.istHours += e.istHours
-                    m.puffer = Math.round(m.istHours - m.sollHours)
+                    m.puffer = Math.round((m.istHours - m.sollHours) * 100) / 100
                     m.sickCount += e.sickCount
                     m.flexCount += e.flexCount
                     m.swapCount += e.swapCount
@@ -515,7 +614,7 @@ export default function AdminOverview() {
                     m.weekendShiftCount += e.weekendShiftCount
                     m.dbdCount += e.dbdCount
                     m.interruptionCount += e.interruptionCount
-                    m.trainingHours = Math.round((m.trainingHours + e.trainingHours) * 10) / 10
+                    m.trainingHours = Math.round((m.trainingHours + e.trainingHours) * 100) / 100
                     m.vacationDaysNet += e.vacationDaysNet
                     Object.entries(e.shiftTypeHours || {}).forEach(([k, v]) => {
                         m.shiftTypeHours[k] = (m.shiftTypeHours[k] || 0) + v
@@ -757,7 +856,7 @@ export default function AdminOverview() {
                                 <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">Team-Puffer</p>
                                 <div className="flex items-baseline gap-2">
                                     <span className={`text-3xl font-black font-mono ${stats.puffer >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                        {stats.puffer > 0 ? '+' : ''}{stats.puffer.toFixed(1)}
+                                        {stats.puffer > 0 ? '+' : ''}{stats.puffer.toFixed(2)}
                                     </span>
                                     <span className="text-sm font-bold text-gray-400">Std.</span>
                                 </div>
@@ -771,7 +870,7 @@ export default function AdminOverview() {
                                                 : <TrendingDown size={12} className="text-rose-500" />
                                         })()}
                                         <span className={`text-[10px] font-bold ${(stats.puffer - (prevStats?.puffer || 0)) >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                            {(() => { const d = Math.round((stats.puffer - (prevStats?.puffer || 0)) * 10) / 10; return `${d > 0 ? '+' : ''}${d.toFixed(1)} vs. ${monthlyData.length >= 2 ? monthlyData[monthlyData.length - 2]?.label : 'Vormonat'}` })()}
+                                            {(() => { const d = Math.round((stats.puffer - (prevStats?.puffer || 0)) * 100) / 100; return `${d > 0 ? '+' : ''}${d.toFixed(2)} vs. ${monthlyData.length >= 2 ? monthlyData[monthlyData.length - 2]?.label : 'Vormonat'}` })()}
                                         </span>
                                     </div>
                                 )}
@@ -869,7 +968,7 @@ export default function AdminOverview() {
                                     <span className="text-sm font-bold text-gray-800">Arbeitsstunden</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm font-bold text-gray-700 font-mono">{stats.totalWorkedHours.toFixed(1)}h</span>
+                                    <span className="text-sm font-bold text-gray-700 font-mono">{stats.totalWorkedHours.toFixed(2)}h</span>
                                     {showWorkedDetails ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                                 </div>
                             </button>
@@ -878,7 +977,7 @@ export default function AdminOverview() {
                                     {Object.entries(stats.shiftHours).filter(([, h]) => h > 0).sort((a, b) => b[1] - a[1]).map(([type, hours]) => (
                                         <div key={type} className={`flex justify-between items-center rounded-md px-2.5 py-1.5 ${shiftColors[type] || 'bg-gray-50 text-gray-700'}`}>
                                             <span className="text-[10px] font-medium text-gray-500">{shiftLabels[type] || type}</span>
-                                            <span className="text-xs font-bold font-mono">{hours.toFixed(1)}h</span>
+                                            <span className="text-xs font-bold font-mono">{hours.toFixed(2)}h</span>
                                         </div>
                                     ))}
                                 </div>
@@ -905,7 +1004,7 @@ export default function AdminOverview() {
                                     <span className="text-sm font-bold text-gray-800">Krankstunden</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm font-bold text-gray-700 font-mono">{stats.totalSickHours.toFixed(1)}h</span>
+                                    <span className="text-sm font-bold text-gray-700 font-mono">{stats.totalSickHours.toFixed(2)}h</span>
                                     {showSickDetails ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                                 </div>
                             </button>
@@ -914,7 +1013,7 @@ export default function AdminOverview() {
                                     {Object.entries(stats.sickHours).filter(([, h]) => h > 0).sort((a, b) => b[1] - a[1]).map(([type, hours]) => (
                                         <div key={type} className={`flex justify-between items-center rounded-md px-2.5 py-1.5 ${sickColors[type] || 'bg-red-50 text-red-700'}`}>
                                             <span className="text-[10px] font-medium text-gray-500">{shiftLabels[type] || type}</span>
-                                            <span className="text-xs font-bold font-mono">{hours.toFixed(1)}h</span>
+                                            <span className="text-xs font-bold font-mono">{hours.toFixed(2)}h</span>
                                         </div>
                                     ))}
                                 </div>
@@ -999,7 +1098,6 @@ export default function AdminOverview() {
 
                             {/* Team Average Bar */}
                             {(() => {
-                                const teamTotal = employeeStats.reduce((s, e) => s + e.workedHours, 0)
                                 const avgHours = {}
                                 shiftTypeConfig.forEach(t => {
                                     const sum = employeeStats.reduce((s, e) => s + (e.shiftTypeHours?.[t.key] || 0), 0)
@@ -1191,7 +1289,7 @@ export default function AdminOverview() {
                                                 {/* Puffer Badge */}
                                                 <div className="flex items-center gap-1.5 shrink-0">
                                                     <span className={`${badgeClass} text-[10px] font-bold px-2 py-0.5 rounded-full font-mono`}>
-                                                        {emp.puffer > 0 ? '+' : emp.puffer < 0 ? '−' : ''}{Math.abs(emp.puffer).toFixed(1)}
+                                                        {emp.puffer > 0 ? '+' : emp.puffer < 0 ? '−' : ''}{Math.abs(emp.puffer).toFixed(2)}
                                                     </span>
                                                     {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                                                 </div>
@@ -1222,7 +1320,7 @@ export default function AdminOverview() {
                                                         <div className="bg-gray-50 rounded-lg text-center py-1.5">
                                                             <p className="text-[9px] text-gray-400">Puffer</p>
                                                             <p className={`text-xs font-bold font-mono ${emp.puffer >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                                {emp.puffer > 0 ? '+' : ''}{emp.puffer.toFixed(1)}
+                                                                {emp.puffer > 0 ? '+' : ''}{emp.puffer.toFixed(2)}
                                                             </p>
                                                         </div>
                                                     </div>

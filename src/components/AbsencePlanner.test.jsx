@@ -6,10 +6,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { createContext, useContext } from 'react'
 
-// Hoisted mock context
-const { MockAuthContext } = vi.hoisted(() => {
-    const { createContext } = require('react')
-    return { MockAuthContext: createContext() }
+// Hoisted mock context — require is provided by vitest in hoisted scope
+const { MockAuthContext, mockUseContext } = vi.hoisted(() => {
+    // eslint-disable-next-line no-undef
+    const React = require('react')
+    return { MockAuthContext: React.createContext(), mockUseContext: React.useContext }
 })
 
 // Mock supabase
@@ -28,10 +29,7 @@ vi.mock('../supabase', () => ({
 // Mock AuthContext
 vi.mock('../AuthContext', () => ({
     AuthContext: MockAuthContext,
-    useAuth: () => {
-        const { useContext } = require('react')
-        return useContext(MockAuthContext)
-    }
+    useAuth: () => mockUseContext(MockAuthContext),
 }))
 
 // Mock hooks and sub-components

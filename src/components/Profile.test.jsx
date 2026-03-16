@@ -7,9 +7,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { createContext, useContext } from 'react'
 
 // Use vi.hoisted so MockAuthContext is available when vi.mock factories run
-const { MockAuthContext } = vi.hoisted(() => {
-    const { createContext } = require('react')
-    return { MockAuthContext: createContext() }
+const { MockAuthContext, mockUseContext } = vi.hoisted(() => {
+    // eslint-disable-next-line no-undef
+    const React = require('react')
+    return { MockAuthContext: React.createContext(), mockUseContext: React.useContext }
 })
 
 // Mock supabase
@@ -25,10 +26,7 @@ vi.mock('../supabase', () => ({
 // Mock AuthContext to use our mock context
 vi.mock('../AuthContext', () => ({
     AuthContext: MockAuthContext,
-    useAuth: () => {
-        const { useContext } = require('react')
-        return useContext(MockAuthContext)
-    }
+    useAuth: () => mockUseContext(MockAuthContext)
 }))
 
 // Mock sub-components

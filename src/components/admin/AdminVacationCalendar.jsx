@@ -3,7 +3,7 @@ import { supabase } from '../../supabase'
 import {
     format, startOfYear, endOfYear, startOfMonth, endOfMonth,
     eachMonthOfInterval, eachDayOfInterval, isWeekend, isSameMonth,
-    getYear, startOfWeek, endOfWeek, isWithinInterval, parseISO, isSameDay
+    getYear, startOfWeek, endOfWeek
 } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Calendar, Users } from 'lucide-react'
@@ -75,13 +75,11 @@ export default function AdminVacationCalendar() {
         const calEnd = endOfWeek(monthEnd, { locale: de })
         const days = eachDayOfInterval({ start: calStart, end: calEnd })
 
-        // Count vacation days in this month
-        let vacationDays = 0
+        // Count unique employees with vacation in this month
         let uniqueEmployees = new Set()
         eachDayOfInterval({ start: monthStart, end: monthEnd }).forEach(day => {
             const dayAbsences = getAbsencesForDay(day)
             if (dayAbsences.length > 0 && !isWeekend(day) && !getHoliday(day)) {
-                vacationDays++
                 dayAbsences.forEach(a => uniqueEmployees.add(a.user_id))
             }
         })

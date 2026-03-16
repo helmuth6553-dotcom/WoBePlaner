@@ -173,7 +173,7 @@ export const calculateWorkHours = (startIso, endIso, type, interruptions = [], t
 
     // 4. Process Interruptions (Inflation + Merge)
     const interruptionResult = processInterruptions(interruptions, readinessStart, readinessEnd, minInterruptionMinutes)
-    const { mergedIntervals: interruptionIntervals, creditedMinutes: interruptionCreditMinutes } = interruptionResult
+    const { creditedMinutes: interruptionCreditMinutes } = interruptionResult
     let deductedReadinessMinutes = interruptionResult.deductedReadinessMinutes
 
     // 5. Final Calculation

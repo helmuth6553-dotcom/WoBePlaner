@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
-import { startOfMonth, endOfMonth, format } from 'date-fns'
+import { startOfMonth, endOfMonth } from 'date-fns'
 import { filterShiftsByStartDate } from '../utils/timeTrackingHelpers'
 
 // Shift types that support multiple participants (group events)

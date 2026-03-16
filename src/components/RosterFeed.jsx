@@ -250,7 +250,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
             // Fetch all time entries for team
             const { data: teamEntries } = await supabase
                 .from('time_entries')
-                .select('user_id, shift_id, calculated_hours, status')
+                .select('user_id, shift_id, calculated_hours, status, actual_start, actual_end')
             setAllTimeEntriesHistory(teamEntries || [])
 
             // Fetch all corrections for team

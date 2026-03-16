@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabase'
 import { Palmtree, Calendar, TrendingDown, Check } from 'lucide-react'
-import { format, getYear, differenceInBusinessDays, isWeekend } from 'date-fns'
-import { de } from 'date-fns/locale'
+import { getYear, isWeekend } from 'date-fns'
 
 export default function AdminVacationStats() {
     const [employees, setEmployees] = useState([])

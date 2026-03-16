@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
 import { Trophy, Zap, MessageSquare, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Flame, TrendingUp, Minus, Users, Coffee } from 'lucide-react'
-import { calculateFairnessIndex, calculateAllFairnessIndices } from '../utils/fairnessIndex'
+import { calculateAllFairnessIndices } from '../utils/fairnessIndex'
 
 const RANK_TIERS = {
     safe: { label: 'Schon wieder ich', icon: ShieldCheck, bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', title: 'Schon wieder ich' },
@@ -75,7 +75,6 @@ export default function SoliPunktePanel() {
 
             // 6. Previous month comparison (filter flex/votes by shift start_time)
             const now = new Date()
-            const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
             const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
 
             const prevFlexData = (flexData || []).filter(f => {
