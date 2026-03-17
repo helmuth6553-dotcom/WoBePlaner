@@ -1,8 +1,26 @@
 import { startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, subDays, isSameMonth, getYear, endOfDay } from 'date-fns'
-import { calculateWorkHours, calculateDailyAbsenceHours } from './timeCalculations'
+import { calculateWorkHours, calculateDailyAbsenceHours, processInterruptions } from './timeCalculations'
 import { getHolidays, isHoliday } from './holidays'
 
-export const calculateGenericBalance = (profile, historyShifts, historyAbsences, timeEntries = [], currentDate = new Date(), corrections = []) => {
+const SHIFT_TYPE_KEYS = ['TD', 'TD1', 'TD2', 'ND', 'DBD', 'TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
+
+const normalizeShiftType = (type) => {
+    if (!type) return null
+    const up = type.toUpperCase()
+    if (up === 'NACHT' || up === 'NACHTDIENST') return 'ND'
+    if (up === 'TAGDIENST') return 'TD1'
+    if (up === 'DOPPELDIENST') return 'DBD'
+    if (up === 'TEAMSITZUNG') return 'TEAM'
+    return SHIFT_TYPE_KEYS.includes(up) ? up : null
+}
+
+const createEmptyShiftTypeHours = () => {
+    const obj = {}
+    SHIFT_TYPE_KEYS.forEach(k => { obj[k] = { hours: 0, count: 0 } })
+    return obj
+}
+
+export const calculateGenericBalance = (profile, historyShifts, historyAbsences, timeEntries = [], currentDate = new Date(), corrections = [], options = {}) => {
     if (!profile) return null
 
     const startDate = profile.start_date ? new Date(profile.start_date) : (profile.created_at ? new Date(profile.created_at) : new Date('2024-01-01'))
@@ -82,6 +100,26 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
 
     let actualMinutes = 0
 
+    // Detailed mode tracking
+    const detailed = options.detailed === true
+    const shiftTypeHours = detailed ? createEmptyShiftTypeHours() : null
+    const absenceBreakdown = detailed ? { Urlaub: { hours: 0, days: 0 }, Krank: { hours: 0, days: 0 } } : null
+    const interruptionStats = detailed ? { count: 0, netGainHours: 0 } : null
+
+    const trackShiftType = (type, hours, count = 1) => {
+        if (!detailed) return
+        const norm = normalizeShiftType(type)
+        if (norm && shiftTypeHours[norm]) {
+            shiftTypeHours[norm].hours += hours
+            shiftTypeHours[norm].count += count
+        }
+    }
+
+    const trackInterruptions = (entry) => {
+        if (!detailed || !entry?.interruptions?.length) return
+        interruptionStats.count += entry.interruptions.length
+    }
+
     // Group shifts by date to detect TD1+TD2 combinations
     const shiftsByDate = {}
     currentMonthShifts.forEach(shift => {
@@ -110,7 +148,11 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
 
             if (isMerged) {
                 // Both entries have the same combined calculated_hours — use once
-                actualMinutes += (td1Entry.calculated_hours || 0) * 60
+                const mergedHours = td1Entry.calculated_hours || 0
+                actualMinutes += mergedHours * 60
+                trackShiftType('TD', mergedHours, 1)
+                trackInterruptions(td1Entry)
+                trackInterruptions(td2Entry)
             } else {
                 // Individual entries — add both minus handover overlap
                 const td1Hours = td1Entry?.calculated_hours !== undefined
@@ -126,7 +168,12 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
                 const td1End = new Date(td1.end_time)
                 const td2Start = new Date(td2.start_time)
                 const overlapMs = Math.max(0, td1End - td2Start)
-                actualMinutes -= overlapMs / (1000 * 60)
+                const overlapMinutes = overlapMs / (1000 * 60)
+                actualMinutes -= overlapMinutes
+                trackShiftType('TD1', td1Hours, 1)
+                trackShiftType('TD2', td2Hours - (overlapMinutes / 60), 1)
+                trackInterruptions(td1Entry)
+                trackInterruptions(td2Entry)
             }
             processedShiftIds.add(td1.id)
             processedShiftIds.add(td2.id)
@@ -136,7 +183,10 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
     // Add all other shifts (not part of TD1+TD2 combination)
     currentMonthShifts.forEach(s => {
         if (!processedShiftIds.has(s.id)) {
-            actualMinutes += getShiftDurationMinutes(s)
+            const mins = getShiftDurationMinutes(s)
+            actualMinutes += mins
+            trackShiftType(s.type, mins / 60, 1)
+            trackInterruptions(entryMap[s.id])
         }
     })
 
@@ -181,20 +231,26 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
             // And to handle months: calculating 'daily average of the planned sum' is risky.
 
             if (abs.planned_hours && Number(abs.planned_hours) > 0) {
-                // Check if we already processed this absence ID to avoid adding it multiple times if we loop? 
-                // We rely on the outer forEach(abs). So we visit each absence once.
-                // We add the hours IF there is any overlap with the month.
-                // To prevent adding FULL amount if only 1 day overlaps of a 30 day illness (unlikely for Shift-Sickness):
-                // We accept that for "Sick with Shifts", the hours belong to the specific dates.
-                // Since we lost the specific dates of the shifts (shifts are deleted), we can't map them perfectly back.
-                // FAILSAFE: Just add the hours.
-                vacationMinutes += (Number(abs.planned_hours) * 60)
+                const absHours = Number(abs.planned_hours)
+                vacationMinutes += (absHours * 60)
+                if (detailed) {
+                    const absType = (abs.type === 'Krank' || abs.type === 'Krankenstand') ? 'Krank' : 'Urlaub'
+                    if (absenceBreakdown[absType]) {
+                        absenceBreakdown[absType].hours += absHours
+                    }
+                }
             } else {
-                // Fallback to per-day calculation (Standard Logic / Vacation)
                 const days = eachDayOfInterval({ start, end })
                 days.forEach(day => {
                     const hours = calculateDailyAbsenceHours(day, abs, historyShifts, profile)
                     vacationMinutes += (hours * 60)
+                    if (detailed && hours > 0) {
+                        const absType = (abs.type === 'Krank' || abs.type === 'Krankenstand') ? 'Krank' : 'Urlaub'
+                        if (absenceBreakdown[absType]) {
+                            absenceBreakdown[absType].hours += hours
+                            absenceBreakdown[absType].days += 1
+                        }
+                    }
                 })
             }
         }
@@ -343,7 +399,7 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
     const totalDiffMinutes = correctedDiffMinutes + totalCarryoverMinutes
     const toFixedNum = (num) => Math.round(num * 100) / 100
 
-    return {
+    const result = {
         target: toFixedNum(targetMinutes / 60),
         actual: toFixedNum(correctedActualMinutes / 60),  // Now includes corrections
         vacation: toFixedNum(vacationMinutes / 60),
@@ -352,4 +408,41 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         correction: toFixedNum(correctionMinutes / 60),
         total: toFixedNum(totalDiffMinutes / 60)
     }
+
+    if (detailed) {
+        // Round all shiftTypeHours
+        SHIFT_TYPE_KEYS.forEach(k => {
+            shiftTypeHours[k].hours = toFixedNum(shiftTypeHours[k].hours)
+        })
+
+        // Calculate interruption net gain from time entries with interruptions
+        let totalInterruptionNetGainMinutes = 0
+        timeEntries.forEach(entry => {
+            if (!entry.interruptions?.length || !entry.shift_id) return
+            const shift = currentMonthShifts.find(s => s.id === entry.shift_id)
+            if (!shift) return
+            const type = normalizeShiftType(shift.type)
+            if (type !== 'ND') return
+            // Get standby config (same logic as calculateWorkHours)
+            const start = new Date(shift.start_time)
+            const end = new Date(shift.end_time)
+            let readinessStart = new Date(start)
+            if (start.getHours() >= 12) readinessStart = new Date(start.getTime() + 86400000)
+            readinessStart.setHours(0, 30, 0, 0)
+            let readinessEnd = new Date(readinessStart)
+            readinessEnd.setHours(6, 0, 0, 0)
+            const intResult = processInterruptions(entry.interruptions, readinessStart, readinessEnd)
+            totalInterruptionNetGainMinutes += (intResult.creditedMinutes - intResult.deductedReadinessMinutes * 0.5)
+        })
+        interruptionStats.netGainHours = toFixedNum(totalInterruptionNetGainMinutes / 60)
+
+        // Round absence hours
+        Object.values(absenceBreakdown).forEach(v => { v.hours = toFixedNum(v.hours) })
+
+        result.shiftTypeHours = shiftTypeHours
+        result.absenceBreakdown = absenceBreakdown
+        result.interruptions = interruptionStats
+    }
+
+    return result
 }

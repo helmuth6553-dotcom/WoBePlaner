@@ -453,5 +453,174 @@ describe('calculateGenericBalance', () => {
             expect(balance).toBeNull()
         })
     })
+
+    // ==========================================================================
+    // DETAILED MODE TESTS
+    // ==========================================================================
+
+    describe('detailed mode (options.detailed = true)', () => {
+        const detailedOpts = { detailed: true }
+
+        it('returns shiftTypeHours, absenceBreakdown, interruptions when detailed', () => {
+            const profile = { start_date: '2024-01-01', weekly_hours: 40 }
+            const currentDate = new Date('2024-01-15T18:00:00')
+            const shifts = [{ id: '1', start_time: '2024-01-15T08:00:00', end_time: '2024-01-15T16:00:00', type: 'TD1' }]
+            const entries = [{ shift_id: '1', calculated_hours: 8 }]
+
+            const b = calculateGenericBalance(profile, shifts, [], entries, currentDate, [], detailedOpts)
+
+            expect(b).toHaveProperty('shiftTypeHours')
+            expect(b).toHaveProperty('absenceBreakdown')
+            expect(b).toHaveProperty('interruptions')
+            expect(b.shiftTypeHours.TD1.hours).toBe(8)
+            expect(b.shiftTypeHours.TD1.count).toBe(1)
+        })
+
+        it('does NOT return detailed fields without options.detailed', () => {
+            const profile = { start_date: '2024-01-01', weekly_hours: 40 }
+            const currentDate = new Date('2024-01-15T18:00:00')
+            const b = calculateGenericBalance(profile, [], [], [], currentDate, [])
+
+            expect(b).not.toHaveProperty('shiftTypeHours')
+            expect(b).not.toHaveProperty('absenceBreakdown')
+            expect(b).not.toHaveProperty('interruptions')
+        })
+
+        it('shiftTypeHours sum matches actual (without corrections)', () => {
+            const profile = { start_date: '2024-01-01', weekly_hours: 40 }
+            const currentDate = new Date('2024-01-15T18:00:00')
+            const shifts = [
+                { id: '1', start_time: '2024-01-15T08:00:00', end_time: '2024-01-15T16:00:00', type: 'TD1' },
+                { id: '2', start_time: '2024-01-16T20:00:00', end_time: '2024-01-17T08:00:00', type: 'ND' }
+            ]
+            const entries = [
+                { shift_id: '1', calculated_hours: 8 },
+                { shift_id: '2', calculated_hours: 9.25 }
+            ]
+
+            const b = calculateGenericBalance(profile, shifts, [], entries, currentDate, [], detailedOpts)
+
+            const totalShiftHours = Object.values(b.shiftTypeHours).reduce((sum, v) => sum + v.hours, 0)
+            expect(totalShiftHours).toBeCloseTo(b.actual)
+        })
+
+        it('tracks merged TD1+TD2 as type TD', () => {
+            const profile = { start_date: '2024-01-01', weekly_hours: 40 }
+            const currentDate = new Date('2024-01-15T18:00:00')
+            const shifts = [
+                { id: 'td1', start_time: '2024-01-15T08:00:00', end_time: '2024-01-15T16:30:00', type: 'TD1' },
+                { id: 'td2', start_time: '2024-01-15T16:00:00', end_time: '2024-01-15T22:00:00', type: 'TD2' }
+            ]
+            // Merged entries: identical actual_start/actual_end
+            const entries = [
+                { shift_id: 'td1', calculated_hours: 14, actual_start: '2024-01-15T08:00:00', actual_end: '2024-01-15T22:00:00' },
+                { shift_id: 'td2', calculated_hours: 14, actual_start: '2024-01-15T08:00:00', actual_end: '2024-01-15T22:00:00' }
+            ]
+
+            const b = calculateGenericBalance(profile, shifts, [], entries, currentDate, [], detailedOpts)
+
+            expect(b.shiftTypeHours.TD.hours).toBe(14)
+            expect(b.shiftTypeHours.TD.count).toBe(1)
+            expect(b.shiftTypeHours.TD1.hours).toBe(0)
+            expect(b.shiftTypeHours.TD2.hours).toBe(0)
+            expect(b.actual).toBe(14)
+        })
+
+        it('tracks non-merged TD1+TD2 with overlap subtracted from TD2', () => {
+            const profile = { start_date: '2024-01-01', weekly_hours: 40 }
+            const currentDate = new Date('2024-01-15T18:00:00')
+            const shifts = [
+                { id: 'td1', start_time: '2024-01-15T08:00:00', end_time: '2024-01-15T16:30:00', type: 'TD1' },
+                { id: 'td2', start_time: '2024-01-15T16:00:00', end_time: '2024-01-15T22:00:00', type: 'TD2' }
+            ]
+            // No entries = use shift times, overlap = 30min
+            const b = calculateGenericBalance(profile, shifts, [], [], currentDate, [], detailedOpts)
+
+            // TD1: 8.5h, TD2: 6h - 0.5h overlap = 5.5h
+            expect(b.shiftTypeHours.TD1.hours).toBeCloseTo(8.5)
+            expect(b.shiftTypeHours.TD2.hours).toBeCloseTo(5.5)
+            expect(b.shiftTypeHours.TD1.count).toBe(1)
+            expect(b.shiftTypeHours.TD2.count).toBe(1)
+            expect(b.actual).toBeCloseTo(14) // 8.5 + 5.5
+        })
+
+        it('tracks TEAM shifts correctly (excluded on absence days)', () => {
+            const profile = { start_date: '2024-01-01', weekly_hours: 40 }
+            const currentDate = new Date('2024-01-15T18:00:00')
+            const shifts = [
+                { id: 'team1', start_time: '2024-01-15T14:00:00', end_time: '2024-01-15T15:00:00', type: 'TEAM' },
+                { id: 'team2', start_time: '2024-01-16T14:00:00', end_time: '2024-01-16T15:00:00', type: 'TEAM' }
+            ]
+            // Absence on Jan 16 = TEAM excluded
+            const absences = [{
+                start_date: '2024-01-16',
+                end_date: '2024-01-16',
+                type: 'Urlaub'
+            }]
+
+            const b = calculateGenericBalance(profile, shifts, absences, [], currentDate, [], detailedOpts)
+
+            expect(b.shiftTypeHours.TEAM.count).toBe(1) // Only team1 counted
+            expect(b.shiftTypeHours.TEAM.hours).toBeCloseTo(1)
+        })
+
+        it('tracks vacation in absenceBreakdown', () => {
+            const profile = { start_date: '2024-01-01', weekly_hours: 40 }
+            const currentDate = new Date('2024-01-15T18:00:00')
+            // 3 workdays of vacation (Mon-Wed)
+            const absences = [{
+                start_date: '2024-01-15',
+                end_date: '2024-01-17',
+                type: 'Urlaub'
+            }]
+
+            const b = calculateGenericBalance(profile, [], absences, [], currentDate, [], detailedOpts)
+
+            expect(b.absenceBreakdown.Urlaub.hours).toBeCloseTo(24) // 3 days * 8h
+            expect(b.absenceBreakdown.Urlaub.days).toBe(3)
+        })
+
+        it('tracks sick with planned_hours in absenceBreakdown', () => {
+            const profile = { start_date: '2024-01-01', weekly_hours: 40 }
+            const currentDate = new Date('2024-01-15T18:00:00')
+            const absences = [{
+                start_date: '2024-01-15',
+                end_date: '2024-01-15',
+                type: 'Krank',
+                planned_hours: 8.5
+            }]
+
+            const b = calculateGenericBalance(profile, [], absences, [], currentDate, [], detailedOpts)
+
+            expect(b.absenceBreakdown.Krank.hours).toBeCloseTo(8.5)
+            // Days not tracked for planned_hours path (no per-day iteration)
+            expect(b.absenceBreakdown.Krank.days).toBe(0)
+        })
+
+        it('base fields are identical with and without detailed mode', () => {
+            const profile = { start_date: '2024-01-01', weekly_hours: 40 }
+            const currentDate = new Date('2024-01-15T18:00:00')
+            const shifts = [
+                { id: '1', start_time: '2024-01-15T08:00:00', end_time: '2024-01-15T16:00:00', type: 'TD1' },
+                { id: '2', start_time: '2024-01-16T20:00:00', end_time: '2024-01-17T08:00:00', type: 'ND' }
+            ]
+            const entries = [
+                { shift_id: '1', calculated_hours: 8 },
+                { shift_id: '2', calculated_hours: 9.25 }
+            ]
+            const absences = [{ start_date: '2024-01-10', end_date: '2024-01-10', type: 'Urlaub' }]
+
+            const normal = calculateGenericBalance(profile, shifts, absences, entries, currentDate)
+            const detail = calculateGenericBalance(profile, shifts, absences, entries, currentDate, [], detailedOpts)
+
+            expect(detail.target).toBe(normal.target)
+            expect(detail.actual).toBe(normal.actual)
+            expect(detail.vacation).toBe(normal.vacation)
+            expect(detail.diff).toBe(normal.diff)
+            expect(detail.carryover).toBe(normal.carryover)
+            expect(detail.correction).toBe(normal.correction)
+            expect(detail.total).toBe(normal.total)
+        })
+    })
 })
 
