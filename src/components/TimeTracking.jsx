@@ -11,7 +11,7 @@ import { constructIso, constructInterruptionIso, isValidInterruptionTime } from 
 import { findSnapshotEntry, calculateCorrection } from '../utils/pdfGenerator'
 
 // Shift types that support multiple participants (group events)
-const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'TEAM']
+const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION', 'TEAM']
 
 export default function TimeTracking() {
     const { user, isAdmin } = useAuth()

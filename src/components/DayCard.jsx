@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { format, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { User, Check, Moon, Sun, CalendarOff, Users, Clock, AlertCircle, Thermometer, Plus, BookOpen, GraduationCap, MessageCircle, MoreHorizontal, EyeOff } from 'lucide-react'
+import { User, Check, Moon, Sun, CalendarOff, Users, Clock, Coffee, Compass, AlertCircle, Thermometer, Plus, BookOpen, GraduationCap, MessageCircle, MoreHorizontal, EyeOff } from 'lucide-react'
 import ActionSheet from './ActionSheet'
 import CoverageVotingPanel from './CoverageVotingPanel'
 import { calculateWorkHours } from '../utils/timeCalculations'
@@ -96,6 +96,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
             if (slotType === 'TD2') return t === 'TD2'
             if (slotType === 'ND') return t === 'ND' || t === 'NACHTDIENST' || t === 'NACHT'
             if (slotType === 'DBD') return t === 'DBD' || t === 'DOPPEL'
+            if (slotType === 'AST') return t === 'AST' || t === 'ANLAUFSTELLE'
             return false
         })
     }
@@ -117,7 +118,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
 
         if (absenceReason && absenceReason.status === 'genehmigt' && !isAdmin) {
             // Allow viewing Team/Training details even if absent?
-            const specialTypes = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
+            const specialTypes = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
             if (!specialTypes.includes(shift.type)) {
                 const msg = absenceReason.type && absenceReason.type.toLowerCase() === 'krank' ? 'Du bist krank gemeldet.' : 'Du bist im Urlaub.'
                 alert(msg + ' Keine Eintragung möglich.')
@@ -126,7 +127,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         }
 
         // Always open details for Admin OR for Special Events (Team/Training)
-        const specialTypes = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
+        const specialTypes = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
         if (isAdmin || specialTypes.includes(shift.type)) {
             setSelectedShift({ ...shift, label, icon })
             return
@@ -151,6 +152,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         EINSCHULUNG: { label: 'Einschulungstermin', icon: <GraduationCap size={18} />, bg: 'bg-cyan-50 border-cyan-200', iconBg: 'bg-cyan-100 text-cyan-700', color: 'text-cyan-700', activeBg: 'bg-cyan-100 border-cyan-300', activeColor: 'text-cyan-800 font-bold' },
         MITARBEITERGESPRAECH: { label: 'Mitarbeitergespräch', icon: <MessageCircle size={18} />, bg: 'bg-orange-50 border-orange-200', iconBg: 'bg-orange-100 text-orange-700', color: 'text-orange-700', activeBg: 'bg-orange-100 border-orange-300', activeColor: 'text-orange-800 font-bold' },
         SONSTIGES: { label: 'Sonstiges', icon: <MoreHorizontal size={18} />, bg: 'bg-slate-50 border-slate-200', iconBg: 'bg-slate-100 text-slate-700', color: 'text-slate-700', activeBg: 'bg-slate-100 border-slate-300', activeColor: 'text-slate-800 font-bold' },
+        SUPERVISION: { label: 'Supervision', icon: <Compass size={18} />, bg: 'bg-violet-50 border-violet-200', iconBg: 'bg-violet-100 text-violet-700', color: 'text-violet-700', activeBg: 'bg-violet-100 border-violet-300', activeColor: 'text-violet-800 font-bold' },
     }
 
     const renderSpecialEventRow = (shift) => {
@@ -356,7 +358,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         const shift = selectedShift
         const isTeam = shift.type === 'TEAM'
         const isTraining = shift.type === 'FORTBILDUNG'
-        const isSpecialOptIn = !isTeam && ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES'].includes(shift.type)
+        const isSpecialOptIn = !isTeam && ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'].includes(shift.type)
 
         let participants = []
 
@@ -574,7 +576,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         )
     }
 
-    const SPECIAL_TYPES = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
+    const SPECIAL_TYPES = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
     const specialShifts = shifts.filter(s => SPECIAL_TYPES.includes(s.type))
 
     return (
@@ -642,7 +644,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                     ))}
 
                     {/* Coverage Voting Panels for urgent shifts */}
-                    {['TD1', 'TD2', 'ND', 'DBD'].map(slotCode => {
+                    {['TD1', 'TD2', 'ND', 'DBD', 'AST'].map(slotCode => {
                         const shift = shifts.find(s => s.type === slotCode)
                         if (!shift) return null
                         const isUrgentShift = !!shift.urgent_since && !shift.assigned_to && (!shift.interests || shift.interests.length === 0)
@@ -680,11 +682,12 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                     {renderShiftRow('TD2', 'Tagdienst 2', <Sun size={18} />)}
                     {renderShiftRow('ND', 'Nachtdienst', <Moon size={18} />)}
                     {renderShiftRow('DBD', 'DBD', <Users size={18} />)}
+                    {renderShiftRow('AST', 'Anlaufstelle', <Coffee size={18} />)}
 
                     {isAdmin && isAddMenuOpen && (
                         <div className="mt-2 border-t border-dashed border-gray-200 pt-2 grid grid-cols-3 gap-1 animate-in slide-in-from-top-2 fade-in duration-200">
-                            {['TD1', 'TD2', 'ND', 'DBD', 'TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES'].map(type => {
-                                const specialLabel = { TEAM: 'Teamsitzung', FORTBILDUNG: 'Fortbildung', EINSCHULUNG: 'Einschulung', MITARBEITERGESPRAECH: 'MA-Gespräch', SONSTIGES: 'Sonstiges' }
+                            {['TD1', 'TD2', 'ND', 'DBD', 'AST', 'TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'].map(type => {
+                                const specialLabel = { TEAM: 'Teamsitzung', FORTBILDUNG: 'Fortbildung', EINSCHULUNG: 'Einschulung', MITARBEITERGESPRAECH: 'MA-Gespräch', SONSTIGES: 'Sonstiges', SUPERVISION: 'Supervision' }
                                 const isSpecial = !!specialLabel[type]
                                 return (
                                     <button

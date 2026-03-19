@@ -335,7 +335,8 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
 
                     // Shift Type (Only first line) - truncate if too long
                     // Dienst column at margin + 86
-                    let shiftType = shift.type || '?'
+                    const PDF_DIENST_LABELS = { MITARBEITERGESPRAECH: 'MA-Gespr.', FORTBILDUNG: 'Fortbild.', EINSCHULUNG: 'Einschul.', TEAMSITZUNG: 'Teamsitz.', SUPERVISION: 'Supervis.' }
+                    let shiftType = PDF_DIENST_LABELS[(shift.type || '').toUpperCase()] || shift.type || '?'
                     if (shiftType.length > 8) shiftType = shiftType.substring(0, 7) + '..'
                     doc.text(shiftType, margin + 86, y)
 

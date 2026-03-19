@@ -185,8 +185,8 @@ export default function AdminOverview() {
             return calculateWorkHours(shift.start_time, shift.end_time, shift.type)
         }
 
-        const shiftHours = { TD: 0, TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0 }
-        const sickHours = { TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0 }
+        const shiftHours = { TD: 0, TD1: 0, TD2: 0, ND: 0, DBD: 0, AST: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0, SUPERVISION: 0 }
+        const sickHours = { TD1: 0, TD2: 0, ND: 0, DBD: 0, AST: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0, SUPERVISION: 0 }
         let flexCount = 0
         let sickCount = 0
         const swapCount = monthSwaps.length
@@ -210,7 +210,7 @@ export default function AdminOverview() {
         // Planned hours
         let totalPlannedHours = 0
         shifts?.forEach(s => {
-            if (!['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES'].includes(s.type)) {
+            if (!['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'].includes(s.type)) {
                 totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type)
             }
         })
@@ -219,7 +219,7 @@ export default function AdminOverview() {
             const availableCount = employees.filter(emp => !allAbsenceDaysByUser[emp.id]?.has(dateKey)).length
             totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * availableCount
         })
-        shifts?.filter(s => ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES'].includes(s.type)).forEach(s => {
+        shifts?.filter(s => ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'].includes(s.type)).forEach(s => {
             totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * monthInterests.filter(i => i.shift_id === s.id).length
         })
 
@@ -228,7 +228,7 @@ export default function AdminOverview() {
         const holidays = getHolidays(getYear(start))
         let totalSollHours = 0 // Will be derived from per-employee calculateGenericBalance results
 
-        const SPECIAL_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
+        const SPECIAL_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
 
         // Sick
         absences?.forEach(abs => {
@@ -693,9 +693,9 @@ export default function AdminOverview() {
         : format(selectedMonth, 'MMMM yyyy', { locale: de })
 
     // Shift type labels for IST breakdown
-    const shiftLabels = { TD: 'Tagdienst', TD1: 'Tagdienst 1', TD2: 'Tagdienst 2', ND: 'Nachtdienst', DBD: 'Doppeldienst', TEAM: 'Teamsitzung', FORTBILDUNG: 'Fortbildung', EINSCHULUNG: 'Einschulung', MITARBEITERGESPRAECH: 'MA-Gespräch', SONSTIGES: 'Sonstiges' }
-    const shiftColors = { TD: 'bg-blue-50 text-blue-700', TD1: 'bg-blue-50 text-blue-700', TD2: 'bg-sky-50 text-sky-700', ND: 'bg-indigo-50 text-indigo-700', DBD: 'bg-violet-50 text-violet-700', TEAM: 'bg-purple-50 text-purple-700', FORTBILDUNG: 'bg-fuchsia-50 text-fuchsia-700', EINSCHULUNG: 'bg-pink-50 text-pink-700', MITARBEITERGESPRAECH: 'bg-gray-50 text-gray-700', SONSTIGES: 'bg-gray-50 text-gray-700' }
-    const sickColors = { TD1: 'bg-red-50 text-red-700', TD2: 'bg-red-50 text-red-700', ND: 'bg-red-50 text-red-700', DBD: 'bg-red-50 text-red-700', TEAM: 'bg-red-50 text-red-700', FORTBILDUNG: 'bg-red-50 text-red-700', EINSCHULUNG: 'bg-red-50 text-red-700', MITARBEITERGESPRAECH: 'bg-red-50 text-red-700', SONSTIGES: 'bg-red-50 text-red-700' }
+    const shiftLabels = { TD: 'Tagdienst', TD1: 'Tagdienst 1', TD2: 'Tagdienst 2', ND: 'Nachtdienst', DBD: 'Doppeldienst', AST: 'Anlaufstelle', TEAM: 'Teamsitzung', FORTBILDUNG: 'Fortbildung', EINSCHULUNG: 'Einschulung', MITARBEITERGESPRAECH: 'MA-Gespräch', SONSTIGES: 'Sonstiges', SUPERVISION: 'Supervision' }
+    const shiftColors = { TD: 'bg-blue-50 text-blue-700', TD1: 'bg-blue-50 text-blue-700', TD2: 'bg-sky-50 text-sky-700', ND: 'bg-indigo-50 text-indigo-700', DBD: 'bg-violet-50 text-violet-700', AST: 'bg-teal-50 text-teal-700', TEAM: 'bg-purple-50 text-purple-700', FORTBILDUNG: 'bg-fuchsia-50 text-fuchsia-700', EINSCHULUNG: 'bg-pink-50 text-pink-700', MITARBEITERGESPRAECH: 'bg-gray-50 text-gray-700', SONSTIGES: 'bg-gray-50 text-gray-700', SUPERVISION: 'bg-violet-50 text-violet-700' }
+    const sickColors = { TD1: 'bg-red-50 text-red-700', TD2: 'bg-red-50 text-red-700', ND: 'bg-red-50 text-red-700', DBD: 'bg-red-50 text-red-700', AST: 'bg-red-50 text-red-700', TEAM: 'bg-red-50 text-red-700', FORTBILDUNG: 'bg-red-50 text-red-700', EINSCHULUNG: 'bg-red-50 text-red-700', MITARBEITERGESPRAECH: 'bg-red-50 text-red-700', SONSTIGES: 'bg-red-50 text-red-700', SUPERVISION: 'bg-red-50 text-red-700' }
 
     return (
         <div>

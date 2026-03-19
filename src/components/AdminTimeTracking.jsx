@@ -471,7 +471,7 @@ export default function AdminTimeTracking() {
             return
         }
 
-        const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'TEAM']
+        const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION', 'TEAM']
 
         // Fetch all data needed for balance: shifts, interests, TEAM shifts, absences, entries, corrections
         const [shiftsRes, interestsRes, teamShiftsRes, absencesRes, entriesRes, corrsRes] = await Promise.all([

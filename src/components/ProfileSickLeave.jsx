@@ -16,6 +16,8 @@ const SHIFT_TYPE_SHORT = {
     EINSCHULUNG: 'Einschulung',
     MITARBEITERGESPRAECH: 'MA-Gespräch',
     SONSTIGES: 'Sonstiges',
+    SUPERVISION: 'SV',
+    AST: 'AST',
 }
 
 const SHIFT_TAG_COLORS = {
@@ -28,6 +30,8 @@ const SHIFT_TAG_COLORS = {
     EINSCHULUNG: 'bg-pink-100 text-pink-700',
     MITARBEITERGESPRAECH: 'bg-rose-100 text-rose-700',
     SONSTIGES: 'bg-gray-100 text-gray-600',
+    SUPERVISION: 'bg-violet-100 text-violet-800',
+    AST: 'bg-teal-100 text-teal-700',
 }
 
 export default function ProfileSickLeave() {

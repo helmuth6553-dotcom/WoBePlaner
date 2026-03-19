@@ -18,6 +18,8 @@ const SHIFT_TYPE_NAMES = {
     'EINSCHULUNG': 'Einschulungstermin',
     'MITARBEITERGESPRAECH': 'Mitarbeitergespräch',
     'SONSTIGES': 'Sonstiges',
+    'SUPERVISION': 'Supervision',
+    'AST': 'Anlaufstelle',
 }
 
 /**

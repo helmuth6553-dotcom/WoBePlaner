@@ -434,6 +434,7 @@ export const generateTimeReportPDF = ({
             FORTBILDUNG: 'Fortbild.',
             EINSCHULUNG: 'Einschul.',
             TEAMSITZUNG: 'Teamsitz.',
+            SUPERVISION: 'Supervis.',
         }
         let displayType = DIENST_LABELS[row.diensttyp?.toUpperCase()] || row.diensttyp
         if (displayType && displayType.length > 12) {

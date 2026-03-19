@@ -19,6 +19,7 @@ export const validateShiftRules = (targetShift, allAbsences, user, shifts) => {
     if (targetType === 'TAGDIENST' || targetType === 'TAG') targetType = 'TD1'
     if (targetType === 'NACHTDIENST' || targetType === 'NACHT') targetType = 'ND'
     if (targetType === 'DOPPEL') targetType = 'DBD'
+    if (targetType === 'ANLAUFSTELLE') targetType = 'AST'
 
     // Check Sick Leave
     const isSick = allAbsences.find(a =>
@@ -52,6 +53,12 @@ export const validateShiftRules = (targetShift, allAbsences, user, shifts) => {
     if (targetType === 'ND' && hasShift(targetDateStr, 'TD2')) return "ND und TD2 sind nicht kombinierbar."
     if (targetType === 'ND' && hasShift(targetDateStr, 'DBD')) return "ND und DBD sind nicht kombinierbar."
     if (targetType === 'DBD' && hasShift(targetDateStr, 'ND')) return "DBD und ND sind nicht kombinierbar."
+
+    // AST Konflikte (16:45-19:45 überlappt mit TD2 14:00-19:30 und ND 19:00+)
+    if (targetType === 'AST' && hasShift(targetDateStr, 'TD2')) return "AST und TD2 sind nicht kombinierbar."
+    if (targetType === 'TD2' && hasShift(targetDateStr, 'AST')) return "TD2 und AST sind nicht kombinierbar."
+    if (targetType === 'AST' && hasShift(targetDateStr, 'ND')) return "AST und ND sind nicht kombinierbar."
+    if (targetType === 'ND' && hasShift(targetDateStr, 'AST')) return "ND und AST sind nicht kombinierbar."
 
     // Rest Periods
     if (targetType === 'TD1') {

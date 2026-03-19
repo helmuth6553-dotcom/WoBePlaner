@@ -12,7 +12,7 @@ import { filterShiftsByStartDate } from '../utils/timeTrackingHelpers'
 
 // Shift types that support multiple participants (group events)
 // These are confirmed as soon as the user is registered, regardless of interest count
-const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'TEAM']
+const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION', 'TEAM']
 
 /**
  * Fetches all shifts for a user in a given month

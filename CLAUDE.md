@@ -83,6 +83,48 @@ Supabase Realtime channels are used in `App.jsx` for badge counts (absences, shi
 - `monthly_reports`: locked summaries with SHA-256 `data_hash` — do not modify time entries for a locked month without unlocking
 - `admin_actions`: append-only audit log — never delete rows
 
+## Neuen Diensttyp hinzufügen — Checkliste
+
+Es gibt zwei Kategorien: **regulär** (Slot-basiert, Einzelperson, wie TD1/ND/AST) und **spezial** (Karten-Layout, Multi-Teilnehmer, opt-in, wie FORTBILDUNG/SUPERVISION).
+
+### Immer (beide Kategorien)
+
+| # | Datei | Was |
+|---|---|---|
+| 1 | `src/contexts/ShiftTemplateContext.jsx` | Template in `SHIFT_TEMPLATES` Array |
+| 2 | `src/utils/balanceHelpers.js` | `SHIFT_TYPE_KEYS` Array + ggf. `normalizeShiftType` Alias |
+| 3 | `src/utils/shiftDefaults.js` | Standardzeiten (if-Block) |
+| 4 | `src/components/ProfileStats.jsx` | `SHIFT_TYPE_LABELS` + `SHIFT_TYPE_COLORS` |
+| 5 | `src/components/ProfileSickLeave.jsx` | `SHIFT_TYPE_SHORT` + `SHIFT_TAG_COLORS` |
+| 6 | `src/utils/calendarExport.js` | `SHIFT_TYPE_NAMES` |
+| 7 | `src/utils/pdfGenerator.js` | `PDF_DIENST_LABELS` (Kurzlabel für >8 Zeichen) |
+| 8 | `src/utils/timeReportPdfGenerator.js` | `DIENST_LABELS` (Kurzlabel für Zeitbericht-PDF) |
+| 9 | `src/components/admin/AdminOverview.jsx` | `shiftHours`, `sickHours`, `shiftLabels`, `shiftColors`, `sickColors` Objekte |
+
+### Nur reguläre Typen (wie TD1, ND, AST)
+
+| # | Datei | Was |
+|---|---|---|
+| 10 | `src/components/DayCard.jsx` | `getShiftForSlot()` Case + `renderShiftRow()` Aufruf + Coverage-Voting Array + Add-Menü Array |
+| 11 | `src/utils/rosterRules.js` | Konfliktregel (z.B. AST+ND nicht kombinierbar) |
+| 12 | `src/utils/coverageEligibility.js` | Coverage-Konflikte |
+
+### Nur speziale Typen (wie FORTBILDUNG, SUPERVISION)
+
+| # | Datei | Was |
+|---|---|---|
+| 10 | `src/components/DayCard.jsx` | `specialTypes` Arrays (2×), `SPECIAL_EVENT_CONFIG`, `SPECIAL_TYPES`, `isSpecialOptIn`, `specialLabel` im Add-Menü |
+| 11 | `src/hooks/useShifts.js` | `GROUP_SHIFT_TYPES` |
+| 12 | `src/components/TimeTracking.jsx` | `GROUP_SHIFT_TYPES` |
+| 13 | `src/components/AdminTimeTracking.jsx` | `GROUP_SHIFT_TYPES` |
+| 14 | `src/components/admin/AdminOverview.jsx` | `SPECIAL_TYPES` + alle Inline-Arrays mit Spezialtypen |
+
+### Verifikation
+
+1. `npm run build` — keine Fehler
+2. `npm test` — alle Tests grün
+3. Manuell: Admin "+" Button, Stundenberechnung, Zeiterfassung, Profil Statistik, AdminOverview, PDF-Export
+
 ## Feature flags
 
 ```js

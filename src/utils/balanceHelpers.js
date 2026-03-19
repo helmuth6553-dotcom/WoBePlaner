@@ -2,7 +2,7 @@ import { startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, subDays, isSame
 import { calculateWorkHours, calculateDailyAbsenceHours, processInterruptions } from './timeCalculations'
 import { getHolidays, isHoliday } from './holidays'
 
-const SHIFT_TYPE_KEYS = ['TD', 'TD1', 'TD2', 'ND', 'DBD', 'TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
+const SHIFT_TYPE_KEYS = ['TD', 'TD1', 'TD2', 'ND', 'DBD', 'AST', 'TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
 
 const normalizeShiftType = (type) => {
     if (!type) return null
@@ -11,6 +11,7 @@ const normalizeShiftType = (type) => {
     if (up === 'TAGDIENST') return 'TD1'
     if (up === 'DOPPELDIENST') return 'DBD'
     if (up === 'TEAMSITZUNG') return 'TEAM'
+    if (up === 'ANLAUFSTELLE') return 'AST'
     return SHIFT_TYPE_KEYS.includes(up) ? up : null
 }
 

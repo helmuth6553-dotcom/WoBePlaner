@@ -74,7 +74,23 @@ export function checkEligibility(targetShift, userId, sickUserId, userShifts, ab
         return { eligible: false, reason: 'ND und DBD nicht kombinierbar' }
     }
 
-    // 6. ND yesterday -> no TD1 today (rest period)
+    // 6. AST + TD2 same day: NOT allowed (overlap 16:45-19:30)
+    if (targetType === 'AST' && myShiftsToday.some(s => s.type?.toUpperCase() === 'TD2')) {
+        return { eligible: false, reason: 'AST und TD2 nicht kombinierbar' }
+    }
+    if (targetType === 'TD2' && myShiftsToday.some(s => s.type?.toUpperCase() === 'AST')) {
+        return { eligible: false, reason: 'TD2 und AST nicht kombinierbar' }
+    }
+
+    // 7. AST + ND same day: NOT allowed (overlap 19:00-19:45)
+    if (targetType === 'AST' && myShiftsToday.some(s => s.type?.toUpperCase() === 'ND')) {
+        return { eligible: false, reason: 'AST und ND nicht kombinierbar' }
+    }
+    if (targetType === 'ND' && myShiftsToday.some(s => s.type?.toUpperCase() === 'AST')) {
+        return { eligible: false, reason: 'ND und AST nicht kombinierbar' }
+    }
+
+    // 8. ND yesterday -> no TD1 today (rest period)
     if (targetType === 'TD1') {
         const yesterday = new Date(targetDate)
         yesterday.setDate(yesterday.getDate() - 1)

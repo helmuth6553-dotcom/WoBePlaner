@@ -124,11 +124,25 @@ export const getDefaultTimes = (dateStr, type, holidays = []) => {
         end = createLocalTime(dateStr, 11, 0)
     }
 
-    // 9. SONSTIGES
+    // 9. AST (Anlaufstelle)
+    if (type === 'AST') {
+        // 16:45 - 19:45
+        start = createLocalTime(dateStr, 16, 45)
+        end = createLocalTime(dateStr, 19, 45)
+    }
+
+    // 10. SONSTIGES
     if (type === 'SONSTIGES') {
         // 10:00 - 11:00
         start = createLocalTime(dateStr, 10, 0)
         end = createLocalTime(dateStr, 11, 0)
+    }
+
+    // 11. SUPERVISION
+    if (type === 'SUPERVISION') {
+        // 09:00 - 10:30
+        start = createLocalTime(dateStr, 9, 0)
+        end = createLocalTime(dateStr, 10, 30)
     }
 
     return { start, end }

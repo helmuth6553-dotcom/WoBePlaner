@@ -19,6 +19,9 @@ const SHIFT_TYPE_LABELS = {
     FORTBILDUNG: 'Fortbildung',
     EINSCHULUNG: 'Einschulung',
     MITARBEITERGESPRAECH: 'MA-Gespräch',
+    SONSTIGES: 'Sonstiges',
+    SUPERVISION: 'Supervision',
+    AST: 'Anlaufstelle',
 }
 
 const SHIFT_TYPE_COLORS = {
@@ -31,6 +34,9 @@ const SHIFT_TYPE_COLORS = {
     FORTBILDUNG: 'bg-fuchsia-100 text-fuchsia-700',
     EINSCHULUNG: 'bg-pink-100 text-pink-700',
     MITARBEITERGESPRAECH: 'bg-emerald-100 text-emerald-700',
+    SONSTIGES: 'bg-gray-100 text-gray-700',
+    SUPERVISION: 'bg-violet-100 text-violet-800',
+    AST: 'bg-teal-100 text-teal-700',
 }
 
 const ABSENCE_TYPE_COLORS = {
