@@ -4,6 +4,7 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, su
 import { de } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, ChevronDown, ChevronUp, Layers, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { calculateWorkHours, processInterruptions } from '../../utils/timeCalculations'
+import { calculateGenericBalance } from '../../utils/balanceHelpers'
 import { getHolidays, isHoliday } from '../../utils/holidays'
 import { calculateAllFairnessIndices } from '../../utils/fairnessIndex'
 import { eachDayOfInterval, isWeekend, getDay, differenceInDays, getYear } from 'date-fns'
@@ -138,19 +139,21 @@ export default function AdminOverview() {
         const startDateStr = format(start, 'yyyy-MM-dd')
         const endDateStr = format(end, 'yyyy-MM-dd')
 
-        const [shiftsRes, profilesRes, entriesRes, absencesRes, interestsRes, logsRes] = await Promise.all([
+        const [shiftsRes, profilesRes, entriesRes, absencesRes, interestsRes, logsRes, correctionsRes] = await Promise.all([
             supabase.from('shifts').select('*').gte('start_time', startStr).lte('start_time', endStr),
-            supabase.from('profiles').select('id, weekly_hours, role, full_name, display_name, email').or('is_active.eq.true,is_active.is.null'),
+            supabase.from('profiles').select('id, weekly_hours, role, full_name, display_name, email, start_date, created_at, initial_balance').or('is_active.eq.true,is_active.is.null'),
             supabase.from('time_entries').select('*, shifts(*)').gte('actual_start', startStr).lte('actual_start', endStr),
             supabase.from('absences').select('*').eq('status', 'genehmigt').lte('start_date', endDateStr).gte('end_date', startDateStr),
             supabase.from('shift_interests').select('*, shifts(*)'),
-            supabase.from('shift_logs').select('*, shift:shifts(start_time)')
+            supabase.from('shift_logs').select('*, shift:shifts(start_time)'),
+            supabase.from('balance_corrections').select('*')
         ])
 
         const shifts = shiftsRes.data
         const profiles = profilesRes.data
         const entries = entriesRes.data
         const absences = absencesRes.data
+        const corrections = correctionsRes.data || []
 
         const monthInterests = interestsRes.data?.filter(i => {
             if (!i.shifts?.start_time) return false
@@ -220,55 +223,11 @@ export default function AdminOverview() {
             totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * monthInterests.filter(i => i.shift_id === s.id).length
         })
 
-        // Soll
+        // Soll & holidays (for vacation detail calculations)
         const daysInMonth = eachDayOfInterval({ start, end })
         const holidays = getHolidays(getYear(start))
-        const workingDays = daysInMonth.filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
-        const weeksInMonth = workingDays / 5
-        let totalSollHours = 0
-        employees.forEach(emp => { totalSollHours += (emp.weekly_hours || 40) * weeksInMonth })
+        let totalSollHours = 0 // Will be derived from per-employee calculateGenericBalance results
 
-        const isTeamShiftOnAbsenceDay = (shift, userId) => {
-            if (shift.type?.toUpperCase() !== 'TEAM') return false
-            const dateKey = new Date(shift.start_time).toISOString().split('T')[0]
-            return allAbsenceDaysByUser[userId]?.has(dateKey) || false
-        }
-
-        // Helper: who is assigned to a shift?
-        const getShiftUserId = (shift) => {
-            if (shift.assigned_to) return shift.assigned_to
-            const interest = monthInterests.find(i => i.shift_id === shift.id)
-            return interest?.user_id || null
-        }
-
-        // TD1+TD2 merged detection — shifts-based
-        const mergedShiftIds = new Set()
-        const shiftsByUserDate = {}
-        shifts?.forEach(s => {
-            const type = s.type?.toUpperCase()
-            if (type !== 'TD1' && type !== 'TD2') return
-            const userId = getShiftUserId(s)
-            if (!userId) return
-            const key = `${userId}_${new Date(s.start_time).toISOString().split('T')[0]}`
-            if (!shiftsByUserDate[key]) shiftsByUserDate[key] = []
-            shiftsByUserDate[key].push(s)
-        })
-        Object.entries(shiftsByUserDate).forEach(([key, day]) => {
-            const userId = key.split('_')[0]
-            const td1 = day.find(s => s.type?.toUpperCase() === 'TD1')
-            const td2 = day.find(s => s.type?.toUpperCase() === 'TD2')
-            if (td1 && td2) {
-                const e1 = entryMap[td1.id]?.[userId], e2 = entryMap[td2.id]?.[userId]
-                const bothTracked = e1 && e2 && e1.actual_start === e2.actual_start && e1.actual_end === e2.actual_end
-                const neitherTracked = !e1 && !e2
-                if (bothTracked || neitherTracked) {
-                    mergedShiftIds.add(td1.id)
-                    mergedShiftIds.add(td2.id)
-                }
-            }
-        })
-
-        // Top-level shiftHours will be aggregated from per-employee stats (see below)
         const SPECIAL_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES']
 
         // Sick
@@ -323,120 +282,49 @@ export default function AdminOverview() {
 
         const totalSickHours = Object.values(sickHours).reduce((a, b) => a + b, 0)
 
-        // Per-employee
+        // Per-employee — uses calculateGenericBalance as Single Source of Truth
         const empStats = employees.map(emp => {
             const wh = emp.weekly_hours || 40
-            const empSoll = wh * weeksInMonth
-            let worked = 0
-            const empShiftHours = { TD: 0, TD1: 0, TD2: 0, ND: 0, DBD: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0 }
 
-            // TD1+TD2 merge detection per employee (wie balanceHelpers)
-            const mergedEntryIds = new Set()
-            const entryByDate = {}
-            entries?.forEach(e => {
-                if (e.user_id !== emp.id || !e.shifts?.type) return
-                const t = e.shifts.type.toUpperCase()
-                if (t !== 'TD1' && t !== 'TD2') return
-                const dateKey = new Date(e.shifts.start_time).toISOString().split('T')[0]
-                if (!entryByDate[dateKey]) entryByDate[dateKey] = {}
-                entryByDate[dateKey][t] = e
-            })
-            Object.values(entryByDate).forEach(day => {
-                if (day.TD1 && day.TD2
-                    && day.TD1.actual_start === day.TD2.actual_start
-                    && day.TD1.actual_end === day.TD2.actual_end) {
-                    mergedEntryIds.add(day.TD2.id)  // Skip TD2, count TD1 as merged "TD"
-                }
-            })
-
-            // Schritt 1: Entries-first (tatsächlich gearbeitete Stunden — user_id ist 100% zuverlässig)
-            const countedShiftIds = new Set()
-            entries?.forEach(e => {
-                if (e.user_id !== emp.id || !e.calculated_hours || !e.shifts?.type) return
-                if (mergedEntryIds.has(e.id)) return  // Skip merged TD2
-                // Nur Entries deren Shift in diesem Monat startet (wie balanceHelpers/isSameMonth)
-                const shiftStart = new Date(e.shifts.start_time)
-                if (shiftStart < start || shiftStart > end) return
-                let type = e.shifts.type.toUpperCase()
-                if (!Object.hasOwn(empShiftHours, type)) return
-                if (type === 'TEAM' && isTeamShiftOnAbsenceDay(e.shifts, emp.id)) return
-                // Merged TD1 → categorize as TD
-                const dateKey = shiftStart.toISOString().split('T')[0]
-                if (type === 'TD1' && entryByDate[dateKey]?.TD2 && mergedEntryIds.has(entryByDate[dateKey].TD2.id)) {
-                    type = 'TD'
-                }
-                const hours = Number(e.calculated_hours) || 0
-                empShiftHours[type] += hours
-                worked += hours
-                if (e.shift_id) countedShiftIds.add(e.shift_id)
-                // Also mark the merged TD2's shift as counted
-                if (type === 'TD' && entryByDate[dateKey]?.TD2?.shift_id) {
-                    countedShiftIds.add(entryByDate[dateKey].TD2.shift_id)
-                }
-            })
-
-            // Schritt 2: Shifts-supplement (geplante Schichten ohne Entry — noch nicht gearbeitet)
-            shifts?.forEach(s => {
-                if (countedShiftIds.has(s.id)) return
+            // Build employee's shift list (same assignment logic as before)
+            const empShifts = shifts?.filter(s => {
                 const type = s.type?.toUpperCase()
-                if (!Object.hasOwn(empShiftHours, type)) return
-
-                let isAssigned = false
-                if (type === 'TEAM') {
-                    if (isTeamShiftOnAbsenceDay(s, emp.id)) return
-                    isAssigned = true
-                } else if (SPECIAL_TYPES.includes(type)) {
-                    isAssigned = monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
-                } else {
-                    isAssigned = s.assigned_to === emp.id
-                        || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
+                if (type === 'TEAM') return true // TEAM for everyone (absence exclusion handled by calculateGenericBalance)
+                if (SPECIAL_TYPES.includes(type)) {
+                    return monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
                 }
-                if (!isAssigned) return
+                return s.assigned_to === emp.id
+                    || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
+            }) || []
 
-                const hours = calculateWorkHours(s.start_time, s.end_time, s.type)
-                empShiftHours[type] += hours
-                worked += hours
-            })
+            const empAbsences = absences?.filter(a => a.user_id === emp.id) || []
+            const empEntries = entries?.filter(e => e.user_id === emp.id) || []
+            const empCorrections = corrections?.filter(c => c.user_id === emp.id) || []
 
-            // TD1+TD2 Handover-Overlap abziehen (für geplante Paare ohne time_entries)
-            const supplementByDate = {}
-            shifts?.forEach(s => {
-                if (countedShiftIds.has(s.id)) return
-                const type = s.type?.toUpperCase()
-                if (type !== 'TD1' && type !== 'TD2' && type !== 'TAGDIENST') return
-                const isAssigned = SPECIAL_TYPES.includes(type)
-                    ? monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
-                    : s.assigned_to === emp.id || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
-                if (!isAssigned) return
-                const effType = (type === 'TAGDIENST') ? 'TD1' : type
-                const dateKey = new Date(s.start_time).toISOString().split('T')[0]
-                if (!supplementByDate[dateKey]) supplementByDate[dateKey] = {}
-                supplementByDate[dateKey][effType] = s
-            })
-            Object.values(supplementByDate).forEach(day => {
-                if (day.TD1 && day.TD2) {
-                    const overlapMs = Math.max(0, new Date(day.TD1.end_time) - new Date(day.TD2.start_time))
-                    const overlapHours = overlapMs / (1000 * 60 * 60)
-                    worked -= overlapHours
-                    empShiftHours.TD2 = (empShiftHours.TD2 || 0) - overlapHours
-                }
-            })
+            // Call calculateGenericBalance with detailed mode — Single Source of Truth
+            const b = calculateGenericBalance(
+                emp, empShifts, empAbsences, empEntries, monthDate, empCorrections, { detailed: true }
+            )
 
-            let empSick = 0, empSickCount = 0
-            absences?.forEach(abs => {
-                if (abs.user_id !== emp.id || (abs.type !== 'Krank' && abs.type !== 'Krankenstand')) return
-                empSickCount++
-                abs.planned_shifts_snapshot?.forEach(s => { empSick += calculateWorkHours(s.start_time, s.end_time, s.type) })
-            })
+            // Map detailed shiftTypeHours { TD: { hours, count } } → flat { TD: hours }
+            const flatShiftHours = {}
+            if (b?.shiftTypeHours) {
+                Object.entries(b.shiftTypeHours).forEach(([k, v]) => { flatShiftHours[k] = v.hours })
+            }
 
-            let empVac = 0, empVacDays = 0, leadTime = 0, vacCount = 0, maxBlock = 0, bridgeDays = 0
+            // Operative metrics (NOT part of hour calculation, remain local)
+            let empFlex = 0
+            urgentShifts.forEach(s => { if (monthInterests.find(i => i.shift_id === s.id && i.user_id === emp.id)) empFlex++ })
+            let empSwap = 0
+            monthSwaps.forEach(sw => { if (sw.new_user_id === emp.id || sw.old_user_id === emp.id) empSwap++ })
+
+            // Vacation detail stats (display metrics, not hour calculation)
+            let empVacDays = 0, leadTime = 0, vacCount = 0, maxBlock = 0, bridgeDays = 0
             absences?.forEach(abs => {
                 if (abs.user_id !== emp.id || abs.type !== 'Urlaub') return
                 const s0 = new Date(abs.start_date) < start ? start : new Date(abs.start_date)
                 const e0 = new Date(abs.end_date) > end ? end : new Date(abs.end_date)
                 if (s0 <= e0) {
-                    const vwd = eachDayOfInterval({ start: s0, end: e0 }).filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
-                    empVac += vwd * (wh / 5)
                     const full = eachDayOfInterval({ start: new Date(abs.start_date), end: new Date(abs.end_date) })
                     const net = full.filter(d => !isWeekend(d) && !isHoliday(d, holidays))
                     empVacDays += net.length
@@ -447,40 +335,45 @@ export default function AdminOverview() {
                 }
             })
 
-            let empFlex = 0
-            urgentShifts.forEach(s => { if (monthInterests.find(i => i.shift_id === s.id && i.user_id === emp.id)) empFlex++ })
-            let empSwap = 0
-            monthSwaps.forEach(sw => { if (sw.new_user_id === emp.id || sw.old_user_id === emp.id) empSwap++ })
+            const workedHours = b ? (b.actual - b.correction) : 0
+            const sickHours = b?.absenceBreakdown?.Krank?.hours || 0
+            const vacationHours = b ? b.vacation : 0
+            const istHours = workedHours + sickHours + vacationHours
 
-            const empIst = worked + empSick + empVac
             return {
                 id: emp.id, name: emp.display_name || emp.full_name || emp.email || 'Unbekannt',
-                weeklyHours: wh, sollHours: Math.round(empSoll),
-                workedHours: Math.round(worked * 100) / 100, sickHours: Math.round(empSick * 100) / 100,
-                vacationHours: Math.round(empVac * 100) / 100, istHours: Math.round(empIst * 100) / 100,
-                puffer: Math.round((empIst - empSoll) * 100) / 100, sickCount: empSickCount,
+                weeklyHours: wh, sollHours: b ? b.target : 0,
+                workedHours: Math.round(workedHours * 100) / 100,
+                sickHours: Math.round(sickHours * 100) / 100,
+                vacationHours: Math.round(vacationHours * 100) / 100,
+                istHours: Math.round(istHours * 100) / 100,
+                puffer: b ? b.total : 0, // Gesamt-Puffer inkl. Carryover
+                sickCount: empAbsences.filter(a => a.type === 'Krank' || a.type === 'Krankenstand').length,
                 flexCount: empFlex, swapCount: empSwap,
-                nightShiftCount: shifts?.filter(s => s.type === 'ND' && (s.assigned_to === emp.id || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id))).length || 0,
-                weekendShiftCount: shifts?.filter(s => { const d = new Date(s.start_time); return (d.getDay() === 0 || d.getDay() === 6) && (s.assigned_to === emp.id || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)) }).length || 0,
-                dbdCount: shifts?.filter(s => s.type === 'DBD' && (s.assigned_to === emp.id || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id))).length || 0,
-                interruptionCount: entries?.reduce((c, e) => e.user_id === emp.id && e.interruptions?.length ? c + e.interruptions.length : c, 0) || 0,
-                trainingHours: Math.round(monthInterests.filter(i => i.user_id === emp.id && i.shifts?.type === 'FORTBILDUNG').reduce((s, i) => s + calculateWorkHours(i.shifts.start_time, i.shifts.end_time, i.shifts.type), 0) * 100) / 100,
+                nightShiftCount: empShifts.filter(s => s.type === 'ND').length,
+                weekendShiftCount: empShifts.filter(s => { const d = new Date(s.start_time); return d.getDay() === 0 || d.getDay() === 6 }).length,
+                dbdCount: empShifts.filter(s => s.type === 'DBD').length,
+                interruptionCount: b?.interruptions?.count || 0,
+                trainingHours: flatShiftHours.FORTBILDUNG || 0,
                 vacationDaysNet: empVacDays,
                 avgLeadTime: vacCount > 0 ? Math.round(leadTime / vacCount) : 0,
                 longestVacationBlock: maxBlock,
                 bridgeDayRatio: empVacDays > 0 ? Math.round((bridgeDays / empVacDays) * 100) : 0,
-                shiftTypeHours: empShiftHours
+                shiftTypeHours: flatShiftHours
             }
         })
 
-        // Aggregate top-level shiftHours from per-employee stats (guaranteed consistency)
+        // Aggregate top-level stats from per-employee results (Single Source of Truth)
         empStats.forEach(emp => {
             Object.entries(emp.shiftTypeHours).forEach(([type, hours]) => {
                 if (Object.hasOwn(shiftHours, type)) shiftHours[type] += hours
             })
         })
         const totalWorkedHours = Object.values(shiftHours).reduce((a, b) => a + b, 0)
-        const totalIstHours = totalWorkedHours + totalSickHours + totalVacationHours
+        // Derive team totals from per-employee stats (consistent with calculateGenericBalance)
+        totalSollHours = empStats.reduce((sum, e) => sum + e.sollHours, 0)
+        totalVacationHours = empStats.reduce((sum, e) => sum + e.vacationHours, 0)
+        const totalIstHours = empStats.reduce((sum, e) => sum + e.istHours, 0)
 
         return {
             stats: {
