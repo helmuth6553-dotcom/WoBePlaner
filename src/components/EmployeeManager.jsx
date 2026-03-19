@@ -100,7 +100,7 @@ export default function EmployeeManager({ isOpen, onClose, onUpdate }) {
                                     </td>
                                     <td className="p-3 text-right">
                                         {editingId === p.id ? (
-                                            <button onClick={saveEdit} className="p-2 bg-black text-white rounded-lg hover:bg-gray-800 shadow-sm transition-all"><Check size={16} /></button>
+                                            <button onClick={saveEdit} className="p-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 shadow-sm transition-all"><Check size={16} /></button>
                                         ) : (
                                             <button onClick={() => startEdit(p)} className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all"><Edit2 size={16} /></button>
                                         )}

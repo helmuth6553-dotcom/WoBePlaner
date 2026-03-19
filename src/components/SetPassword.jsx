@@ -153,7 +153,7 @@ export default function SetPassword({ user, onPasswordSet }) {
                     <div className="text-center">
                         <button
                             onClick={() => setStep('privacy')}
-                            className="bg-black text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-gray-800 transition-all flex items-center gap-2 mx-auto hover:scale-105 active:scale-95 shadow-lg shadow-gray-200"
+                            className="bg-teal-500 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-teal-600 transition-all flex items-center gap-2 mx-auto hover:scale-105 active:scale-95 shadow-lg shadow-teal-200"
                         >
                             Weiter <ArrowRight size={20} />
                         </button>
@@ -295,7 +295,7 @@ export default function SetPassword({ user, onPasswordSet }) {
                     <div className="text-center">
                         <button
                             onClick={() => setStep('password')}
-                            className="bg-black text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all flex items-center gap-2 mx-auto"
+                            className="bg-teal-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-teal-600 transition-all flex items-center gap-2 mx-auto"
                         >
                             Verstanden, weiter <ArrowRight size={18} />
                         </button>
@@ -374,7 +374,7 @@ export default function SetPassword({ user, onPasswordSet }) {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-black text-white p-3.5 rounded-xl font-bold hover:bg-gray-800 transition-all disabled:opacity-50 mt-4 flex items-center justify-center gap-2"
+                        className="w-full bg-teal-500 text-white p-3.5 rounded-xl font-bold hover:bg-teal-600 transition-all disabled:opacity-50 mt-4 flex items-center justify-center gap-2"
                     >
                         {loading ? (
                             <>

@@ -81,7 +81,7 @@ export default function MonthSettingsModal({ isOpen, onClose, year, month, isOpe
                     </button>
                     <button
                         onClick={handleSave}
-                        className="flex-1 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-colors shadow-lg"
+                        className="flex-1 py-3 bg-teal-500 text-white rounded-xl font-bold hover:bg-teal-600 transition-colors shadow-lg"
                     >
                         Speichern
                     </button>

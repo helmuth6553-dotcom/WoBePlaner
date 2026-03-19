@@ -320,7 +320,7 @@ export default function AdminEmployees() {
                 <h2 className="text-xl font-bold">Personen</h2>
                 <button
                     onClick={() => { setShowInviteModal(true); setEditingUser(null); }}
-                    className="bg-black text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-gray-800 transition-colors shadow-sm"
+                    className="bg-teal-500 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-teal-600 transition-colors shadow-sm"
                 >
                     <Plus size={16} /> Neu
                 </button>
@@ -529,7 +529,7 @@ export default function AdminEmployees() {
                             </button>
                             <button
                                 onClick={editingUser ? handleUpdateUser : initiateInvite}
-                                className="flex-1 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2"
+                                className="flex-1 py-3 rounded-xl bg-teal-500 text-white font-bold hover:bg-teal-600 disabled:opacity-50 flex items-center justify-center gap-2"
                                 disabled={isCreatingUser}
                             >
                                 {isCreatingUser ? (
@@ -606,7 +606,7 @@ export default function AdminEmployees() {
                                 </button>
                                 <button
                                     onClick={verifyPasswordAndInvite}
-                                    className="flex-1 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800"
+                                    className="flex-1 py-3 rounded-xl bg-teal-500 text-white font-bold hover:bg-teal-600"
                                 >
                                     Bestätigen
                                 </button>

@@ -1030,7 +1030,7 @@ export default function AdminOverview() {
                                     <div className="flex flex-wrap gap-1.5 mb-2">
                                         {[{ key: 'total', label: 'Gesamt' }, { key: 'krank', label: 'Krank' }, { key: 'urlaub', label: 'Urlaub' }, ...shiftTypeConfig.filter(t => employeeStats.some(e => (e.shiftTypeHours?.[t.key] || 0) > 0))].map(t => (
                                             <button key={t.key} onClick={() => setProfilSort(t.key)}
-                                                className={`text-[9px] font-bold px-2 py-0.5 rounded-md border transition-all ${profilSort === t.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-transparent text-gray-400 border-gray-200 hover:bg-gray-50'}`}>
+                                                className={`text-[9px] font-bold px-2 py-0.5 rounded-md border transition-all ${profilSort === t.key ? 'bg-teal-500 text-white border-teal-500' : 'bg-transparent text-gray-400 border-gray-200 hover:bg-gray-50'}`}>
                                                 {t.label}
                                             </button>
                                         ))}

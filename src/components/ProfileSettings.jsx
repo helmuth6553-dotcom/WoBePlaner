@@ -114,7 +114,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
                 <button
                     onClick={updateProfile}
                     disabled={loading}
-                    className="w-full bg-black text-white p-3 rounded-xl hover:bg-gray-800 disabled:opacity-50 font-bold flex items-center justify-center gap-2"
+                    className="w-full bg-teal-500 text-white p-3 rounded-xl hover:bg-teal-600 disabled:opacity-50 font-bold flex items-center justify-center gap-2"
                 >
                     <Save size={20} /> Speichern
                 </button>
@@ -140,7 +140,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
                     <button
                         onClick={updatePassword}
                         disabled={loading || !password}
-                        className="bg-gray-900 text-white p-3 rounded-xl hover:bg-black disabled:opacity-50"
+                        className="bg-teal-500 text-white p-3 rounded-xl hover:bg-teal-600 disabled:opacity-50"
                     >
                         Setzen
                     </button>

@@ -269,7 +269,7 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
                                     <button
                                         onClick={addInterruption}
                                         disabled={!isValidInterruptionTime(formData.newIntStart, formData.newIntEnd)}
-                                        className={`w-full text-white px-4 py-2.5 rounded-lg font-bold transition-all ${isValidInterruptionTime(formData.newIntStart, formData.newIntEnd) ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed opacity-50'}`}
+                                        className={`w-full text-white px-4 py-2.5 rounded-lg font-bold transition-all ${isValidInterruptionTime(formData.newIntStart, formData.newIntEnd) ? 'bg-teal-500 hover:bg-teal-600' : 'bg-gray-300 cursor-not-allowed opacity-50'}`}
                                     >
                                         Unterbrechung hinzufügen
                                     </button>
@@ -304,7 +304,7 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
                     {!isApproved && (
                         <button
                             onClick={handleSave}
-                            className="flex-1 py-3 bg-black hover:bg-gray-900 text-white shadow-lg shadow-black/20 rounded-xl font-bold transition-all"
+                            className="flex-1 py-3 bg-teal-500 hover:bg-teal-600 text-white shadow-lg shadow-teal-500/20 rounded-xl font-bold transition-all"
                         >
                             Speichern
                         </button>

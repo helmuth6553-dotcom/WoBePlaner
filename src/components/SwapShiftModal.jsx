@@ -102,7 +102,7 @@ export default function SwapShiftModal({ isOpen, onClose, shift, onSwap, current
                             </button>
                             <button
                                 onClick={handleConfirm}
-                                className="flex-1 py-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800 flex items-center justify-center gap-2"
+                                className="flex-1 py-3 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 flex items-center justify-center gap-2"
                             >
                                 <Check size={18} /> Ja, Tausch bestätigen
                             </button>

@@ -1157,7 +1157,7 @@ export default function TimeTracking() {
                                     )
                                 })()}
                                 {!isLocked && !isAbsence && (
-                                    <button onClick={() => setEditingItem(item)} className={`w-full py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${isDone ? 'bg-gray-800 text-white hover:bg-black' : entry ? 'bg-gray-800 text-white hover:bg-black' : 'bg-[#00c2cb] text-white hover:bg-[#00b3bb] shadow-lg'}`}>
+                                    <button onClick={() => setEditingItem(item)} className={`w-full py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${isDone ? 'bg-teal-500 text-white hover:bg-teal-600' : entry ? 'bg-teal-500 text-white hover:bg-teal-600' : 'bg-teal-500 text-white hover:bg-teal-600 shadow-lg'}`}>
                                         {isDone ? 'Bearbeiten' : <>{entry ? 'Bearbeiten' : 'Zeit Bestätigen'} <ChevronRight size={16} /></>}
                                     </button>
                                 )}
@@ -1173,7 +1173,7 @@ export default function TimeTracking() {
                     <button
                         disabled={!allItemsDone}
                         onClick={() => setIsSubmitModalOpen(true)}
-                        className={`pointer-events-auto shadow-2xl px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 transition-all transform active:scale-95 ${allItemsDone ? 'bg-black text-white hover:bg-gray-900 border-2 border-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        className={`pointer-events-auto shadow-2xl px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 transition-all transform active:scale-95 ${allItemsDone ? 'bg-indigo-600 text-white hover:bg-indigo-700 border-2 border-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             }`}
                     >
                         <Save size={20} /> {allItemsDone ? 'Monat abschließen & Signieren' : 'Erst alle Tage erfassen'}
@@ -1193,7 +1193,7 @@ export default function TimeTracking() {
                         </div>
                         <div className="flex gap-3">
                             <button onClick={() => setIsSubmitModalOpen(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold">Abbrechen</button>
-                            <button onClick={handleSubmitMonth} disabled={!password || isSubmitting} className="flex-1 py-3 bg-black text-white rounded-xl font-bold">{isSubmitting ? '...' : 'Signieren'}</button>
+                            <button onClick={handleSubmitMonth} disabled={!password || isSubmitting} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold disabled:opacity-50">{isSubmitting ? '...' : 'Signieren'}</button>
                         </div>
                     </div>
                 </div>
@@ -1345,7 +1345,7 @@ export default function TimeTracking() {
                                                         }
                                                     }}
                                                     disabled={!isValidInterruptionTime(formData.newIntStart, formData.newIntEnd)}
-                                                    className={`w-full text-white px-4 py-2.5 rounded-lg font-bold transition-all ${isValidInterruptionTime(formData.newIntStart, formData.newIntEnd) ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed opacity-50'}`}
+                                                    className={`w-full text-white px-4 py-2.5 rounded-lg font-bold transition-all ${isValidInterruptionTime(formData.newIntStart, formData.newIntEnd) ? 'bg-teal-500 hover:bg-teal-600' : 'bg-gray-300 cursor-not-allowed opacity-50'}`}
                                                 >
                                                     Unterbrechung hinzufügen
                                                 </button>
@@ -1368,7 +1368,7 @@ export default function TimeTracking() {
                             </div>
                             <div className="flex gap-3 mt-6">
                                 <button onClick={() => setEditingItem(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors">Abbrechen</button>
-                                {!isApproved && <button onClick={handleSave} className="flex-1 py-3 bg-black hover:bg-gray-900 text-white shadow-lg shadow-black/20 rounded-xl font-bold transition-all">Speichern</button>}
+                                {!isApproved && <button onClick={handleSave} className="flex-1 py-3 bg-teal-500 hover:bg-teal-600 text-white shadow-lg shadow-teal-500/20 rounded-xl font-bold transition-all">Speichern</button>}
                             </div>
                         </div>
                     </div>

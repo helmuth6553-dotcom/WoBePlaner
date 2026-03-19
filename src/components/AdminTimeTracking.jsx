@@ -988,7 +988,7 @@ export default function AdminTimeTracking() {
                         )}
                     </div>
                     <div className="flex gap-2">
-                        {userMonthStatus.status === 'eingereicht' && <button onClick={handleFinalizeMonth} className="flex-1 bg-black text-white py-2 rounded-lg font-bold">Genehmigen</button>}
+                        {userMonthStatus.status === 'eingereicht' && <button onClick={handleFinalizeMonth} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold">Genehmigen</button>}
                         {userMonthStatus.status === 'eingereicht' && <button onClick={handleReopenMonth} className="px-4 border border-red-200 text-red-600 rounded-lg"><XCircle /></button>}
                         {userMonthStatus.status === 'genehmigt' && <button onClick={() => generatePDF(true)} className="flex-1 border bg-white py-2 rounded-lg font-bold flex justify-center gap-2"><Download size={18} /> PDF</button>}
                     </div>
@@ -1457,7 +1457,7 @@ export default function AdminTimeTracking() {
                                                 }
                                             }}
                                             disabled={!isValidInterruptionTime(formData.newIntStart, formData.newIntEnd)}
-                                            className={`w-full text-white px-4 py-2.5 rounded-lg font-bold transition-all ${isValidInterruptionTime(formData.newIntStart, formData.newIntEnd) ? 'bg-black hover:bg-gray-800' : 'bg-gray-300 cursor-not-allowed opacity-50'}`}
+                                            className={`w-full text-white px-4 py-2.5 rounded-lg font-bold transition-all ${isValidInterruptionTime(formData.newIntStart, formData.newIntEnd) ? 'bg-teal-500 hover:bg-teal-600' : 'bg-gray-300 cursor-not-allowed opacity-50'}`}
                                         >
                                             Unterbrechung hinzufügen
                                         </button>
@@ -1480,7 +1480,7 @@ export default function AdminTimeTracking() {
 
                         <div className="mt-6 flex gap-3">
                             <button onClick={() => setEditingEntry(null)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-xl">Abbrechen</button>
-                            <button onClick={handleApproveEntry} className="flex-1 py-3 bg-black text-white font-bold rounded-xl shadow-lg hover:bg-gray-800">Speichern</button>
+                            <button onClick={handleApproveEntry} className="flex-1 py-3 bg-teal-500 text-white font-bold rounded-xl shadow-lg hover:bg-teal-600">Speichern</button>
                         </div>
                     </div>
                 </div>

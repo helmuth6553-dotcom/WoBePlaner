@@ -400,10 +400,10 @@ export default function TimeTrackingV2() {
                                             setEditingItem(item)
                                         }}
                                         className={`w-full mt-3 py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${isDone
-                                                ? 'bg-gray-800 text-white hover:bg-black'
+                                                ? 'bg-teal-500 text-white hover:bg-teal-600'
                                                 : entry
-                                                    ? 'bg-gray-800 text-white hover:bg-black'
-                                                    : 'bg-[#00c2cb] text-white hover:bg-[#00b3bb] shadow-lg'
+                                                    ? 'bg-teal-500 text-white hover:bg-teal-600'
+                                                    : 'bg-teal-500 text-white hover:bg-teal-600 shadow-lg'
                                             }`}
                                     >
                                         {isDone ? 'Bearbeiten' : (
@@ -431,7 +431,7 @@ export default function TimeTrackingV2() {
                 <div className="fixed bottom-20 left-0 right-0 p-4 flex justify-center pointer-events-none z-[80]">
                     <button
                         onClick={() => setIsSubmitModalOpen(true)}
-                        className="pointer-events-auto shadow-2xl px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 bg-black text-white hover:bg-gray-900 border-2 border-white"
+                        className="pointer-events-auto shadow-2xl px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-3 bg-indigo-600 text-white hover:bg-indigo-700 border-2 border-white"
                     >
                         <Save size={20} /> Monat abschließen & Signieren
                     </button>
@@ -476,7 +476,7 @@ export default function TimeTrackingV2() {
                             <button
                                 onClick={handleSubmitMonth}
                                 disabled={!password || isSubmitting}
-                                className="flex-1 py-3 bg-black text-white rounded-xl font-bold disabled:opacity-50"
+                                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold disabled:opacity-50"
                             >
                                 {isSubmitting ? '...' : 'Signieren'}
                             </button>

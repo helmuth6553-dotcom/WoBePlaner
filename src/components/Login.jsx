@@ -81,7 +81,7 @@ export default function Login() {
 
                     <button
                         disabled={loading}
-                        className="w-full bg-black text-white p-3.5 rounded-xl font-bold hover:bg-gray-800 transition-colors disabled:opacity-50"
+                        className="w-full bg-teal-500 text-white p-3.5 rounded-xl font-bold hover:bg-teal-600 transition-colors disabled:opacity-50"
                     >
                         {loading ? 'Lade...' : (useMagicLink ? 'Link anfordern' : 'Einloggen')}
                     </button>

@@ -22,7 +22,7 @@ export default function AlertModal({ isOpen, onClose, title, message, type = 'in
                 <p className="text-gray-500 mb-6">{message}</p>
                 <button
                     onClick={onClose}
-                    className="w-full py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-transform active:scale-95"
+                    className="w-full py-3 bg-gray-700 text-white rounded-xl font-bold hover:bg-gray-800 transition-transform active:scale-95"
                 >
                     OK
                 </button>

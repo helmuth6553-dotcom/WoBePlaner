@@ -557,7 +557,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                                 onUpdateShift(selectedShift.id, startDate.toISOString(), endDate.toISOString(), editTitle)
                                 setSelectedShift(null)
                             }}
-                            className="w-full py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-colors"
+                            className="w-full py-3 bg-teal-500 text-white rounded-xl font-bold hover:bg-teal-600 transition-colors"
                         >
                             Speichern
                         </button>
@@ -697,7 +697,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                                             setIsAddMenuOpen(false)
                                         }}
                                         className={`py-2 text-xs font-bold border rounded-lg hover:text-white transition-colors
-                                        ${isSpecial ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-600' : 'bg-white border-gray-200 hover:bg-black'}
+                                        ${isSpecial ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-600' : 'bg-white border-gray-200 hover:bg-teal-500'}
                                     `}
                                     >
                                         {specialLabel[type] || type}

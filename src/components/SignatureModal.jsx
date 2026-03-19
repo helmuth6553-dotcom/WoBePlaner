@@ -106,7 +106,7 @@ export default function SignatureModal({ isOpen, onClose, onConfirm, payload, ti
                         <button
                             onClick={handleSign}
                             disabled={loading || !password}
-                            className="w-full bg-black text-white py-4 rounded-xl font-bold text-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all mt-2"
+                            className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all mt-2"
                         >
                             {loading ? (
                                 <span className="animate-pulse">Signiere...</span>

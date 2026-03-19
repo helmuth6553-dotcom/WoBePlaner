@@ -391,7 +391,7 @@ export default function AbsencePlanner({ initialDate }) {
                 <div className="px-4 mb-3 shrink-0">
                     <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center font-bold text-lg shadow-md">
+                            <div className="w-10 h-10 rounded-xl bg-teal-500 text-white flex items-center justify-center font-bold text-lg shadow-md">
                                 {myStats.remaining}
                             </div>
                             <div className="flex flex-col leading-none gap-1">
@@ -530,7 +530,7 @@ export default function AbsencePlanner({ initialDate }) {
                 <div className="mt-4 mx-4 z-40 animate-in slide-in-from-bottom-4 fade-in duration-300 shrink-0">
                     <button
                         onClick={handleSave}
-                        className="w-full bg-black text-white py-4 rounded-2xl font-bold text-lg shadow-2xl flex items-center justify-center gap-2 transform transition-transform active:scale-95"
+                        className="w-full bg-teal-500 hover:bg-teal-600 text-white py-4 rounded-2xl font-bold text-lg shadow-2xl flex items-center justify-center gap-2 transform transition-transform active:scale-95"
                     >
                         <Calendar size={20} />
                         {(() => {
