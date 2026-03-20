@@ -62,6 +62,12 @@ function generateInsights(stats, employeeStats, monthlyData) {
         insights.push({ color: 'rose', text: `${e.name.split(' ')[0]}`, detail: `0h erfasst diesen Monat`, priority: 30 })
     })
 
+    // 7. MA ohne Dienst für >5 Arbeitstage (≈1 Woche)
+    const longGaps = employeeStats.filter(e => e.maxGapDays > 5)
+    longGaps.forEach(e => {
+        insights.push({ color: 'amber', text: `${e.name.split(' ')[0]}`, detail: `${e.maxGapDays} Arbeitstage ohne Dienst`, priority: e.maxGapDays * 5 })
+    })
+
     return insights.sort((a, b) => b.priority - a.priority).slice(0, 3)
 }
 
@@ -334,6 +340,29 @@ export default function AdminOverview() {
                 }
             })
 
+            // Max consecutive days without shift (TEAM doesn't count, weekends count, only holidays skipped)
+            const shiftDates = new Set(empShifts.filter(s => s.type?.toUpperCase() !== 'TEAM').map(s => new Date(s.start_time).toISOString().split('T')[0]))
+            const absenceDates = new Set()
+            empAbsences.forEach(a => {
+                if (a.status !== 'genehmigt' && a.type !== 'Krank') return
+                const aStart = new Date(a.start_date) < start ? start : new Date(a.start_date)
+                const aEnd = new Date(a.end_date) > end ? end : new Date(a.end_date)
+                if (aStart <= aEnd) {
+                    eachDayOfInterval({ start: aStart, end: aEnd }).forEach(d => absenceDates.add(format(d, 'yyyy-MM-dd')))
+                }
+            })
+            let maxGap = 0, currentGap = 0
+            daysInMonth.forEach(d => {
+                if (isHoliday(d, holidays)) return // skip holidays only
+                const ds = format(d, 'yyyy-MM-dd')
+                if (shiftDates.has(ds) || absenceDates.has(ds)) {
+                    currentGap = 0
+                } else {
+                    currentGap++
+                    if (currentGap > maxGap) maxGap = currentGap
+                }
+            })
+
             const workedHours = b ? (b.actual - b.correction) : 0
             const sickHours = b?.absenceBreakdown?.Krank?.hours || 0
             const vacationHours = b ? b.vacation : 0
@@ -358,7 +387,8 @@ export default function AdminOverview() {
                 avgLeadTime: vacCount > 0 ? Math.round(leadTime / vacCount) : 0,
                 longestVacationBlock: maxBlock,
                 bridgeDayRatio: empVacDays > 0 ? Math.round((bridgeDays / empVacDays) * 100) : 0,
-                shiftTypeHours: flatShiftHours
+                shiftTypeHours: flatShiftHours,
+                maxGapDays: maxGap
             }
         })
 
