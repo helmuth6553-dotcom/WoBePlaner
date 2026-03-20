@@ -24,7 +24,7 @@ const getUserColor = (name) => {
         'bg-rose-100 text-rose-900'
     ]
     let hash = 0
-    for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i)
+    for (let i = 0; i < (name || '').length; i++) hash = hash * 8 + (name || '').charCodeAt(i)
     return colors[Math.abs(hash) % colors.length]
 }
 

@@ -141,7 +141,7 @@ export default function AdminOverview() {
 
         const [shiftsRes, profilesRes, entriesRes, absencesRes, interestsRes, logsRes, correctionsRes] = await Promise.all([
             supabase.from('shifts').select('*').gte('start_time', startStr).lte('start_time', endStr),
-            supabase.from('profiles').select('id, weekly_hours, role, full_name, display_name, email, start_date, created_at, initial_balance').or('is_active.eq.true,is_active.is.null'),
+            supabase.from('profiles').select('id, weekly_hours, role, full_name, display_name, email, start_date, initial_balance').or('is_active.eq.true,is_active.is.null'),
             supabase.from('time_entries').select('*, shifts(*)').gte('actual_start', startStr).lte('actual_start', endStr),
             supabase.from('absences').select('*').eq('status', 'genehmigt').lte('start_date', endDateStr).gte('end_date', startDateStr),
             supabase.from('shift_interests').select('*, shifts(*)'),

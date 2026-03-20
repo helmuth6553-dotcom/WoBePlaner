@@ -24,7 +24,7 @@ const createEmptyShiftTypeHours = () => {
 export const calculateGenericBalance = (profile, historyShifts, historyAbsences, timeEntries = [], currentDate = new Date(), corrections = [], options = {}) => {
     if (!profile) return null
 
-    const startDate = profile.start_date ? new Date(profile.start_date) : (profile.created_at ? new Date(profile.created_at) : new Date('2024-01-01'))
+    const startDate = profile.start_date ? new Date(profile.start_date) : new Date('2024-01-01')
     if (isNaN(startDate.getTime())) return null
 
     const weeklyHours = profile.weekly_hours || 40
