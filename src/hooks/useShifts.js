@@ -47,19 +47,17 @@ export function useShifts(userId, selectedMonth, options = {}) {
             const endIso = end.toISOString()
 
             // 1. Get shifts via interests (confirmed when only 1 person interested)
+            // Uses !inner join to filter server-side by date range
             const { data: myInterests, error: interestError } = await supabase
                 .from('shift_interests')
-                .select('shift_id, shifts(*)')
+                .select('shift_id, shifts!inner(*)')
                 .eq('user_id', userId)
+                .gte('shifts.start_time', startIso)
+                .lte('shifts.start_time', endIso)
 
             if (interestError) throw interestError
 
-            // Filter to shifts within the selected month
-            const monthInterests = myInterests?.filter(i => {
-                if (!i.shifts?.start_time) return false
-                const shiftDate = new Date(i.shifts.start_time)
-                return shiftDate >= start && shiftDate <= end
-            }) || []
+            const monthInterests = myInterests || []
 
             const shiftIds = monthInterests.map(i => i.shift_id)
             let confirmedShifts = []
