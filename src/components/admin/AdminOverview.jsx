@@ -130,38 +130,37 @@ export default function AdminOverview() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedMonth, globalMode])
 
-    // ─── Shared month calculation ───
-    const calcMonthStats = async (monthDate) => {
+    // ─── Shared month calculation (uses pre-loaded data) ───
+    const calcMonthStats = (monthDate, { allShifts, profiles, allEntries, allAbsences, allInterests, allLogs, allCorrections }) => {
         const start = startOfMonth(monthDate)
         const end = endOfMonth(monthDate)
-        const startStr = start.toISOString()
-        const endStr = end.toISOString()
         const startDateStr = format(start, 'yyyy-MM-dd')
         const endDateStr = format(end, 'yyyy-MM-dd')
 
-        const [shiftsRes, profilesRes, entriesRes, absencesRes, interestsRes, logsRes, correctionsRes] = await Promise.all([
-            supabase.from('shifts').select('*').gte('start_time', startStr).lte('start_time', endStr),
-            supabase.from('profiles').select('id, weekly_hours, role, full_name, display_name, email, start_date, initial_balance').or('is_active.eq.true,is_active.is.null'),
-            supabase.from('time_entries').select('*, shifts(*)').gte('actual_start', startStr).lte('actual_start', endStr),
-            supabase.from('absences').select('*').eq('status', 'genehmigt').lte('start_date', endDateStr).gte('end_date', startDateStr),
-            supabase.from('shift_interests').select('*, shifts(*)'),
-            supabase.from('shift_logs').select('*, shift:shifts(start_time)'),
-            supabase.from('balance_corrections').select('*')
-        ])
+        // Filter pre-loaded data to this month
+        const shifts = allShifts?.filter(s => {
+            const d = new Date(s.start_time)
+            return d >= start && d <= end
+        }) || []
 
-        const shifts = shiftsRes.data
-        const profiles = profilesRes.data
-        const entries = entriesRes.data
-        const absences = absencesRes.data
-        const corrections = correctionsRes.data || []
+        const entries = allEntries?.filter(e => {
+            const d = new Date(e.actual_start)
+            return d >= start && d <= end
+        }) || []
 
-        const monthInterests = interestsRes.data?.filter(i => {
+        const absences = allAbsences?.filter(a => {
+            return a.start_date <= endDateStr && a.end_date >= startDateStr
+        }) || []
+
+        const corrections = allCorrections || []
+
+        const monthInterests = allInterests?.filter(i => {
             if (!i.shifts?.start_time) return false
             const d = new Date(i.shifts.start_time)
             return d >= start && d <= end
         }) || []
 
-        const monthSwaps = logsRes.data?.filter(log => {
+        const monthSwaps = allLogs?.filter(log => {
             if (!log.shift?.start_time) return false
             const d = new Date(log.shift.start_time)
             return d >= start && d <= end
@@ -397,15 +396,49 @@ export default function AdminOverview() {
     const fetchAll = async () => {
         setLoading(true)
         try {
-            // Determine month range based on mode
-            let promises = []
+            // Determine full date range for all 12 months
+            let rangeStart, rangeEnd
+            if (globalMode === 'jahr') {
+                rangeStart = startOfMonth(startOfYear(selectedMonth))
+                rangeEnd = endOfMonth(addMonths(startOfYear(selectedMonth), 11))
+            } else {
+                rangeStart = startOfMonth(subMonths(selectedMonth, 11))
+                rangeEnd = endOfMonth(selectedMonth)
+            }
+            const rangeStartStr = rangeStart.toISOString()
+            const rangeEndStr = rangeEnd.toISOString()
+            const rangeStartDateStr = format(rangeStart, 'yyyy-MM-dd')
+            const rangeEndDateStr = format(rangeEnd, 'yyyy-MM-dd')
+
+            // Load ALL data once for the entire 12-month range (7 queries instead of 84)
+            const [shiftsRes, profilesRes, entriesRes, absencesRes, interestsRes, logsRes, correctionsRes] = await Promise.all([
+                supabase.from('shifts').select('*').gte('start_time', rangeStartStr).lte('start_time', rangeEndStr),
+                supabase.from('profiles').select('id, weekly_hours, role, full_name, display_name, email, start_date, initial_balance').or('is_active.eq.true,is_active.is.null'),
+                supabase.from('time_entries').select('*, shifts(*)').gte('actual_start', rangeStartStr).lte('actual_start', rangeEndStr),
+                supabase.from('absences').select('*').eq('status', 'genehmigt').lte('start_date', rangeEndDateStr).gte('end_date', rangeStartDateStr),
+                supabase.from('shift_interests').select('*, shifts(*)'),
+                supabase.from('shift_logs').select('*, shift:shifts(start_time)'),
+                supabase.from('balance_corrections').select('*')
+            ])
+
+            const preloaded = {
+                allShifts: shiftsRes.data || [],
+                profiles: profilesRes.data || [],
+                allEntries: entriesRes.data || [],
+                allAbsences: absencesRes.data || [],
+                allInterests: interestsRes.data || [],
+                allLogs: logsRes.data || [],
+                allCorrections: correctionsRes.data || []
+            }
+
+            // Calculate each month using pre-loaded data (no more network requests)
+            let results = []
             if (globalMode === 'jahr') {
                 const yearStart = startOfYear(selectedMonth)
-                for (let i = 0; i < 12; i++) promises.push(calcMonthStats(addMonths(yearStart, i)))
+                for (let i = 0; i < 12; i++) results.push(calcMonthStats(addMonths(yearStart, i), preloaded))
             } else {
-                for (let i = 11; i >= 0; i--) promises.push(calcMonthStats(subMonths(selectedMonth, i)))
+                for (let i = 11; i >= 0; i--) results.push(calcMonthStats(subMonths(selectedMonth, i), preloaded))
             }
-            const results = await Promise.all(promises)
             setMonthlyData(results)
 
             if (globalMode === 'jahr') {
