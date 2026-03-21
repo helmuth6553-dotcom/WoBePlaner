@@ -183,6 +183,7 @@ Es gibt zwei Kategorien: **regulär** (Slot-basiert, Einzelperson, wie TD1/ND/AS
 - Neue UI-Elemente müssen zum bestehenden Tailwind-Stil passen (siehe Design-System) — kein generisches CSS
 - `AlertModal`/`ConfirmModal` statt native `alert()`/`confirm()` verwenden
 - **Keine neuen npm-Pakete ohne explizite Freigabe**
+- **DSGVO**: Personenbezogene Daten (Krankmeldungen, Arbeitszeiten, Abwesenheiten) sind schützenswert — keine Änderungen an Logging, Datensichtbarkeit oder RLS-Policies ohne explizite Rückfrage
 
 ## Bekannte Probleme / Tech Debt
 
