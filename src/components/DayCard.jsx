@@ -625,10 +625,19 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                             <div className="flex flex-wrap gap-1 justify-end mt-1">
                                 {absences.map((abs, idx) => {
                                     const name = abs.profiles?.full_name || abs.profiles?.email?.split('@')[0] || '?'
-                                    const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                                    const firstName = abs.profiles?.display_name?.split(' ')[0] || name.split(' ')[0]
+                                    const isMe = abs.user_id === userId
+                                    const canSeeDetails = isAdmin || isMe
+                                    const isSickAbs = abs.type?.toLowerCase() === 'krank' || abs.type === 'Krankenstand'
+                                    const colorClass = (isSickAbs && canSeeDetails)
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-orange-100 text-orange-700'
+                                    const tooltip = canSeeDetails
+                                        ? `${name} (${abs.type || 'Abwesend'})`
+                                        : `${name} (Abwesend)`
                                     return (
-                                        <span key={idx} className="text-[10px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded" title={name}>
-                                            {initials}
+                                        <span key={idx} className={`text-[10px] font-bold ${colorClass} px-1.5 py-0.5 rounded`} title={tooltip}>
+                                            {firstName}
                                         </span>
                                     )
                                 })}
