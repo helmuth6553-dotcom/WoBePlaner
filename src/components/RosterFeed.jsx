@@ -961,47 +961,60 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                 <PullToRefresh onRefresh={fetchData}>
                     <div className="min-h-full pb-20">
                         <div className="sticky top-0 bg-white z-10 border-b shadow-sm">
-                            <div className="p-4 flex justify-between items-center">
-                                <div className="flex items-center gap-3">
+                            <div className="px-3 pt-3 pb-1 flex justify-between items-center">
+                                <div className="flex items-center gap-2">
                                     <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-                                        <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronLeft size={20} /></button>
-                                        <span className="px-3 font-bold text-sm min-w-[100px] text-center capitalize">{format(currentDate, 'MMMM yyyy', { locale: de })}</span>
-                                        <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronRight size={20} /></button>
+                                        <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronLeft size={18} /></button>
+                                        <span className="px-2 font-bold text-sm min-w-[90px] text-center capitalize">{format(currentDate, 'MMM yyyy', { locale: de })}</span>
+                                        <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronRight size={18} /></button>
                                     </div>
-                                    <div className="flex bg-gray-100 rounded-lg p-1">
-                                        <button onClick={() => setViewMode('cards')} className={`p-1.5 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={16} /></button>
-                                        <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={16} /></button>
+                                    <div className="flex bg-gray-100 rounded-lg p-0.5">
+                                        <button onClick={() => setViewMode('cards')} className={`p-1.5 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={15} /></button>
+                                        <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={15} /></button>
                                     </div>
                                 </div>
 
-                                <div className="flex gap-2 items-center">
+                                <div className="flex gap-1.5 items-center">
                                     {!isAdmin && (
                                         <button
                                             onClick={handleCalendarExport}
-                                            className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-100"
+                                            className="p-1.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-100"
                                             title="Dienste in Kalender exportieren"
                                         >
-                                            <Calendar size={20} />
+                                            <Calendar size={18} />
                                         </button>
                                     )}
 
                                     {!isAdmin && (
                                         <button
                                             onClick={() => setIsSickModalOpen(true)}
-                                            className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors border border-red-100"
+                                            className="p-1.5 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors border border-red-100"
                                             title="Krankmelden"
                                         >
-                                            <Thermometer size={20} />
+                                            <Thermometer size={18} />
                                         </button>
                                     )}
 
                                     {!isAdmin && (
                                         <div
-                                            className={`p-2 rounded-full border transition-colors ${isMonthOpen ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}
+                                            className={`p-1.5 rounded-full border transition-colors ${isMonthOpen ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}
                                             title={isMonthOpen ? "Dienstplan offen" : "Dienstplan geschlossen"}
                                         >
-                                            {isMonthOpen ? <Unlock size={20} /> : <Lock size={20} />}
+                                            {isMonthOpen ? <Unlock size={18} /> : <Lock size={18} />}
                                         </div>
+                                    )}
+
+                                    {balance && !isAdmin && (
+                                        <button
+                                            onClick={toggleBalanceExpand}
+                                            className={`px-2 py-1 rounded-full text-xs font-bold border transition-colors ${balance.total >= 0
+                                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                            }`}
+                                            title="Stundenkonto anzeigen"
+                                        >
+                                            {balance.total > 0 ? '+' : ''}{balance.total}h
+                                        </button>
                                     )}
 
                                     {isAdmin && (
@@ -1009,15 +1022,15 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                             {!isMonthOpen && (
                                                 <button
                                                     onClick={() => setIsLogModalOpen(true)}
-                                                    className="p-2 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors border border-gray-200"
+                                                    className="p-1.5 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors border border-gray-200"
                                                     title="Änderungsprotokoll"
                                                 >
-                                                    <FileText size={20} />
+                                                    <FileText size={18} />
                                                 </button>
                                             )}
                                             <button
                                                 onClick={() => setIsSettingsModalOpen(true)}
-                                                className={`p-2 rounded-full border transition-colors ${isMonthVisible && isMonthOpen
+                                                className={`p-1.5 rounded-full border transition-colors ${isMonthVisible && isMonthOpen
                                                     ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
                                                     : isMonthVisible && !isMonthOpen
                                                         ? 'bg-yellow-50 text-yellow-600 border-yellow-200 hover:bg-yellow-100'
@@ -1031,24 +1044,12 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                             : "Versteckt (Nicht sichtbar)"
                                                 }
                                             >
-                                                <Settings size={20} />
+                                                <Settings size={18} />
                                             </button>
                                         </>
                                     )}
-                                    {balance && !isAdmin && (
-                                        <button
-                                            onClick={toggleBalanceExpand}
-                                            className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${balance.total >= 0
-                                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                                                : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                                            }`}
-                                            title="Stundenkonto anzeigen"
-                                        >
-                                            {balance.total > 0 ? '+' : ''}{balance.total}h
-                                        </button>
-                                    )}
                                 </div>
-                            </div >
+                            </div>
                         </div>
 
                         <div className={viewMode === 'table' ? 'p-4' : 'p-4 max-w-md mx-auto'}>
