@@ -156,7 +156,7 @@ serve(async (req) => {
 
                 const firstShift = userShifts[0]
                 const startTime = new Date(firstShift.start_time)
-                const timeStr = startTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+                const timeStr = startTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' })
 
                 const payload = JSON.stringify({
                     title: 'Dienst beginnt bald!',
