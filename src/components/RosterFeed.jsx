@@ -975,17 +975,33 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                 <PullToRefresh onRefresh={fetchData}>
                     <div className="min-h-full pb-20">
                         <div className="sticky top-0 bg-white z-10 border-b shadow-sm">
-                            <div className="px-3 pt-3 pb-1 flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-                                        <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronLeft size={18} /></button>
-                                        <span className="px-2 font-bold text-sm min-w-[90px] text-center capitalize">{format(currentDate, 'MMM yyyy', { locale: de })}</span>
-                                        <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronRight size={18} /></button>
-                                    </div>
-                                    <div className="flex bg-gray-100 rounded-lg p-0.5">
-                                        <button onClick={() => setViewMode('cards')} className={`p-1.5 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={15} /></button>
-                                        <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={15} /></button>
-                                    </div>
+                            {/* Zeile 1: Datumsnavigation + Stundensaldo */}
+                            <div className="px-3 pt-2.5 pb-1 flex justify-between items-center">
+                                <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                                    <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronLeft size={18} /></button>
+                                    <span className="px-2 font-bold text-sm min-w-[90px] text-center capitalize">{format(currentDate, 'MMM yyyy', { locale: de })}</span>
+                                    <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronRight size={18} /></button>
+                                </div>
+
+                                {balance && !isAdmin && (
+                                    <button
+                                        onClick={toggleBalanceExpand}
+                                        className={`px-3 py-1.5 rounded-full text-sm font-bold border transition-colors ${balance.total >= 0
+                                            ? 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100'
+                                            : 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100'
+                                        }`}
+                                        title="Stundenkonto anzeigen"
+                                    >
+                                        {balance.total > 0 ? '+' : ''}{balance.total}h
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Zeile 2: View-Toggle + Status-Icons */}
+                            <div className="px-3 pb-2 flex justify-between items-center">
+                                <div className="flex bg-gray-100 rounded-lg p-0.5">
+                                    <button onClick={() => setViewMode('cards')} className={`p-1.5 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={15} /></button>
+                                    <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={15} /></button>
                                 </div>
 
                                 <div className="flex gap-1.5 items-center">
@@ -1016,19 +1032,6 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                         >
                                             {isMonthOpen ? <Unlock size={18} /> : <Lock size={18} />}
                                         </div>
-                                    )}
-
-                                    {balance && !isAdmin && (
-                                        <button
-                                            onClick={toggleBalanceExpand}
-                                            className={`px-2 py-1 rounded-full text-xs font-bold border transition-colors ${balance.total >= 0
-                                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                                                : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                                            }`}
-                                            title="Stundenkonto anzeigen"
-                                        >
-                                            {balance.total > 0 ? '+' : ''}{balance.total}h
-                                        </button>
                                     )}
 
                                     {isAdmin && (
