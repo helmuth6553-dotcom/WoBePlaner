@@ -70,6 +70,20 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
 
     const { getHoliday } = useHolidays()
 
+    // Scroll to today's DayCard when the current month is loaded
+    useEffect(() => {
+        if (!isSameMonth(currentDate, new Date())) return
+        const todayStr = format(new Date(), 'yyyy-MM-dd')
+        if (!visibleShiftsByDate[todayStr]) return
+        requestAnimationFrame(() => {
+            const container = document.getElementById('roster-scroll-container')
+            const todayEl = document.getElementById(`day-${todayStr}`)
+            if (container && todayEl) {
+                container.scrollTop = todayEl.offsetTop - 16
+            }
+        })
+    }, [visibleShiftsByDate, currentDate])
+
     // 1. Daten Laden
     const fetchData = async () => {
         const monthStart = startOfMonth(currentDate)
@@ -1085,8 +1099,8 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                 const holiday = getHoliday(new Date(dateStr))
 
                                                 return (
+                                                    <div key={dateStr} id={`day-${dateStr}`}>
                                                     <DayCard
-                                                        key={dateStr}
                                                         dateStr={dateStr}
                                                         shifts={visibleShiftsByDate[dateStr]}
                                                         userId={user.id}
@@ -1180,6 +1194,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                         onCoverageVote={submitCoverageVote}
                                                         onCoverageResolve={resolveAllCoverageRequests}
                                                     />
+                                                    </div>
                                                 )
                                             })}
                                         </>
