@@ -16,6 +16,8 @@ Interne Workforce-Management-App für ein Sozialdienstleistungsteam (11 MA, Inns
 - **Issues automatisch**: Vor Arbeitsbeginn prüfen ob ein passendes Issue existiert — wenn nicht, eines erstellen. PRs immer mit `fixes #XX` verknüpfen. Bei neuen Bugs/Problemen die während der Arbeit auffallen, ebenfalls Issues erstellen. Ausnahme: Triviale Änderungen (Typos, Einzeiler) brauchen kein Issue.
 - **Merge nur auf Anweisung**: Claude Code erstellt Branches, Issues und PRs selbstständig — aber nie eigenständig in `main` mergen. Der Merge-Button bleibt beim Menschen.
 - **Commit-Messages**: Semantisches Format — `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`. Issue-Nummer anhängen wenn vorhanden. Beispiele: `fix: Fairness-Linie bricht auf Mobile (#51)`, `feat: Soli-Punkte auf 6-Monats-Fenster`, `chore: Dependabot Updates`
+- **Squash Merge**: Repo ist auf Squash Merge konfiguriert — die PR-Titel-Message landet auf `main`, einzelne Commits werden zusammengefasst. PR-Titel daher immer semantisch formulieren.
+- **Verfügbare MCPs**: `mcp__github__*` für Issues/PRs/Branches direkt aus Claude heraus. `mcp__sentry__*` für Fehler-Monitoring. `gh` CLI als Fallback. Beide bevorzugt gegenüber Browser-Wechsel.
 
 ## Commands
 
