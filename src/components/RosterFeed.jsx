@@ -56,6 +56,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     const [allProfiles, setAllProfiles] = useState([])
     const allProfilesRef = useRef([])
     const shiftsRef = useRef([])
+    const stickyHeaderRef = useRef(null)
     const [allShiftsHistory, setAllShiftsHistory] = useState([])
     const [allTeamShiftsHistory, setAllTeamShiftsHistory] = useState([]) // TEAM shifts apply to all employees
     const [allAbsencesHistory, setAllAbsencesHistory] = useState([])
@@ -974,7 +975,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
             <div className="flex-1 overflow-hidden">
                 <PullToRefresh onRefresh={fetchData}>
                     <div className="min-h-full pb-20">
-                        <div className="sticky top-0 bg-white z-10 border-b shadow-sm">
+                        <div ref={stickyHeaderRef} className="sticky top-0 bg-white z-10 border-b shadow-sm">
                             {/* Zeile 1: Datumsnavigation + Stundensaldo */}
                             <div className="px-3 pt-2.5 pb-1 flex justify-between items-center">
                                 <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
@@ -1090,7 +1091,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                         />
                                     ) : (
                                         <>
-                                            <MonthMinimap shifts={shifts} currentDate={currentDate} userId={user.id} absences={allAbsences} />
+                                            <MonthMinimap shifts={shifts} currentDate={currentDate} userId={user.id} absences={allAbsences} headerRef={stickyHeaderRef} />
                                             {Object.keys(visibleShiftsByDate).length === 0 && (
                                                 <div className="text-center mt-10">
                                                     <p className="text-gray-400 mb-4">Keine Dienste für {format(currentDate, 'MMMM', { locale: de })} gefunden.</p>

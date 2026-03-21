@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react'
 import { getDaysInMonth, getDate, isSameMonth, isValid, format } from 'date-fns'
-import { de } from 'date-fns/locale'
 
-export default function MonthMinimap({ shifts, currentDate, userId, absences = [] }) {
+export default function MonthMinimap({ shifts, currentDate, userId, absences = [], headerRef }) {
     const [progress, setProgress] = useState(0)
+    const [topOffset, setTopOffset] = useState(90)
+
+    useEffect(() => {
+        if (!headerRef?.current) return
+        const update = () => {
+            setTopOffset(headerRef.current.getBoundingClientRect().bottom + 4)
+        }
+        update()
+        window.addEventListener('resize', update)
+        return () => window.removeEventListener('resize', update)
+    }, [headerRef])
 
     useEffect(() => {
         const container = document.getElementById('roster-scroll-container')
@@ -56,7 +66,7 @@ export default function MonthMinimap({ shifts, currentDate, userId, absences = [
     }
 
     return (
-        <div className="fixed right-4 top-56 bottom-24 w-1.5 bg-gray-300 rounded-full z-[9999] pointer-events-none md:hidden">
+        <div className="fixed right-4 bottom-24 w-1.5 bg-gray-300 rounded-full z-[9999] pointer-events-none md:hidden" style={{ top: `${topOffset}px` }}>
             {/* Week separators */}
             {[7, 14, 21, 28].filter(d => d <= daysInMonth).map(day => (
                 <div
@@ -86,28 +96,38 @@ export default function MonthMinimap({ shifts, currentDate, userId, absences = [
                 )
             })}
 
-            {/* Shift dots */}
-            {myShifts.map(s => {
-                const day = getDate(new Date(s.start_time))
-                const interestCount = s.interests?.length || 0
-                const isOnlyMe = interestCount === 1
-
-                // Green = only me, Yellow = others also interested
-                const colorClass = isOnlyMe ? 'bg-green-500' : 'bg-yellow-400'
-
-                return (
-                    <div
-                        key={s.id}
-                        className={`absolute w-2 h-2 rounded-full left-1/2 -translate-x-1/2 border border-white ${colorClass}`}
-                        style={{ top: `${getPosition(day)}%` }}
-                    />
-                )
-            })}
+            {/* Shift dots — grouped by day: Teal=assigned, Green=only me, Yellow=competition */}
+            {(() => {
+                const byDay = {}
+                myShifts.forEach(s => {
+                    const day = getDate(new Date(s.start_time))
+                    if (!byDay[day]) byDay[day] = []
+                    byDay[day].push(s)
+                })
+                return Object.entries(byDay).map(([dayStr, dayShifts]) => {
+                    const day = parseInt(dayStr)
+                    const isAssigned = dayShifts.some(s => s.assigned_to === userId)
+                    const hasCompetition = dayShifts.some(s =>
+                        s.interests?.some(i => i.user_id !== userId)
+                    )
+                    const colorClass = isAssigned
+                        ? 'bg-teal-500'
+                        : hasCompetition ? 'bg-yellow-400' : 'bg-green-500'
+                    const sizeClass = dayShifts.length > 1 ? 'w-3 h-3' : 'w-2 h-2'
+                    return (
+                        <div
+                            key={`shift-day-${day}`}
+                            className={`absolute ${sizeClass} rounded-full left-1/2 -translate-x-1/2 border border-white ${colorClass}`}
+                            style={{ top: `${getPosition(day)}%` }}
+                        />
+                    )
+                })
+            })()}
 
             {/* Scroll Indicator */}
             <div
                 className="absolute w-3 h-5 bg-gray-600 rounded-full left-1/2 -translate-x-1/2 shadow border-2 border-white"
-                style={{ top: `calc(${getPosition(Math.max(1, Math.round(progress / 100 * (daysInMonth - 1)) + 1))}% - 10px)` }}
+                style={{ top: `calc(${progress}% - 10px)` }}
             />
         </div>
     )
