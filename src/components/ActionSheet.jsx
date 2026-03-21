@@ -18,7 +18,7 @@ export default function ActionSheet({ isOpen, onClose, title, children }) {
     if (!visible && !isOpen) return null
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
             {/* Backdrop */}
             <div
                 className={`fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
@@ -27,7 +27,7 @@ export default function ActionSheet({ isOpen, onClose, title, children }) {
 
             {/* Sheet */}
             <div
-                className={`bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl transform transition-transform duration-300 ease-out max-h-[90vh] overflow-y-auto ${isOpen ? 'translate-y-0 sm:scale-100' : 'translate-y-full sm:translate-y-0 sm:scale-95'}`}
+                className={`bg-white w-full max-w-md rounded-2xl shadow-2xl transform transition-all duration-300 ease-out max-h-[90vh] overflow-y-auto ${isOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
             >
                 <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex justify-between items-center z-10">
                     <h3 className="font-bold text-lg text-gray-900">{title}</h3>
