@@ -446,8 +446,8 @@ export default function AdminOverview() {
                 supabase.from('profiles').select('id, weekly_hours, role, full_name, display_name, email, start_date, initial_balance').or('is_active.eq.true,is_active.is.null'),
                 supabase.from('time_entries').select('*, shifts(*)').gte('actual_start', rangeStartStr).lte('actual_start', rangeEndStr),
                 supabase.from('absences').select('*').eq('status', 'genehmigt').lte('start_date', rangeEndDateStr).gte('end_date', rangeStartDateStr),
-                supabase.from('shift_interests').select('*, shifts(*)'),
-                supabase.from('shift_logs').select('*, shift:shifts(start_time)'),
+                supabase.from('shift_interests').select('*, shifts!inner(*)').gte('shifts.start_time', rangeStartStr).lte('shifts.start_time', rangeEndStr),
+                supabase.from('shift_logs').select('*, shift:shifts!inner(start_time)').gte('shift.start_time', rangeStartStr).lte('shift.start_time', rangeEndStr),
                 supabase.from('balance_corrections').select('*')
             ])
 
