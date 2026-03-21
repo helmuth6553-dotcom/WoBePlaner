@@ -10,6 +10,7 @@ import RosterLogModal from './RosterLogModal'
 import ConfirmModal from './ConfirmModal'
 import AlertModal from './AlertModal'
 import SickReportModal from './SickReportModal'
+import ActionSheet from './ActionSheet'
 import MonthSettingsModal from './MonthSettingsModal'
 import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Settings, Calendar } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, getYear, getMonth, subDays, isSameMonth, isValid } from 'date-fns'
@@ -799,73 +800,50 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         fetchData()
     }
 
-    const toggleBalanceExpand = async () => {
-        if (!isBalanceExpanded) {
-            if (allShiftsHistory.length === 0) {
-                try {
-                    // 1. Get Shifts with Interests
-                    const { data: interests, error: intError } = await supabase.from('shift_interests').select('user_id, shift:shifts(id, start_time, end_time, type)')
-                    if (intError) throw new Error('Interests Error: ' + intError.message)
+    const loadBalanceHistory = async () => {
+        if (allShiftsHistory.length > 0) return // already cached
+        try {
+            const { data: interests, error: intError } = await supabase.from('shift_interests').select('user_id, shift:shifts(id, start_time, end_time, type)')
+            if (intError) throw new Error('Interests Error: ' + intError.message)
 
-                    // 2. Get Shifts with Direct Assignments
-                    // Fetch ALL and filter client-side to avoid UUID syntax errors with 'is null' filters
-                    const { data: directAssignments, error: dirError } = await supabase.from('shifts').select('id, start_time, end_time, type, assigned_to')
-                    if (dirError) throw new Error('Direct Error: ' + dirError.message)
+            const { data: directAssignments, error: dirError } = await supabase.from('shifts').select('id, start_time, end_time, type, assigned_to')
+            if (dirError) throw new Error('Direct Error: ' + dirError.message)
 
-                    const historyFromInterests = interests?.map(i => ({
-                        user_id: i.user_id,
-                        id: i.shift?.id,
-                        start_time: i.shift?.start_time,
-                        end_time: i.shift?.end_time,
-                        type: i.shift?.type
-                    })).filter(s => s.start_time) || []
+            const historyFromInterests = interests?.map(i => ({
+                user_id: i.user_id, id: i.shift?.id, start_time: i.shift?.start_time, end_time: i.shift?.end_time, type: i.shift?.type
+            })).filter(s => s.start_time) || []
 
-                    const historyFromDirect = directAssignments?.filter(s => s.assigned_to).map(s => ({
-                        user_id: s.assigned_to,
-                        id: s.id,
-                        start_time: s.start_time,
-                        end_time: s.end_time,
-                        type: s.type
-                    })) || []
+            const historyFromDirect = directAssignments?.filter(s => s.assigned_to).map(s => ({
+                user_id: s.assigned_to, id: s.id, start_time: s.start_time, end_time: s.end_time, type: s.type
+            })) || []
 
-                    // Merge and deduplicate
-                    const combinedHistory = [...historyFromInterests]
-                    historyFromDirect.forEach(s => {
-                        const exists = combinedHistory.some(h => h.id === s.id && h.user_id === s.user_id)
-                        if (!exists) {
-                            combinedHistory.push(s)
-                        }
-                    })
+            const combinedHistory = [...historyFromInterests]
+            historyFromDirect.forEach(s => {
+                if (!combinedHistory.some(h => h.id === s.id && h.user_id === s.user_id)) combinedHistory.push(s)
+            })
+            setAllShiftsHistory(combinedHistory)
 
-                    setAllShiftsHistory(combinedHistory)
+            const { data: teamShifts } = await supabase.from('shifts').select('id, start_time, end_time, type').eq('type', 'TEAM')
+            setAllTeamShiftsHistory(teamShifts || [])
 
-                    // 2b. TEAM shifts (apply to ALL employees)
-                    const { data: teamShifts } = await supabase
-                        .from('shifts')
-                        .select('id, start_time, end_time, type')
-                        .eq('type', 'TEAM')
-                    setAllTeamShiftsHistory(teamShifts || [])
+            const { data: absences, error: absError } = await supabase.from('absences').select('start_date, end_date, user_id, status, type, planned_hours').eq('status', 'genehmigt')
+            if (absError) throw new Error('Absences Error: ' + absError.message)
+            setAllAbsencesHistory(absences || [])
 
-                    // 3. Absences
-                    const { data: absences, error: absError } = await supabase.from('absences').select('start_date, end_date, user_id, status, type, planned_hours').eq('status', 'genehmigt')
-                    if (absError) throw new Error('Absences Error: ' + absError.message)
-                    setAllAbsencesHistory(absences || [])
+            const { data: allEntries, error: entError } = await supabase.from('time_entries').select('user_id, shift_id, calculated_hours, status, actual_start, actual_end')
+            if (entError) throw new Error('Entries Error: ' + entError.message)
+            setAllTimeEntriesHistory(allEntries || [])
 
-                    // 4. Entries
-                    const { data: allEntries, error: entError } = await supabase.from('time_entries').select('user_id, shift_id, calculated_hours, status, actual_start, actual_end')
-                    if (entError) throw new Error('Entries Error: ' + entError.message)
-                    setAllTimeEntriesHistory(allEntries || [])
-
-                    // 5. Corrections
-                    const { data: allCorrs } = await supabase.from('balance_corrections').select('user_id, correction_hours, effective_month')
-                    setAllCorrectionsHistory(allCorrs || [])
-
-                } catch (err) {
-                    console.error('Balance Load Error', err)
-                    setAlertConfig({ isOpen: true, title: 'Ladefehler', message: err.message, type: 'error' })
-                }
-            }
+            const { data: allCorrs } = await supabase.from('balance_corrections').select('user_id, correction_hours, effective_month')
+            setAllCorrectionsHistory(allCorrs || [])
+        } catch (err) {
+            console.error('Balance Load Error', err)
+            setAlertConfig({ isOpen: true, title: 'Ladefehler', message: err.message, type: 'error' })
         }
+    }
+
+    const toggleBalanceExpand = async () => {
+        if (!isBalanceExpanded) await loadBalanceHistory()
         setIsBalanceExpanded(!isBalanceExpanded)
     }
 
@@ -990,7 +968,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                         <span className="px-3 font-bold text-sm min-w-[100px] text-center capitalize">{format(currentDate, 'MMMM yyyy', { locale: de })}</span>
                                         <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronRight size={20} /></button>
                                     </div>
-                                    <div className="flex bg-gray-100 rounded-lg p-1 hidden sm:flex">
+                                    <div className="flex bg-gray-100 rounded-lg p-1">
                                         <button onClick={() => setViewMode('cards')} className={`p-1.5 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={16} /></button>
                                         <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={16} /></button>
                                     </div>
@@ -1057,91 +1035,20 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                             </button>
                                         </>
                                     )}
+                                    {balance && !isAdmin && (
+                                        <button
+                                            onClick={toggleBalanceExpand}
+                                            className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${balance.total >= 0
+                                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                            }`}
+                                            title="Stundenkonto anzeigen"
+                                        >
+                                            {balance.total > 0 ? '+' : ''}{balance.total}h
+                                        </button>
+                                    )}
                                 </div>
                             </div >
-
-                            <div className="sm:hidden px-4 pb-2 flex justify-center">
-                                <div className="flex bg-gray-100 rounded-lg p-1 w-full max-w-[200px]">
-                                    <button onClick={() => setViewMode('cards')} className={`flex-1 p-1.5 rounded-md transition-all text-center text-xs font-bold ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}>Karten</button>
-                                    <button onClick={() => setViewMode('table')} className={`flex-1 p-1.5 rounded-md transition-all text-center text-xs font-bold ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}>Tabelle</button>
-                                </div>
-                            </div>
-
-                            {balance && viewMode === 'cards' && !isAdmin && (
-                                <div className="px-4 pb-2 max-w-md mx-auto">
-                                    <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
-                                        <div className="flex justify-between items-center mb-2 cursor-pointer" onClick={toggleBalanceExpand}>
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mein Stundenkonto</h3>
-                                                {isBalanceExpanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
-                                            </div>
-                                            <span className="text-[10px] text-gray-400">{format(currentDate, 'MMMM', { locale: de })}</span>
-                                        </div>
-
-                                        <div className="grid grid-cols-4 gap-2 text-center">
-                                            <div className="bg-gray-50 rounded-lg p-1.5">
-                                                <div className="text-[9px] text-gray-400 uppercase font-bold">Soll</div>
-                                                <div className="font-bold text-sm text-gray-700">{balance.target}h</div>
-                                            </div>
-                                            <div className="bg-blue-50 rounded-lg p-1.5">
-                                                <div className="text-[9px] text-blue-400 uppercase font-bold">Ist</div>
-                                                <div className="font-bold text-sm text-blue-700">{balance.actual + balance.vacation}h</div>
-                                            </div>
-                                            <div className={`rounded-lg p-1.5 ${balance.carryover >= 0 ? 'bg-gray-50' : 'bg-red-50'}`}>
-                                                <div className={`text-[9px] uppercase font-bold ${balance.carryover >= 0 ? 'text-gray-400' : 'text-red-600'}`}>Übertrag</div>
-                                                <div className={`font-bold text-sm ${balance.carryover >= 0 ? 'text-gray-700' : 'text-red-700'}`}>
-                                                    {balance.carryover > 0 ? '+' : ''}{balance.carryover}h
-                                                </div>
-                                            </div>
-                                            <div className={`rounded-lg p-1.5 ${balance.total >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                                                <div className={`text-[9px] uppercase font-bold ${balance.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>Gesamt</div>
-                                                <div className={`font-bold text-sm ${balance.total >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                                    {balance.total > 0 ? '+' : ''}{balance.total}h
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {isBalanceExpanded && (
-                                            <div className="mt-4 pt-4 border-t border-gray-100">
-                                                <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">Kollegen Übersicht</h4>
-                                                <div className="space-y-2">
-                                                    {allProfiles.filter(p => p.id !== user.id && p.role !== 'admin').map(profile => {
-                                                        // Personal shifts from interests/assignments
-                                                        const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
-                                                        // Add TEAM shifts for this user (they apply to everyone)
-                                                        const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
-                                                        // Merge personal + team, avoiding duplicates
-                                                        const userShifts = [...personalShifts]
-                                                        teamShiftsForUser.forEach(ts => {
-                                                            if (!userShifts.some(s => s.id === ts.id)) {
-                                                                userShifts.push(ts)
-                                                            }
-                                                        })
-                                                        const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
-                                                        const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
-                                                        const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
-                                                        const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
-
-                                                        if (!b) return null
-
-                                                        return (
-                                                            <div key={profile.id} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded-lg">
-                                                                <span className="font-medium text-gray-700">{profile.display_name || profile.full_name || profile.email}</span>
-                                                                <div className="flex gap-3">
-                                                                    <span className="text-gray-500">Soll: {b.target}h</span>
-                                                                    <span className={`font-bold ${b.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                                        {b.total > 0 ? '+' : ''}{b.total}h
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         <div className={viewMode === 'table' ? 'p-4' : 'p-4 max-w-md mx-auto'}>
@@ -1335,6 +1242,65 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                 message={alertConfig.message}
                 type={alertConfig.type}
             />
+
+            {/* Balance Detail Sheet */}
+            <ActionSheet isOpen={isBalanceExpanded} onClose={() => setIsBalanceExpanded(false)} title="Mein Stundenkonto">
+                {balance && (
+                    <>
+                        <div className="text-xs text-gray-400 mb-3 uppercase font-bold">{format(currentDate, 'MMMM yyyy', { locale: de })}</div>
+                        <div className="grid grid-cols-4 gap-2 text-center mb-4">
+                            <div className="bg-gray-50 rounded-lg p-2">
+                                <div className="text-[9px] text-gray-400 uppercase font-bold">Soll</div>
+                                <div className="font-bold text-sm text-gray-700">{balance.target}h</div>
+                            </div>
+                            <div className="bg-blue-50 rounded-lg p-2">
+                                <div className="text-[9px] text-blue-400 uppercase font-bold">Ist</div>
+                                <div className="font-bold text-sm text-blue-700">{balance.actual + balance.vacation}h</div>
+                            </div>
+                            <div className={`rounded-lg p-2 ${balance.carryover >= 0 ? 'bg-gray-50' : 'bg-red-50'}`}>
+                                <div className={`text-[9px] uppercase font-bold ${balance.carryover >= 0 ? 'text-gray-400' : 'text-red-600'}`}>Übertrag</div>
+                                <div className={`font-bold text-sm ${balance.carryover >= 0 ? 'text-gray-700' : 'text-red-700'}`}>
+                                    {balance.carryover > 0 ? '+' : ''}{balance.carryover}h
+                                </div>
+                            </div>
+                            <div className={`rounded-lg p-2 ${balance.total >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                                <div className={`text-[9px] uppercase font-bold ${balance.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>Gesamt</div>
+                                <div className={`font-bold text-sm ${balance.total >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                    {balance.total > 0 ? '+' : ''}{balance.total}h
+                                </div>
+                            </div>
+                        </div>
+
+                        <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">Kollegen Übersicht</h4>
+                        <div className="space-y-2">
+                            {allProfiles.filter(p => p.id !== user.id && p.role !== 'admin').map(profile => {
+                                const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
+                                const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
+                                const userShifts = [...personalShifts]
+                                teamShiftsForUser.forEach(ts => {
+                                    if (!userShifts.some(s => s.id === ts.id)) userShifts.push(ts)
+                                })
+                                const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
+                                const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
+                                const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
+                                const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
+                                if (!b) return null
+                                return (
+                                    <div key={profile.id} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded-lg">
+                                        <span className="font-medium text-gray-700">{profile.display_name || profile.full_name || profile.email}</span>
+                                        <div className="flex gap-3">
+                                            <span className="text-gray-500">Soll: {b.target}h</span>
+                                            <span className={`font-bold ${b.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {b.total > 0 ? '+' : ''}{b.total}h
+                                            </span>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </>
+                )}
+            </ActionSheet>
 
             {/* TeamPanel (Desktop Only - synchronized with RosterFeed data) */}
             {isAdmin && (
