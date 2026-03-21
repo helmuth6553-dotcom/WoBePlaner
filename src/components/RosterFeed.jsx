@@ -70,20 +70,6 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
 
     const { getHoliday } = useHolidays()
 
-    // Scroll to today's DayCard when the current month is loaded
-    useEffect(() => {
-        if (!isSameMonth(currentDate, new Date())) return
-        const todayStr = format(new Date(), 'yyyy-MM-dd')
-        if (!visibleShiftsByDate[todayStr]) return
-        requestAnimationFrame(() => {
-            const container = document.getElementById('roster-scroll-container')
-            const todayEl = document.getElementById(`day-${todayStr}`)
-            if (container && todayEl) {
-                container.scrollTop = todayEl.offsetTop - 16
-            }
-        })
-    }, [visibleShiftsByDate, currentDate])
-
     // 1. Daten Laden
     const fetchData = async () => {
         const monthStart = startOfMonth(currentDate)
@@ -414,6 +400,20 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         })
         return filtered
     }, [shiftsByDate, currentDate, isAdmin, isMonthVisible])
+
+    // Scroll to today's DayCard when the current month is loaded
+    useEffect(() => {
+        if (!isSameMonth(currentDate, new Date())) return
+        const todayStr = format(new Date(), 'yyyy-MM-dd')
+        if (!visibleShiftsByDate[todayStr]) return
+        requestAnimationFrame(() => {
+            const container = document.getElementById('roster-scroll-container')
+            const todayEl = document.getElementById(`day-${todayStr}`)
+            if (container && todayEl) {
+                container.scrollTop = todayEl.offsetTop - 16
+            }
+        })
+    }, [visibleShiftsByDate, currentDate])
 
     if (!user) return <div className="p-4 text-center">Benutzer wird geladen...</div>
 
