@@ -1,39 +1,38 @@
 ---
-description: Deploy the app to Cloudflare Pages (with Git backup)
+description: Hotfix-Deploy direkt zu Cloudflare Pages (umgeht Git-Pipeline)
 ---
 
-# Deploy to Cloudflare Pages
+# Hotfix Deploy
+
+> **Normalfall**: Einfach auf `main` mergen — Cloudflare deployed automatisch.
+> Dieses Script nur für Notfall-Hotfixes nutzen, wenn die Git-Pipeline zu langsam ist.
 
 // turbo-all
 
-1. Stage all changes:
-```bash
-git add -A
-```
-
-2. Commit with a timestamp message:
-```bash
-git commit -m "Deploy: %date% %time%"
-```
-
-3. Push to remote repository:
-```bash
-git push
-```
-
-4. Build the production bundle:
+1. Build zuerst — wenn das fehlschlägt, passiert nichts:
 ```bash
 npm run build
 ```
 
-5. Deploy to Cloudflare Pages:
+2. Direkt zu Cloudflare deployen:
 ```bash
 npx wrangler pages deploy dist --project-name=wobeapp
 ```
 
-The app will be deployed to https://wobeapp.pages.dev
+3. Änderungen committen und pushen (damit Git synchron bleibt):
+```bash
+git add -A
+git commit -m "Hotfix: $(date '+%Y-%m-%d %H:%M')" || echo "Nothing to commit"
+git push || echo "Push failed, continuing..."
+```
 
-## Notes
-- Git commit and push happens BEFORE build/deploy
-- If push fails (no remote configured), deploy continues anyway
-- Wrangler is installed as a dev dependency
+## Normaler Workflow
+
+Für reguläre Features/Fixes den Branch-Workflow nutzen:
+```bash
+git checkout -b fix/mein-fix
+# Arbeiten...
+git push -u origin fix/mein-fix
+gh pr create --title "Fix: ..." --body "..."
+# CI prüft → Merge → Auto-Deploy
+```

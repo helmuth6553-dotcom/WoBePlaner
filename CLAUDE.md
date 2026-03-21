@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Projekt
+
+Interne Workforce-Management-App für ein Sozialdienstleistungsteam (11 MA, Innsbruck/Österreich). Kein öffentlicher Zugang, keine externen Nutzer. Deployment: Cloudflare Pages.
+
+## Workflow
+
+- **Branch-Strategie**: `main` = Production. Features/Fixes in eigenen Branches (`feature/...`, `fix/...`)
+- **CI**: GitHub Actions prüft Lint, Build, Tests bei jedem PR (`.github/workflows/ci.yml`)
+- **Deployment**: Automatisch via Cloudflare Pages Git-Integration bei Merge in `main`
+- **Preview**: Jeder Branch/PR bekommt ein Preview-Deployment auf Cloudflare
+- **Tracking**: GitHub Issues für Features und Bugs. PRs referenzieren Issues (`fixes #42`)
+- **Issues automatisch**: Vor Arbeitsbeginn prüfen ob ein passendes Issue existiert — wenn nicht, eines erstellen. PRs immer mit `fixes #XX` verknüpfen. Bei neuen Bugs/Problemen die während der Arbeit auffallen, ebenfalls Issues erstellen. Ausnahme: Triviale Änderungen (Typos, Einzeiler) brauchen kein Issue.
+- **Merge nur auf Anweisung**: Claude Code erstellt Branches, Issues und PRs selbstständig — aber nie eigenständig in `main` mergen. Der Merge-Button bleibt beim Menschen.
+- **Commit-Messages**: Semantisches Format — `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`. Issue-Nummer anhängen wenn vorhanden. Beispiele: `fix: Fairness-Linie bricht auf Mobile (#51)`, `feat: Soli-Punkte auf 6-Monats-Fenster`, `chore: Dependabot Updates`
+
 ## Commands
 
 ```bash
@@ -124,6 +139,91 @@ Es gibt zwei Kategorien: **regulär** (Slot-basiert, Einzelperson, wie TD1/ND/AS
 1. `npm run build` — keine Fehler
 2. `npm test` — alle Tests grün
 3. Manuell: Admin "+" Button, Stundenberechnung, Zeiterfassung, Profil Statistik, AdminOverview, PDF-Export
+
+## Design-System
+
+**Styling**: Tailwind CSS v4.1+ — kein UI-Framework (kein MUI, Shadcn etc.). Alle Komponenten custom-built.
+
+**Primärfarbe**: Teal `#00C2CB` — aktive Navigation, primäre Buttons (`bg-teal-500` / `bg-teal-600`)
+
+**Farbschema** (semantisch):
+- Grün: Genehmigt/Erfolg (`green-600/700`)
+- Gelb/Amber: Ausstehend/Warnung (`yellow-500/600`, `amber-50`)
+- Rot: Dringend/Fehler (`red-500/600`)
+- Blau: Info/Eingereicht (`blue-500/600`)
+- Grau: Neutral/Hintergrund (`gray-50` App-BG, `gray-100/200` Borders)
+
+**Typografie**: System-Font-Stack (kein Google Fonts). Hierarchie über `font-bold`/`font-black` + Tailwind-Größen (`text-xs` bis `text-3xl`). Vereinzelt Custom: `text-[10px]`, `text-[9px]`.
+
+**Icons**: Lucide React (SVG) — ausschließlich.
+
+**UI-Stil**:
+- Light mode only (kein Dark Mode)
+- Dicht/kompakt, besonders auf Mobile
+- Buttons: `rounded-xl` bis `rounded-2xl`, `active:scale-95`
+- Cards: `bg-white rounded-2xl border border-gray-100 shadow-sm`
+- Modals: `bg-black/50` Backdrop, `rounded-[1.5rem]` Container, `shadow-[0_8px_30px_rgb(0,0,0,0.12)]`
+- Inputs: `border border-gray-200 p-3 rounded-xl`, Focus: `ring-2 ring-black`
+- Mobile: Bottom-Nav (`bg-white/80 backdrop-blur-xl`), Desktop: Sidebar (`w-64`)
+
+**Modale Komponenten**: `AlertModal.jsx`, `ConfirmModal.jsx`, `ActionSheet.jsx` (Mobile-Bottom-Drawer)
+
+## Konventionen
+
+- **UI-Sprache: ausschließlich Deutsch** — keine englischen Labels, Buttons oder Platzhalter in der UI
+- **Keine pastelligen Farben, kein kindlicher Look** — professionell, dicht, erwachsen
+- **Komponentennamen**: PascalCase (React-Standard)
+- **Utility-Dateien**: camelCase
+- Neue UI-Elemente müssen zum bestehenden Tailwind-Stil passen (siehe Design-System) — kein generisches CSS
+- `AlertModal`/`ConfirmModal` statt native `alert()`/`confirm()` verwenden
+- **Keine neuen npm-Pakete ohne explizite Freigabe**
+
+## Bekannte Probleme / Tech Debt
+
+- **AdminOverview Fairness-Linie**: `calc(72px + (100% - 72px - 40px) * ...)` nimmt feste Label/Badge-Breiten an — bricht bei Responsive/Mobile
+- **38× native `alert()`/`confirm()`**: Müssen durch `AlertModal`/`ConfirmModal` ersetzt werden (größte Altlast, siehe `AdminTimeTracking`, `AdminEmployees`, `AdminAbsences` etc.)
+- **PDF-Export unvollständig**: `vacationData: null` und `balanceData: null` in `AdminTimeTracking.jsx:756-757` + `TimeTracking.jsx:804-805`
+- **Cross-Month Sickness**: `balanceHelpers.js:225-256` — SSOT-basierte Stundenzuordnung bei monatsübergreifender Krankheit unzuverlässig
+- **Zombie Time Entries**: DB-Einträge ohne gültigen Shift werden versteckt statt bereinigt (`AdminTimeTracking.jsx:297`)
+- **Pre-Holiday Nachtdienst**: `shiftDefaults.js:56` — Ende 10:00 bei Vorfeiertag nicht implementiert
+- **TimeTrackingV2**: Alternative Implementierung existiert, aber deaktiviert (`USE_NEW_TIME_TRACKING = false`)
+
+## Einspring/Soli-System (Coverage)
+
+Komplexestes Feature — verwaltet Dienstübernahmen bei Krankmeldungen mit fairness-basiertem Voting.
+
+### Flow
+
+1. **Krankmeldung** → `SickReportModal` → `RosterFeed.handleSickReport()` erstellt Abwesenheit + `mark_shifts_urgent()` RPC
+2. **Edge Function** `notify-sickness` → erstellt `coverage_requests` + `coverage_votes` für eligible User → Web Push
+3. **Voting** → `CoverageVotingPanel` auf DayCard: 3 Stufen (`available` / `reluctant` / `emergency_only`)
+4. **Auflösung** → Admin klickt "Optimal besetzen" → Greedy-Algorithmus → `assign_coverage()` RPC → `shift_interest` mit `is_flex=true`
+
+### Soli-Punkte (Fairness-Index)
+
+```
+Punkte = (Flex-Einsätze × 10) + (Abstimmungs-Teilnahmen × 2)
+```
+- 6-Monats-Fenster (rollierend)
+- Niedrigste Punkte + beste Präferenz = wird empfohlen (⭐)
+- Sichtbar für alle (anonymisiert für Employees, volle Namen für Admins)
+
+### Key Files
+
+| Datei | Zweck |
+|---|---|
+| `src/utils/fairnessIndex.js` | Soli-Punkte Berechnung |
+| `src/utils/coverageEligibility.js` | Wer darf einspringen (Konfliktregel: ND+TD2 ✗, AST+ND ✗, etc.) |
+| `src/components/CoverageVotingPanel.jsx` | Voting-UI auf Shift-Karte |
+| `src/components/SoliPunktePanel.jsx` | Profil-Panel mit Fairness-Slider |
+| `src/components/RosterFeed.jsx` | Orchestrierung: Krankmeldung, Voting, Auflösung |
+| `supabase/functions/notify-sickness/index.ts` | Edge Function: Push + DB-Records |
+
+### DB-Tabellen
+
+- `coverage_requests`: `shift_id`, `status` (open/assigned/expired), `assigned_to`
+- `coverage_votes`: `shift_id`, `user_id`, `was_eligible`, `responded`, `availability_preference`
+- `shift_interests.is_flex`: `true` = Coverage-Zuweisung
 
 ## Feature flags
 
