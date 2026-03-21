@@ -1091,7 +1091,9 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                         />
                                     ) : (
                                         <>
-                                            <MonthMinimap shifts={shifts} currentDate={currentDate} userId={user.id} absences={allAbsences} headerRef={stickyHeaderRef} />
+                                            {!isBalanceExpanded && (
+                                                <MonthMinimap shifts={shifts} currentDate={currentDate} userId={user.id} absences={allAbsences} headerRef={stickyHeaderRef} />
+                                            )}
                                             {Object.keys(visibleShiftsByDate).length === 0 && (
                                                 <div className="text-center mt-10">
                                                     <p className="text-gray-400 mb-4">Keine Dienste für {format(currentDate, 'MMMM', { locale: de })} gefunden.</p>
