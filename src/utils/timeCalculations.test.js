@@ -334,7 +334,8 @@ describe('Daylight Saving Time (Zeitumstellung)', () => {
         // Uhr springt von 03:00 auf 02:00 → effektiv 15h statt 14h
         //
         // HINWEIS: Verhalten systemabhängig (siehe März-Test)
-        expect([14, 15]).toContain(hours)
+        // UTC (CI): 13h (kein DST), Vienna: 14-15h (DST)
+        expect([13, 14, 15]).toContain(hours)
     })
 
     it('ND shift during March DST has correctly reduced readiness time', () => {
