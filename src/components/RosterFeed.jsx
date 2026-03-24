@@ -26,6 +26,19 @@ import { calculateAllFairnessIndices } from '../utils/fairnessIndex'
 import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
 import { debounce } from '../utils/debounce'
 
+/**
+ * Merge arrays by ID, avoiding duplicates.
+ * matchKeys: array of key names to match on (default: ['id'])
+ */
+function mergeById(base, additions, matchKeys = ['id']) {
+    const result = [...base]
+    additions.forEach(item => {
+        const exists = result.some(r => matchKeys.every(k => r[k] === item[k]))
+        if (!exists) result.push(item)
+    })
+    return result
+}
+
 export default function RosterFeed({ onCoverageVoteChanged }) {
 
     const { user, isAdmin } = useAuth()
@@ -71,6 +84,58 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
 
     const { getHoliday } = useHolidays()
 
+    // === Admin-only: Fetch all team data for TeamPanel ===
+    const fetchAdminTeamData = async () => {
+        const { data: allInterests } = await supabase
+            .from('shift_interests')
+            .select('user_id, shift:shifts(id, start_time, end_time, type)')
+
+        const interestShifts = allInterests?.map(i => ({
+            user_id: i.user_id,
+            id: i.shift?.id,
+            start_time: i.shift?.start_time,
+            end_time: i.shift?.end_time,
+            type: i.shift?.type
+        })).filter(s => s.id) || []
+
+        const { data: directShifts } = await supabase
+            .from('shifts')
+            .select('id, start_time, end_time, type, assigned_to')
+            .not('assigned_to', 'is', null)
+
+        const directMapped = directShifts?.map(s => ({
+            user_id: s.assigned_to,
+            id: s.id,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            type: s.type
+        })) || []
+
+        setAllShiftsHistory(mergeById(interestShifts, directMapped, ['id', 'user_id']))
+
+        const { data: teamShiftsData } = await supabase
+            .from('shifts')
+            .select('id, start_time, end_time, type')
+            .eq('type', 'TEAM')
+        setAllTeamShiftsHistory(teamShiftsData || [])
+
+        const { data: teamAbsences } = await supabase
+            .from('absences')
+            .select('start_date, end_date, user_id, status, type, planned_hours')
+            .eq('status', 'genehmigt')
+        setAllAbsencesHistory(teamAbsences || [])
+
+        const { data: teamEntries } = await supabase
+            .from('time_entries')
+            .select('user_id, shift_id, calculated_hours, status, actual_start, actual_end')
+        setAllTimeEntriesHistory(teamEntries || [])
+
+        const { data: teamCorrs } = await supabase
+            .from('balance_corrections')
+            .select('user_id, correction_hours, effective_month')
+        setAllCorrectionsHistory(teamCorrs || [])
+    }
+
     // 1. Daten Laden
     const fetchData = async () => {
         const monthStart = startOfMonth(currentDate)
@@ -89,39 +154,18 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
             .select('shift:shifts(id, start_time, end_time, assigned_to, type)')
             .eq('user_id', user?.id)
 
-        // Also get shifts where user is directly assigned (not just interests)
         const { data: myDirectShifts } = await supabase
             .from('shifts')
             .select('id, start_time, end_time, assigned_to, type')
             .eq('assigned_to', user?.id)
 
-        const shiftsFromInterests = myInterests?.map(i => i.shift).filter(s => s) || []
-        const shiftsFromDirect = myDirectShifts || []
-
-        // TEAM shifts are mandatory for all employees - fetch them too
         const { data: teamShifts } = await supabase
             .from('shifts')
             .select('id, start_time, end_time, type')
             .eq('type', 'TEAM')
 
-        const myTeamShifts = teamShifts || []
-
-        // Merge and deduplicate
-        const allMyShiftsCombined = [...shiftsFromInterests]
-        shiftsFromDirect.forEach(s => {
-            const exists = allMyShiftsCombined.some(h => h.id === s.id)
-            if (!exists) {
-                allMyShiftsCombined.push(s)
-            }
-        })
-        // Add Team shifts (they apply to all employees)
-        myTeamShifts.forEach(s => {
-            const exists = allMyShiftsCombined.some(h => h.id === s.id)
-            if (!exists) {
-                allMyShiftsCombined.push(s)
-            }
-        })
-        setAllMyShifts(allMyShiftsCombined)
+        const shiftsFromInterests = myInterests?.map(i => i.shift).filter(s => s) || []
+        setAllMyShifts(mergeById(mergeById(shiftsFromInterests, myDirectShifts || []), teamShifts || []))
 
         const { data: myEntries } = await supabase.from('time_entries').select('shift_id, calculated_hours, actual_start, actual_end').eq('user_id', user?.id)
         if (myEntries) setAllMyTimeEntries(myEntries)
@@ -135,8 +179,8 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         const { data: shiftData } = await supabase
             .from('shifts')
             .select(`
-                *, 
-                interests:shift_interests(*, profiles(email, full_name, display_name)), 
+                *,
+                interests:shift_interests(*, profiles(email, full_name, display_name)),
                 assigned_profile:profiles!shifts_assigned_to_fkey(email, full_name, display_name)
             `)
             .gte('start_time', queryStart)
@@ -198,179 +242,108 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
             setIsMonthVisible(false)
         }
 
-        // === ADMIN ONLY: Fetch all team data for TeamPanel ===
-        if (isAdmin) {
-            // Fetch all shift interests (to map user_id to shifts)
-            const { data: allInterests } = await supabase
-                .from('shift_interests')
-                .select('user_id, shift:shifts(id, start_time, end_time, type)')
+        if (isAdmin) await fetchAdminTeamData()
+    }
 
-            const shiftsFromInterests = allInterests?.map(i => ({
-                user_id: i.user_id,
-                id: i.shift?.id,
-                start_time: i.shift?.start_time,
-                end_time: i.shift?.end_time,
-                type: i.shift?.type
-            })).filter(s => s.id) || []
-
-            // Fetch shifts with direct assignment
-            const { data: directShifts } = await supabase
-                .from('shifts')
-                .select('id, start_time, end_time, type, assigned_to')
-                .not('assigned_to', 'is', null)
-
-            const shiftsFromDirect = directShifts?.map(s => ({
-                user_id: s.assigned_to,
-                id: s.id,
-                start_time: s.start_time,
-                end_time: s.end_time,
-                type: s.type
-            })) || []
-
-            // Merge both sources
-            const allHistoryShifts = [...shiftsFromInterests]
-            shiftsFromDirect.forEach(s => {
-                const exists = allHistoryShifts.some(h => h.id === s.id && h.user_id === s.user_id)
-                if (!exists) allHistoryShifts.push(s)
+    // Realtime handler: shift_interests changes (instant UI update)
+    const handleRealtimeInterest = (payload, debouncedFetch) => {
+        console.log('[Realtime] shift_interests:', payload.eventType, payload.new || payload.old)
+        if (payload.eventType === 'INSERT' && payload.new) {
+            const { shift_id, user_id } = payload.new
+            setShifts(prev => prev.map(s => {
+                if (s.id !== shift_id) return s
+                if (s.interests?.some(i => i.user_id === user_id)) return s
+                const profile = allProfilesRef.current.find(p => p.id === user_id)
+                return { ...s, interests: [...(s.interests || []), { ...payload.new, user_id, profiles: profile }] }
+            }))
+            setAllShiftsHistory(prev => {
+                if (prev.some(s => s.id === shift_id && s.user_id === user_id)) return prev
+                const shift = shiftsRef.current.find(s => s.id === shift_id)
+                if (!shift) return prev
+                return [...prev, { user_id, id: shift.id, start_time: shift.start_time, end_time: shift.end_time, type: shift.type }]
             })
-            setAllShiftsHistory(allHistoryShifts)
-
-            // Fetch TEAM shifts (apply to all employees)
-            const { data: teamShiftsData } = await supabase
-                .from('shifts')
-                .select('id, start_time, end_time, type')
-                .eq('type', 'TEAM')
-            setAllTeamShiftsHistory(teamShiftsData || [])
-
-            // Fetch all absences for team
-            const { data: teamAbsences } = await supabase
-                .from('absences')
-                .select('start_date, end_date, user_id, status, type, planned_hours')
-                .eq('status', 'genehmigt')
-            setAllAbsencesHistory(teamAbsences || [])
-
-            // Fetch all time entries for team
-            const { data: teamEntries } = await supabase
-                .from('time_entries')
-                .select('user_id, shift_id, calculated_hours, status, actual_start, actual_end')
-            setAllTimeEntriesHistory(teamEntries || [])
-
-            // Fetch all corrections for team
-            const { data: teamCorrs } = await supabase
-                .from('balance_corrections')
-                .select('user_id, correction_hours, effective_month')
-            setAllCorrectionsHistory(teamCorrs || [])
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+            const { shift_id, user_id, id: interestId } = payload.old
+            console.log('[Realtime] shift_interests DELETE:', { shift_id, user_id, interestId })
+            setShifts(prev => prev.map(s => {
+                if (shift_id && s.id !== shift_id) return s
+                return { ...s, interests: (s.interests || []).filter(i => {
+                    if (user_id && i.user_id === user_id && (!shift_id || s.id === shift_id)) return false
+                    if (interestId && i.id === interestId) return false
+                    return true
+                })}
+            }))
+            if (shift_id && user_id) {
+                setAllShiftsHistory(prev => prev.filter(s => !(s.id === shift_id && s.user_id === user_id)))
+            }
         }
+        debouncedFetch()
+    }
+
+    // Realtime handler: shifts changes (instant UI update)
+    const handleRealtimeShift = (payload, debouncedFetch) => {
+        console.log('[Realtime] shifts:', payload.eventType, payload.new || payload.old)
+        if (payload.eventType === 'INSERT' && payload.new) {
+            const newShift = { ...payload.new, interests: [], assigned_profile: null }
+            setShifts(prev => [...prev, newShift].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')))
+            if (payload.new.assigned_to) {
+                setAllShiftsHistory(prev => [...prev, {
+                    user_id: payload.new.assigned_to, id: payload.new.id,
+                    start_time: payload.new.start_time, end_time: payload.new.end_time, type: payload.new.type
+                }])
+            }
+            if (payload.new.type === 'TEAM') {
+                setAllTeamShiftsHistory(prev => [...prev, {
+                    id: payload.new.id, start_time: payload.new.start_time,
+                    end_time: payload.new.end_time, type: payload.new.type
+                }])
+            }
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+            const { interests, assigned_profile, ...tableColumns } = payload.new
+            setShifts(prev => prev.map(s => s.id === payload.new.id ? { ...s, ...tableColumns } : s))
+            setAllShiftsHistory(prev => prev.map(s => s.id === payload.new.id
+                ? { ...s, start_time: payload.new.start_time, end_time: payload.new.end_time, type: payload.new.type }
+                : s
+            ))
+            setAllTeamShiftsHistory(prev => prev.map(s => s.id === payload.new.id
+                ? { ...s, start_time: payload.new.start_time, end_time: payload.new.end_time, type: payload.new.type }
+                : s
+            ))
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+            setShifts(prev => prev.filter(s => s.id !== payload.old.id))
+            setAllShiftsHistory(prev => prev.filter(s => s.id !== payload.old.id))
+            setAllTeamShiftsHistory(prev => prev.filter(s => s.id !== payload.old.id))
+        }
+        debouncedFetch()
     }
 
     useEffect(() => {
         if (!user) return
         fetchData()
 
-        // Unique channel name per user session to avoid conflicts
         const channelName = `roster-updates-${user.id}-${Date.now()}`
-
         const debouncedFetch = debounce(fetchData, 2000)
         let wasConnected = false
 
         const channel = supabase
             .channel(channelName)
-            // shift_interests: Direct state update for instant UI + instant balance recalc
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, (payload) => {
-                console.log('[Realtime] shift_interests:', payload.eventType, payload.new || payload.old)
-                if (payload.eventType === 'INSERT' && payload.new) {
-                    const { shift_id, user_id } = payload.new
-                    // Update roster UI
-                    setShifts(prev => prev.map(s => {
-                        if (s.id !== shift_id) return s
-                        if (s.interests?.some(i => i.user_id === user_id)) return s
-                        const profile = allProfilesRef.current.find(p => p.id === user_id)
-                        return { ...s, interests: [...(s.interests || []), { ...payload.new, user_id, profiles: profile }] }
-                    }))
-                    // Update balance history (triggers useMemo recalc)
-                    setAllShiftsHistory(prev => {
-                        if (prev.some(s => s.id === shift_id && s.user_id === user_id)) return prev
-                        const shift = shiftsRef.current.find(s => s.id === shift_id)
-                        if (!shift) return prev
-                        return [...prev, { user_id, id: shift.id, start_time: shift.start_time, end_time: shift.end_time, type: shift.type }]
-                    })
-                } else if (payload.eventType === 'DELETE' && payload.old) {
-                    const { shift_id, user_id, id: interestId } = payload.old
-                    console.log('[Realtime] shift_interests DELETE:', { shift_id, user_id, interestId })
-                    // Update roster UI
-                    setShifts(prev => prev.map(s => {
-                        if (shift_id && s.id !== shift_id) return s
-                        return { ...s, interests: (s.interests || []).filter(i => {
-                            if (user_id && i.user_id === user_id && (!shift_id || s.id === shift_id)) return false
-                            if (interestId && i.id === interestId) return false
-                            return true
-                        })}
-                    }))
-                    // Update balance history
-                    if (shift_id && user_id) {
-                        setAllShiftsHistory(prev => prev.filter(s => !(s.id === shift_id && s.user_id === user_id)))
-                    }
-                }
-                // Fallback refetch for edge cases
-                debouncedFetch()
-            })
-            // shifts: Direct state update for instant UI + instant balance recalc
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => {
-                console.log('[Realtime] shifts:', payload.eventType, payload.new || payload.old)
-                if (payload.eventType === 'INSERT' && payload.new) {
-                    const newShift = { ...payload.new, interests: [], assigned_profile: null }
-                    setShifts(prev => [...prev, newShift].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')))
-                    // Add to balance history if directly assigned
-                    if (payload.new.assigned_to) {
-                        setAllShiftsHistory(prev => [...prev, {
-                            user_id: payload.new.assigned_to, id: payload.new.id,
-                            start_time: payload.new.start_time, end_time: payload.new.end_time, type: payload.new.type
-                        }])
-                    }
-                    // Add to team shifts history if TEAM type
-                    if (payload.new.type === 'TEAM') {
-                        setAllTeamShiftsHistory(prev => [...prev, {
-                            id: payload.new.id, start_time: payload.new.start_time,
-                            end_time: payload.new.end_time, type: payload.new.type
-                        }])
-                    }
-                } else if (payload.eventType === 'UPDATE' && payload.new) {
-                    const { interests, assigned_profile, ...tableColumns } = payload.new
-                    setShifts(prev => prev.map(s => s.id === payload.new.id ? { ...s, ...tableColumns } : s))
-                    // Update in balance history
-                    setAllShiftsHistory(prev => prev.map(s => s.id === payload.new.id
-                        ? { ...s, start_time: payload.new.start_time, end_time: payload.new.end_time, type: payload.new.type }
-                        : s
-                    ))
-                    setAllTeamShiftsHistory(prev => prev.map(s => s.id === payload.new.id
-                        ? { ...s, start_time: payload.new.start_time, end_time: payload.new.end_time, type: payload.new.type }
-                        : s
-                    ))
-                } else if (payload.eventType === 'DELETE' && payload.old) {
-                    setShifts(prev => prev.filter(s => s.id !== payload.old.id))
-                    setAllShiftsHistory(prev => prev.filter(s => s.id !== payload.old.id))
-                    setAllTeamShiftsHistory(prev => prev.filter(s => s.id !== payload.old.id))
-                }
-                // Fallback refetch for edge cases
-                debouncedFetch()
-            })
-            // Other tables: debounced refetch (change infrequently, complex calculations)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_interests' }, (payload) => handleRealtimeInterest(payload, debouncedFetch))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => handleRealtimeShift(payload, debouncedFetch))
             .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_months' }, debouncedFetch)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debouncedFetch)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedFetch)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'time_entries' }, debouncedFetch)
             .subscribe((status, err) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log('[Realtime] ✓ Connected to', channelName)
+                    console.log('[Realtime] Connected to', channelName)
                     if (wasConnected) { console.log('[Realtime] Reconnected — catching up'); fetchData() }
                     wasConnected = true
                 }
-                if (status === 'CHANNEL_ERROR') console.error('[Realtime] ✗ Channel error:', err)
-                if (status === 'TIMED_OUT') console.warn('[Realtime] ⚠ Timed out')
+                if (status === 'CHANNEL_ERROR') console.error('[Realtime] Channel error:', err)
+                if (status === 'TIMED_OUT') console.warn('[Realtime] Timed out')
                 if (status === 'CLOSED') console.warn('[Realtime] Channel closed')
             })
 
-        // Fallback polling every 30s (Realtime delivers instant updates; this catches missed events)
         const pollInterval = setInterval(debouncedFetch, 30000)
 
         return () => {
@@ -832,11 +805,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                 user_id: s.assigned_to, id: s.id, start_time: s.start_time, end_time: s.end_time, type: s.type
             })) || []
 
-            const combinedHistory = [...historyFromInterests]
-            historyFromDirect.forEach(s => {
-                if (!combinedHistory.some(h => h.id === s.id && h.user_id === s.user_id)) combinedHistory.push(s)
-            })
-            setAllShiftsHistory(combinedHistory)
+            setAllShiftsHistory(mergeById(historyFromInterests, historyFromDirect, ['id', 'user_id']))
 
             const { data: teamShifts } = await supabase.from('shifts').select('id, start_time, end_time, type').eq('type', 'TEAM')
             setAllTeamShiftsHistory(teamShifts || [])
@@ -903,25 +872,32 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         console.error("Error calculating balance:", err)
     }
 
+    // Build merged shifts (personal + team) for a given user
+    const getUserShifts = (userId) => {
+        const personalShifts = allShiftsHistory.filter(s => s.user_id === userId)
+        const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: userId }))
+        return mergeById(personalShifts, teamShiftsForUser)
+    }
+
+    // Calculate balance for a given profile using history data
+    const calcProfileBalance = (profile) => {
+        const userShifts = getUserShifts(profile.id)
+        const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
+        const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
+        const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
+        return calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
+    }
+
     // Calculate Fairness-Index for all non-admin users
     const fairnessIndices = useMemo(() => {
         const nonAdminIds = allProfiles.filter(p => p.role !== 'admin').map(p => p.id)
         if (nonAdminIds.length === 0) return []
 
-        // Build balances map
+        // Build balances map (used for context, even if not directly returned)
         const balancesMap = {}
         allProfiles.filter(p => p.role !== 'admin').forEach(profile => {
             try {
-                const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
-                const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
-                const userShifts = [...personalShifts]
-                teamShiftsForUser.forEach(ts => {
-                    if (!userShifts.some(s => s.id === ts.id)) userShifts.push(ts)
-                })
-                const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
-                const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
-                const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
-                const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
+                const b = calcProfileBalance(profile)
                 if (b) balancesMap[profile.id] = b
             } catch (e) {
                 // Skip if balance calc fails
@@ -938,24 +914,8 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     const teamBalances = useMemo(() => {
         if (!isAdmin) return []
 
-        const results = []
-        allProfiles.filter(p => p.role !== 'admin').forEach(profile => {
-            // Personal shifts from interests/assignments
-            const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
-            // Add TEAM shifts for this user (they apply to everyone)
-            const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
-            // Merge personal + team, avoiding duplicates
-            const userShifts = [...personalShifts]
-            teamShiftsForUser.forEach(ts => {
-                if (!userShifts.some(s => s.id === ts.id)) {
-                    userShifts.push(ts)
-                }
-            })
-            const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
-            const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
-            const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
-            const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
-
+        return allProfiles.filter(p => p.role !== 'admin').reduce((results, profile) => {
+            const b = calcProfileBalance(profile)
             if (b) {
                 results.push({
                     id: profile.id,
@@ -966,8 +926,8 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                     total: b.total
                 })
             }
-        })
-        return results
+            return results
+        }, [])
     }, [isAdmin, allProfiles, allShiftsHistory, allTeamShiftsHistory, allAbsencesHistory, allTimeEntriesHistory, allCorrectionsHistory, yearMonth, currentDate])
 
     return (
@@ -1296,16 +1256,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                         <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">Kollegen Übersicht</h4>
                         <div className="space-y-2">
                             {allProfiles.filter(p => p.id !== user.id && p.role !== 'admin').map(profile => {
-                                const personalShifts = allShiftsHistory.filter(s => s.user_id === profile.id)
-                                const teamShiftsForUser = allTeamShiftsHistory.map(s => ({ ...s, user_id: profile.id }))
-                                const userShifts = [...personalShifts]
-                                teamShiftsForUser.forEach(ts => {
-                                    if (!userShifts.some(s => s.id === ts.id)) userShifts.push(ts)
-                                })
-                                const userAbsences = allAbsencesHistory.filter(a => a.user_id === profile.id)
-                                const userEntries = allTimeEntriesHistory.filter(e => e.user_id === profile.id)
-                                const userCorrections = allCorrectionsHistory.filter(c => c.user_id === profile.id)
-                                const b = calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
+                                const b = calcProfileBalance(profile)
                                 if (!b) return null
                                 return (
                                     <div key={profile.id} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded-lg">
