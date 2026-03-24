@@ -7,6 +7,25 @@
 
 import { format } from 'date-fns'
 
+// Symmetric conflict pairs: [typeA, typeB] means neither can be combined with the other on the same day
+const CONFLICT_PAIRS = [
+    ['ND', 'TD2'],   // Overlap: ND 19:00+ / TD2 14:00-19:30
+    ['ND', 'DBD'],   // Overlap: ND 19:00+ / DBD 20:00+
+    ['AST', 'TD2'],  // Overlap: AST 16:45-19:45 / TD2 14:00-19:30
+    ['AST', 'ND'],   // Overlap: AST 16:45-19:45 / ND 19:00+
+]
+
+/** Check if targetType conflicts with any of the user's existing shifts */
+function findConflict(targetType, existingShifts) {
+    for (const [a, b] of CONFLICT_PAIRS) {
+        const conflicting = targetType === a ? b : targetType === b ? a : null
+        if (conflicting && existingShifts.some(s => s.type?.toUpperCase() === conflicting)) {
+            return `${targetType} und ${conflicting} nicht kombinierbar`
+        }
+    }
+    return null
+}
+
 /**
  * Check if a user is eligible to cover a specific shift.
  *
@@ -18,7 +37,6 @@ import { format } from 'date-fns'
  * @returns {{ eligible: boolean, reason?: string }}
  */
 export function checkEligibility(targetShift, userId, sickUserId, userShifts, absences) {
-    // 1. Is the sick person
     if (userId === sickUserId) {
         return { eligible: false, reason: 'Ist krankgemeldet' }
     }
@@ -31,7 +49,7 @@ export function checkEligibility(targetShift, userId, sickUserId, userShifts, ab
     const targetDateStr = targetShift.start_time.split('T')[0]
     const targetType = targetShift.type?.toUpperCase()
 
-    // 2. Has approved absence (vacation/sick) on this day
+    // Has approved absence (vacation/sick) on this day
     const hasAbsence = absences.find(abs =>
         abs.user_id === userId &&
         abs.status === 'genehmigt' &&
@@ -43,54 +61,23 @@ export function checkEligibility(targetShift, userId, sickUserId, userShifts, ab
     }
 
     // Helper: find user's shifts on a specific date
-    const getUserShiftsOnDate = (dateStr) => {
-        return userShifts.filter(s => {
-            if (!s.start_time) return false
-            return s.start_time.startsWith(dateStr)
-        })
-    }
+    const getUserShiftsOnDate = (dateStr) =>
+        userShifts.filter(s => s.start_time && s.start_time.startsWith(dateStr))
 
     const myShiftsToday = getUserShiftsOnDate(targetDateStr)
 
-    // 3. Already has exact same shift type on this day
-    const hasSameShift = myShiftsToday.find(s => s.type?.toUpperCase() === targetType)
-    if (hasSameShift) {
+    // Already has exact same shift type on this day
+    if (myShiftsToday.some(s => s.type?.toUpperCase() === targetType)) {
         return { eligible: false, reason: `Hat bereits ${targetType}` }
     }
 
-    // 4. TD2 + ND same day: NOT allowed (overlap)
-    if (targetType === 'ND' && myShiftsToday.some(s => s.type?.toUpperCase() === 'TD2')) {
-        return { eligible: false, reason: 'TD2 und ND nicht kombinierbar' }
-    }
-    if (targetType === 'TD2' && myShiftsToday.some(s => s.type?.toUpperCase() === 'ND')) {
-        return { eligible: false, reason: 'ND und TD2 nicht kombinierbar' }
+    // Check symmetric conflict pairs (ND+TD2, ND+DBD, AST+TD2, AST+ND)
+    const conflict = findConflict(targetType, myShiftsToday)
+    if (conflict) {
+        return { eligible: false, reason: conflict }
     }
 
-    // 5. ND + DBD same day: NOT allowed
-    if (targetType === 'ND' && myShiftsToday.some(s => s.type?.toUpperCase() === 'DBD')) {
-        return { eligible: false, reason: 'DBD und ND nicht kombinierbar' }
-    }
-    if (targetType === 'DBD' && myShiftsToday.some(s => s.type?.toUpperCase() === 'ND')) {
-        return { eligible: false, reason: 'ND und DBD nicht kombinierbar' }
-    }
-
-    // 6. AST + TD2 same day: NOT allowed (overlap 16:45-19:30)
-    if (targetType === 'AST' && myShiftsToday.some(s => s.type?.toUpperCase() === 'TD2')) {
-        return { eligible: false, reason: 'AST und TD2 nicht kombinierbar' }
-    }
-    if (targetType === 'TD2' && myShiftsToday.some(s => s.type?.toUpperCase() === 'AST')) {
-        return { eligible: false, reason: 'TD2 und AST nicht kombinierbar' }
-    }
-
-    // 7. AST + ND same day: NOT allowed (overlap 19:00-19:45)
-    if (targetType === 'AST' && myShiftsToday.some(s => s.type?.toUpperCase() === 'ND')) {
-        return { eligible: false, reason: 'AST und ND nicht kombinierbar' }
-    }
-    if (targetType === 'ND' && myShiftsToday.some(s => s.type?.toUpperCase() === 'AST')) {
-        return { eligible: false, reason: 'ND und AST nicht kombinierbar' }
-    }
-
-    // 8. ND yesterday -> no TD1 today (rest period)
+    // ND yesterday -> no TD1 today (rest period)
     if (targetType === 'TD1') {
         const yesterday = new Date(targetDate)
         yesterday.setDate(yesterday.getDate() - 1)
@@ -100,10 +87,6 @@ export function checkEligibility(targetShift, userId, sickUserId, userShifts, ab
             return { eligible: false, reason: 'Ruhezeit: Nach ND kein TD1 am Folgetag' }
         }
     }
-
-    // 7. TD1 today -> ND today is allowed (enough break)
-    // 8. TD1 today -> TD2 today is allowed (shift handover)
-    // These are explicitly ALLOWED, no rule needed
 
     return { eligible: true }
 }
