@@ -11,7 +11,58 @@ import { constructIso, constructInterruptionIso, isValidInterruptionTime } from 
 import { findSnapshotEntry, calculateCorrection } from '../utils/pdfGenerator'
 
 // Shift types that support multiple participants (group events)
-const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION', 'TEAM']
+const GROUP_SHIFT_TYPES = new Set(['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION', 'TEAM'])
+
+/** Compute display details (start/end/hours) for a time tracking item */
+function getItemDisplayDetails(item, entry, userProfile) {
+    const isAbsence = item.itemType === 'absence'
+
+    // Colliding Team Shift without entry -> 0 hours
+    if (item.isTeam && item.isColliding && !entry) {
+        return {
+            start: format(parseISO(item.start_time), 'HH:mm'),
+            end: format(parseISO(item.end_time), 'HH:mm'),
+            hours: "0.00 (Inkludiert)",
+        }
+    }
+
+    if (entry) {
+        let hours = Number(entry.calculated_hours).toFixed(2)
+        if (Number(entry.calculated_hours) === 0 && item.isTeam && item.isColliding) {
+            hours = "0.00 (Inkludiert)"
+        }
+        return {
+            start: format(parseISO(entry.actual_start), 'HH:mm'),
+            end: format(parseISO(entry.actual_end), 'HH:mm'),
+            hours,
+        }
+    }
+
+    if (isAbsence) {
+        const weeklyHours = Number(userProfile?.weekly_hours) || 40
+        const dailyHours = weeklyHours / 5
+        const isSick = item.reason === 'sick' || item.type?.toLowerCase().includes('krank')
+
+        if (isSick && item.plannedShift) {
+            return {
+                start: format(parseISO(item.plannedShift.start_time), 'HH:mm'),
+                end: format(parseISO(item.plannedShift.end_time), 'HH:mm'),
+                hours: (item.planned_hours || 0).toFixed(2),
+            }
+        }
+
+        const hours = isSick ? (item.planned_hours || 0) : dailyHours
+        const endHour = 8 + Math.floor(hours)
+        const endMinute = Math.round((hours % 1) * 60)
+        return {
+            start: '08:00',
+            end: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
+            hours: hours.toFixed(2),
+        }
+    }
+
+    return null
+}
 
 export default function TimeTracking() {
     const { user, isAdmin } = useAuth()
@@ -224,7 +275,7 @@ export default function TimeTracking() {
                 .filter(i => {
                     const type = i.shifts?.type?.toUpperCase()
                     if (!type) return false
-                    if (GROUP_SHIFT_TYPES.includes(type)) return true
+                    if (GROUP_SHIFT_TYPES.has(type)) return true
                     return interestCounts[i.shift_id] === 1
                 })
                 .map(i => i.shifts)
@@ -1010,76 +1061,20 @@ export default function TimeTracking() {
                                     )}
                                 </div>
                                 {(() => {
-                                    // Helper to determine what to show
-                                    let showDetails = false
-                                    let displayStart = ''
-                                    let displayEnd = ''
-                                    let displayHours = ''
-
-                                    // Special case: Colliding Team Shift without entry -> Show 0 hours
-                                    if (item.isTeam && item.isColliding && !entry) {
-                                        showDetails = true
-                                        displayStart = format(parseISO(item.start_time), 'HH:mm')
-                                        displayEnd = format(parseISO(item.end_time), 'HH:mm')
-                                        displayHours = "0.00 (Inkludiert)"
-                                    } else if (entry) {
-                                        showDetails = true
-                                        displayStart = format(parseISO(entry.actual_start), 'HH:mm')
-                                        displayEnd = format(parseISO(entry.actual_end), 'HH:mm')
-                                        displayHours = Number(entry.calculated_hours).toFixed(2)
-                                        if (Number(entry.calculated_hours) === 0 && item.isTeam && item.isColliding) {
-                                            displayHours = "0.00 (Inkludiert)"
-                                        }
-                                    } else if (isAbsence) {
-                                        showDetails = true
-                                        const weeklyHours = Number(userProfile?.weekly_hours) || 40
-                                        const dailyHours = weeklyHours / 5
-
-                                        const d = item.sortDate
-                                        const _dateKey = format(d, 'yyyy-MM-dd')
-                                        const isSick = item.reason === 'sick' || (item.type && item.type.toLowerCase().includes('krank'))
-
-                                        if (isSick) {
-                                            // SICK: Use pre-calculated SSOT hours
-                                            let sickHours = item.planned_hours || 0
-
-                                            // Use original planned shift times if available
-                                            if (item.plannedShift) {
-                                                // Show original shift times (e.g., ND 19:00-08:00)
-                                                displayStart = format(parseISO(item.plannedShift.start_time), 'HH:mm')
-                                                displayEnd = format(parseISO(item.plannedShift.end_time), 'HH:mm')
-                                            } else {
-                                                // Fallback to calculated display
-                                                const endHour = 8 + Math.floor(sickHours)
-                                                const endMinute = Math.round((sickHours % 1) * 60)
-                                                displayStart = '08:00'
-                                                displayEnd = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`
-                                            }
-                                            displayHours = sickHours.toFixed(2)
-                                        } else {
-                                            // VACATION: Use standard hours (08:00 - X)
-                                            const endHour = 8 + Math.floor(dailyHours)
-                                            const endMinute = Math.round((dailyHours % 1) * 60)
-
-                                            displayStart = '08:00'
-                                            displayEnd = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`
-                                            displayHours = dailyHours.toFixed(2)
-                                        }
-                                    }
-
-                                    if (!showDetails) return null
+                                    const details = getItemDisplayDetails(item, entry, userProfile)
+                                    if (!details) return null
 
                                     return (
                                         <div className="mb-3 p-2 bg-gray-50 rounded-lg text-sm">
                                             <div className="flex justify-between">
                                                 <span className="text-gray-600">Erfasst:</span>
                                                 <span className="font-mono font-bold">
-                                                    {displayStart} - {displayEnd}
+                                                    {details.start} - {details.end}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between mt-1">
                                                 <span className="text-gray-600">Stunden:</span>
-                                                <span className="font-mono font-bold text-blue-600">{isNaN(displayHours) ? displayHours : `${displayHours}h`}</span>
+                                                <span className="font-mono font-bold text-blue-600">{isNaN(details.hours) ? details.hours : `${details.hours}h`}</span>
                                             </div>
                                             {entry?.interruptions && entry.interruptions.length > 0 && (
                                                 <div className="mt-2 bg-blue-50 p-2 rounded border border-blue-100">
@@ -1157,8 +1152,8 @@ export default function TimeTracking() {
                                     )
                                 })()}
                                 {!isLocked && !isAbsence && (
-                                    <button onClick={() => setEditingItem(item)} className={`w-full py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${isDone ? 'bg-teal-500 text-white hover:bg-teal-600' : entry ? 'bg-teal-500 text-white hover:bg-teal-600' : 'bg-teal-500 text-white hover:bg-teal-600 shadow-lg'}`}>
-                                        {isDone ? 'Bearbeiten' : <>{entry ? 'Bearbeiten' : 'Zeit Bestätigen'} <ChevronRight size={16} /></>}
+                                    <button onClick={() => setEditingItem(item)} className={`w-full py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 bg-teal-500 text-white hover:bg-teal-600 ${!isDone && !entry ? 'shadow-lg' : ''}`}>
+                                        {(isDone || entry) ? 'Bearbeiten' : <>Zeit Bestätigen <ChevronRight size={16} /></>}
                                     </button>
                                 )}
                             </div>
