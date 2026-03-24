@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { format, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { User, Check, Moon, Sun, CalendarOff, Users, Clock, Coffee, Compass, AlertCircle, Thermometer, Plus, BookOpen, GraduationCap, MessageCircle, MoreHorizontal, EyeOff } from 'lucide-react'
+import { Moon, Sun, CalendarOff, Users, Clock, Coffee, Compass, Thermometer, Plus, BookOpen, GraduationCap, MessageCircle, MoreHorizontal, EyeOff } from 'lucide-react'
 import ActionSheet from './ActionSheet'
 import CoverageVotingPanel from './CoverageVotingPanel'
 import { calculateWorkHours } from '../utils/timeCalculations'
@@ -28,7 +28,7 @@ const getUserColor = (name) => {
         'bg-rose-100 border-rose-200 text-rose-900'
     ]
     let hash = 0
-    for (let i = 0; i < (name || '').length; i++) hash = hash * 8 + name.charCodeAt(i)
+    for (let i = 0; i < (name || '').length; i++) hash = hash * 8 + name.codePointAt(i)
     return colors[Math.abs(hash) % colors.length]
 }
 
@@ -576,8 +576,8 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         )
     }
 
-    const SPECIAL_TYPES = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
-    const specialShifts = shifts.filter(s => SPECIAL_TYPES.includes(s.type))
+    const SPECIAL_TYPES = new Set(['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'])
+    const specialShifts = shifts.filter(s => SPECIAL_TYPES.has(s.type))
 
     return (
         <>
@@ -636,7 +636,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                                         ? `${name} (${abs.type || 'Abwesend'})`
                                         : `${name} (Abwesend)`
                                     return (
-                                        <span key={idx} className={`text-[10px] font-bold ${colorClass} px-1.5 py-0.5 rounded`} title={tooltip}>
+                                        <span key={abs.id || `${abs.user_id}-${abs.type}`} className={`text-[10px] font-bold ${colorClass} px-1.5 py-0.5 rounded`} title={tooltip}>
                                             {firstName}
                                         </span>
                                     )

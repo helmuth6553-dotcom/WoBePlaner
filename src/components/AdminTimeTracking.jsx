@@ -471,7 +471,7 @@ export default function AdminTimeTracking() {
             return
         }
 
-        const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION', 'TEAM']
+        const GROUP_SHIFT_TYPES = new Set(['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION', 'TEAM'])
 
         // Fetch all data needed for balance: shifts, interests, TEAM shifts, absences, entries, corrections
         const [shiftsRes, interestsRes, teamShiftsRes, absencesRes, entriesRes, corrsRes] = await Promise.all([
@@ -503,7 +503,7 @@ export default function AdminTimeTracking() {
                 .filter(i => {
                     const type = i.shifts?.type?.toUpperCase()
                     if (!type) return false
-                    if (GROUP_SHIFT_TYPES.includes(type)) return true
+                    if (GROUP_SHIFT_TYPES.has(type)) return true
                     return interestCounts[i.shift_id] === 1
                 })
                 .map(i => i.shifts)

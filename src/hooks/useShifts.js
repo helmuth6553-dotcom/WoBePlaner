@@ -12,7 +12,7 @@ import { filterShiftsByStartDate } from '../utils/timeTrackingHelpers'
 
 // Shift types that support multiple participants (group events)
 // These are confirmed as soon as the user is registered, regardless of interest count
-const GROUP_SHIFT_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION', 'TEAM']
+const GROUP_SHIFT_TYPES = new Set(['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION', 'TEAM'])
 
 /**
  * Fetches all shifts for a user in a given month
@@ -79,7 +79,7 @@ export function useShifts(userId, selectedMonth, options = {}) {
                     .filter(i => {
                         const type = i.shifts?.type?.toUpperCase()
                         if (!type) return false
-                        if (GROUP_SHIFT_TYPES.includes(type)) return true
+                        if (GROUP_SHIFT_TYPES.has(type)) return true
                         return interestCounts[i.shift_id] === 1
                     })
                     .map(i => i.shifts)
