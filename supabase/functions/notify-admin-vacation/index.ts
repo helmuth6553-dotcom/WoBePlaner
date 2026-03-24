@@ -6,7 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpushNpm from "npm:web-push@3.6.3";
 
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': 'https://wobeplaner.pages.dev',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -18,23 +18,54 @@ serve(async (req) => {
     try {
         console.log("notify-admin-vacation invoked")
 
+        // Verify caller is authenticated
+        const authHeader = req.headers.get('Authorization')
+        if (!authHeader) {
+            return new Response(
+                JSON.stringify({ error: 'Unauthorized' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
+        // Verify JWT and get the calling user
+        const userClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+            { global: { headers: { Authorization: authHeader } } }
+        )
+        const { data: { user }, error: authError } = await userClient.auth.getUser()
+        if (authError || !user) {
+            return new Response(
+                JSON.stringify({ error: 'Unauthorized: Invalid session' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
         const payload = await req.json()
-        console.log("Payload received:", JSON.stringify(payload))
 
-        const { userName, startDate, endDate } = payload
+        const { startDate, endDate } = payload
 
-        if (!userName || !startDate || !endDate) {
+        if (!startDate || !endDate) {
             console.log("Missing required fields")
             return new Response(
-                JSON.stringify({ error: 'Missing required fields: userName, startDate, endDate' }),
+                JSON.stringify({ error: 'Missing required fields: startDate, endDate' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
+
+        // Get userName from DB (don't trust payload)
+        const { data: profile } = await supabaseClient
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .single()
+        const userName = profile?.full_name || user.email
+        console.log(`Vacation request from authenticated user: ${user.id}`)
 
         // 1. Get all admin users
         const { data: admins, error: adminError } = await supabaseClient
