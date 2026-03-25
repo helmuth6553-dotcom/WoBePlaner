@@ -232,6 +232,28 @@ Punkte = (Flex-Einsätze × 10) + (Abstimmungs-Teilnahmen × 2)
 - `coverage_votes`: `shift_id`, `user_id`, `was_eligible`, `responded`, `availability_preference`
 - `shift_interests.is_flex`: `true` = Coverage-Zuweisung
 
+## SonarCloud — Autonomer Code-Review-Workflow
+
+**Projekt**: `helmuth6553-dotcom_WoBePlaner` auf SonarCloud
+**MCP**: `mcp__sonarqube__*` Tools für Issue-Abfrage und Status-Änderungen
+**Lokaler Scan**: `npx sonar-scanner` (braucht `SONAR_TOKEN` als Umgebungsvariable)
+
+### Workflow bei Code-Änderungen
+1. Code schreiben/ändern
+2. `npm run build && npm test` — muss bestehen
+3. `npx sonar-scanner` — lokalen Scan ausführen
+4. Bei fehlgeschlagenem Quality Gate:
+   - Issues via `mcp__sonarqube__search_sonar_issues_in_projects` lesen
+   - Jedes Issue bewerten: **Echtes Problem** → fixen | **False Positive** → via `mcp__sonarqube__change_sonar_issue_status` markieren | **Won't Fix** → als ACCEPTED markieren mit Begründung
+   - Fixen und erneut scannen (Schritt 2-3 wiederholen)
+5. Erst zurückmelden wenn Quality Gate bestanden ist
+
+### Regeln
+- **Kein blindes Fixen** — jedes Issue im Kontext des Codes bewerten
+- **Cognitive Complexity**: Nur refactoren wenn Lesbarkeit sich tatsächlich verbessert
+- **Props Validation (S6774)**: Als ACCEPTED markieren — Projekt nutzt weder TypeScript noch PropTypes
+- **Security Hotspots**: Immer prüfen, nie automatisch als SAFE markieren ohne Code-Review
+
 ## Feature flags
 
 ```js

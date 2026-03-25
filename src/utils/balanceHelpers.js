@@ -21,11 +21,66 @@ const createEmptyShiftTypeHours = () => {
     return obj
 }
 
+/** Collect weekday absence date-strings within a range (used to exclude TEAM shifts on absence days) */
+const collectAbsenceDays = (absences, rangeStart, rangeEnd) => {
+    const days = new Set()
+    absences.forEach(abs => {
+        if (!abs.start_date || !abs.end_date) return
+        const absStart = new Date(abs.start_date)
+        const absEnd = new Date(abs.end_date)
+        if (Number.isNaN(absStart.getTime()) || Number.isNaN(absEnd.getTime())) return
+        const start = absStart < rangeStart ? rangeStart : absStart
+        const end = absEnd > rangeEnd ? rangeEnd : absEnd
+        if (start <= end) {
+            eachDayOfInterval({ start, end }).forEach(d => {
+                if (!isWeekend(d)) days.add(d.toISOString().split('T')[0])
+            })
+        }
+    })
+    return days
+}
+
+/** Calculate total absence minutes within a range, optionally tracking breakdown */
+const calculateAbsenceMinutes = (absences, rangeStart, rangeEnd, historyShifts, profile, absenceBreakdown) => {
+    let minutes = 0
+    absences.forEach(abs => {
+        if (!abs.start_date || !abs.end_date) return
+        const absStart = new Date(abs.start_date)
+        const absEnd = new Date(abs.end_date)
+        if (Number.isNaN(absStart.getTime()) || Number.isNaN(absEnd.getTime())) return
+        const start = absStart < rangeStart ? rangeStart : absStart
+        const end = absEnd > rangeEnd ? rangeEnd : absEnd
+        if (start > end || absStart > rangeEnd || absEnd < rangeStart) return
+
+        if (abs.planned_hours && Number(abs.planned_hours) > 0) {
+            const absHours = Number(abs.planned_hours)
+            minutes += absHours * 60
+            if (absenceBreakdown) {
+                const absType = (abs.type === 'Krank' || abs.type === 'Krankenstand') ? 'Krank' : 'Urlaub'
+                if (absenceBreakdown[absType]) absenceBreakdown[absType].hours += absHours
+            }
+        } else {
+            eachDayOfInterval({ start, end }).forEach(day => {
+                const hours = calculateDailyAbsenceHours(day, abs, historyShifts, profile)
+                minutes += hours * 60
+                if (absenceBreakdown && hours > 0) {
+                    const absType = (abs.type === 'Krank' || abs.type === 'Krankenstand') ? 'Krank' : 'Urlaub'
+                    if (absenceBreakdown[absType]) {
+                        absenceBreakdown[absType].hours += hours
+                        absenceBreakdown[absType].days += 1
+                    }
+                }
+            })
+        }
+    })
+    return minutes
+}
+
 export const calculateGenericBalance = (profile, historyShifts, historyAbsences, timeEntries = [], currentDate = new Date(), corrections = [], options = {}) => {
     if (!profile) return null
 
     const startDate = profile.start_date ? new Date(profile.start_date) : new Date('2024-01-01')
-    if (isNaN(startDate.getTime())) return null
+    if (Number.isNaN(startDate.getTime())) return null
 
     const weeklyHours = profile.weekly_hours || 40
     const dailyHours = weeklyHours / 5
@@ -72,25 +127,12 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
     }
 
     // Collect absence days for current month to exclude TEAM shifts on those days
-    const absenceDays = new Set()
-    historyAbsences.forEach(abs => {
-        if (!abs.start_date || !abs.end_date) return
-        const absStart = new Date(abs.start_date)
-        const absEnd = new Date(abs.end_date)
-        if (isNaN(absStart.getTime()) || isNaN(absEnd.getTime())) return
-        const start = absStart < monthStart ? monthStart : absStart
-        const end = absEnd > monthEnd ? monthEnd : absEnd
-        if (start <= end) {
-            eachDayOfInterval({ start, end }).forEach(d => {
-                if (!isWeekend(d)) absenceDays.add(d.toISOString().split('T')[0])
-            })
-        }
-    })
+    const absenceDays = collectAbsenceDays(historyAbsences, monthStart, monthEnd)
 
     let currentMonthShifts = historyShifts.filter(s => {
         if (!s.start_time) return false
         const d = new Date(s.start_time)
-        if (!(!isNaN(d.getTime()) && isSameMonth(d, currentDate) && d >= startDate)) return false
+        if (Number.isNaN(d.getTime()) || !isSameMonth(d, currentDate) || d < startDate) return false
         // Exclude TEAM shifts on days with absences (vacation/sick) to avoid double counting
         if (s.type?.toUpperCase() === 'TEAM') {
             const dateKey = d.toISOString().split('T')[0]
@@ -191,71 +233,10 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         }
     })
 
-    let vacationMinutes = 0
-    historyAbsences.forEach(abs => {
-        if (!abs.start_date || !abs.end_date) return
-        const absStart = new Date(abs.start_date)
-        const absEnd = new Date(abs.end_date)
-        if (isNaN(absStart.getTime()) || isNaN(absEnd.getTime())) return
-
-        // CHECK IF ABSENCE FALLS INTO CURRENT MONTH
-        // We only care if there is an overlap.
-        // However, if we have a "Paunchal-Wert" (planned_hours), we need to decide where to book it.
-        // Simple rule: We book the Full Amount if the START DATE is in this month. 
-        // Or pro-rate it? Pro-rating stored total hours is hard without metadata.
-        // For now: If overlap exists, we check if we handle days individually or lump sum.
-
-        const start = absStart < monthStart ? monthStart : absStart
-        const end = absEnd > monthEnd ? monthEnd : absEnd
-
-        if (start <= end && (absStart <= monthEnd && absEnd >= monthStart)) {
-
-
-            // Rule: If we have pre-calculated/stored hours (e.g. from Sick Report), use them directly!
-            // But only if the absence started in this month (to avoid double counting across month boundaries for long illnesses? 
-            // Actually, handleSickReport calculates usually per shift. 
-            // If illness spans months, we have a Total. We must allocate it. 
-            // BUT: SickReport stores hours for the DELETED SHIFTS.
-            // So if I was sick 3 days, and had shifts on day 1 (in Jan) and day 3 (in Feb),
-            // planned_hours is the Sum.
-            // This is tricky.
-            // Safest bet for now (User Case): Single Day or Short term.
-            // Let's stick to: If planned_hours is set, add it ONCE per absence record.
-            // BUT we must effectively verify if the "relevant part" is in this month.
-            // Let's assume for now sickness doesn't span months typically with this tool or we accept the edge case.
-
-            // BETTER APPROACH to avoid double counting and complex dates:
-            // Revert to per-day calculation BUT feed the SSOT correctly.
-            // EXCEPT: SSOT failed us.
-
-            // Let's do the "Direct Use" ONLY if planned_hours is present.
-            // And to handle months: calculating 'daily average of the planned sum' is risky.
-
-            if (abs.planned_hours && Number(abs.planned_hours) > 0) {
-                const absHours = Number(abs.planned_hours)
-                vacationMinutes += (absHours * 60)
-                if (detailed) {
-                    const absType = (abs.type === 'Krank' || abs.type === 'Krankenstand') ? 'Krank' : 'Urlaub'
-                    if (absenceBreakdown[absType]) {
-                        absenceBreakdown[absType].hours += absHours
-                    }
-                }
-            } else {
-                const days = eachDayOfInterval({ start, end })
-                days.forEach(day => {
-                    const hours = calculateDailyAbsenceHours(day, abs, historyShifts, profile)
-                    vacationMinutes += (hours * 60)
-                    if (detailed && hours > 0) {
-                        const absType = (abs.type === 'Krank' || abs.type === 'Krankenstand') ? 'Krank' : 'Urlaub'
-                        if (absenceBreakdown[absType]) {
-                            absenceBreakdown[absType].hours += hours
-                            absenceBreakdown[absType].days += 1
-                        }
-                    }
-                })
-            }
-        }
-    })
+    const vacationMinutes = calculateAbsenceMinutes(
+        historyAbsences, monthStart, monthEnd, historyShifts, profile,
+        detailed ? absenceBreakdown : null
+    )
 
 
 
@@ -270,27 +251,14 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         const pastTarget = pastWorkDays * dailyHours * 60
 
         // Collect past absence days to exclude TEAM shifts on those days
-        const pastAbsenceDays = new Set()
-        historyAbsences.forEach(abs => {
-            if (!abs.start_date || !abs.end_date) return
-            const absStart = new Date(abs.start_date)
-            const absEnd = new Date(abs.end_date)
-            if (isNaN(absStart.getTime()) || isNaN(absEnd.getTime())) return
-            const aStart = absStart < startDate ? startDate : absStart
-            const aEnd = absEnd > pastEnd ? pastEnd : absEnd
-            if (aStart <= aEnd) {
-                eachDayOfInterval({ start: aStart, end: aEnd }).forEach(d => {
-                    if (!isWeekend(d)) pastAbsenceDays.add(d.toISOString().split('T')[0])
-                })
-            }
-        })
+        const pastAbsenceDays = collectAbsenceDays(historyAbsences, startDate, pastEnd)
 
         let pastActual = 0
         const pastShifts = []
         historyShifts.forEach(s => {
             if (!s.start_time) return
             const start = new Date(s.start_time)
-            if (isNaN(start.getTime())) return
+            if (Number.isNaN(start.getTime())) return
             if (start >= startDate && start <= pastEnd) {
                 // Exclude TEAM shifts on days with absences
                 if (s.type?.toUpperCase() === 'TEAM') {
@@ -346,27 +314,9 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
             }
         })
 
-        let pastVacation = 0
-        historyAbsences.forEach(abs => {
-            if (!abs.start_date || !abs.end_date) return
-            const absStart = new Date(abs.start_date)
-            const absEnd = new Date(abs.end_date)
-            if (isNaN(absStart.getTime()) || isNaN(absEnd.getTime())) return
-            const start = absStart < startDate ? startDate : absStart
-            const end = absEnd > pastEnd ? pastEnd : absEnd
-            if (start <= end) {
-                if (abs.planned_hours && Number(abs.planned_hours) > 0) {
-                    pastVacation += (Number(abs.planned_hours) * 60)
-                } else {
-                    const days = eachDayOfInterval({ start, end })
-                    days.forEach(day => {
-                        // SINGLE SOURCE OF TRUTH (Carryover)
-                        const hours = calculateDailyAbsenceHours(day, abs, historyShifts, profile)
-                        pastVacation += (hours * 60)
-                    })
-                }
-            }
-        })
+        const pastVacation = calculateAbsenceMinutes(
+            historyAbsences, startDate, pastEnd, historyShifts, profile, null
+        )
         carryoverMinutes = (pastActual + pastVacation) - pastTarget
     }
 
@@ -426,7 +376,6 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
             if (type !== 'ND') return
             // Get standby config (same logic as calculateWorkHours)
             const start = new Date(shift.start_time)
-            const end = new Date(shift.end_time)
             let readinessStart = new Date(start)
             if (start.getHours() >= 12) readinessStart = new Date(start.getTime() + 86400000)
             readinessStart.setHours(0, 30, 0, 0)

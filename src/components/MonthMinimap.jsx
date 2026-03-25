@@ -1,6 +1,33 @@
 import { useEffect, useState } from 'react'
 import { getDaysInMonth, getDate, isSameMonth, isValid, format } from 'date-fns'
 
+function getShiftDotColor(dayShifts, userId) {
+    if (dayShifts.some(s => s.assigned_to === userId)) return 'bg-teal-500'
+    if (dayShifts.some(s => s.interests?.some(i => i.user_id !== userId))) return 'bg-yellow-400'
+    return 'bg-green-500'
+}
+
+function shiftDotsByDay(myShifts, userId, getPosition) {
+    const byDay = {}
+    myShifts.forEach(s => {
+        const day = getDate(new Date(s.start_time))
+        if (!byDay[day]) byDay[day] = []
+        byDay[day].push(s)
+    })
+    return Object.entries(byDay).map(([dayStr, dayShifts]) => {
+        const day = Number.parseInt(dayStr, 10)
+        const colorClass = getShiftDotColor(dayShifts, userId)
+        const sizeClass = dayShifts.length > 1 ? 'w-3 h-3' : 'w-2 h-2'
+        return (
+            <div
+                key={`shift-day-${day}`}
+                className={`absolute ${sizeClass} rounded-full left-1/2 -translate-x-1/2 border border-white ${colorClass}`}
+                style={{ top: `${getPosition(day)}%` }}
+            />
+        )
+    })
+}
+
 export default function MonthMinimap({ shifts, currentDate, userId, absences = [], headerRef }) {
     const [progress, setProgress] = useState(0)
     const [topOffset, setTopOffset] = useState(90)
@@ -97,32 +124,7 @@ export default function MonthMinimap({ shifts, currentDate, userId, absences = [
             })}
 
             {/* Shift dots — grouped by day: Teal=assigned, Green=only me, Yellow=competition */}
-            {(() => {
-                const byDay = {}
-                myShifts.forEach(s => {
-                    const day = getDate(new Date(s.start_time))
-                    if (!byDay[day]) byDay[day] = []
-                    byDay[day].push(s)
-                })
-                return Object.entries(byDay).map(([dayStr, dayShifts]) => {
-                    const day = parseInt(dayStr)
-                    const isAssigned = dayShifts.some(s => s.assigned_to === userId)
-                    const hasCompetition = dayShifts.some(s =>
-                        s.interests?.some(i => i.user_id !== userId)
-                    )
-                    const colorClass = isAssigned
-                        ? 'bg-teal-500'
-                        : hasCompetition ? 'bg-yellow-400' : 'bg-green-500'
-                    const sizeClass = dayShifts.length > 1 ? 'w-3 h-3' : 'w-2 h-2'
-                    return (
-                        <div
-                            key={`shift-day-${day}`}
-                            className={`absolute ${sizeClass} rounded-full left-1/2 -translate-x-1/2 border border-white ${colorClass}`}
-                            style={{ top: `${getPosition(day)}%` }}
-                        />
-                    )
-                })
-            })()}
+            {shiftDotsByDay(myShifts, userId, getPosition)}
 
             {/* Scroll Indicator */}
             <div

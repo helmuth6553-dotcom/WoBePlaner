@@ -81,10 +81,7 @@ import webpush from "https://esm.sh/web-push@3.6.3?bundle"
 // Let's assume Supabase supports npm specifiers now (it does).
 import webpushNpm from "npm:web-push@3.6.3";
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, verifyCronSecret } from '../_shared/cors.ts'
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -92,10 +89,13 @@ serve(async (req) => {
     }
 
     try {
+        const authError = verifyCronSecret(req)
+        if (authError) return authError
+
         // Check if we are crashing before even starting
         console.log("Function invoked - v2.0")
 
-        // NEW: Sleep for 2000ms to avoid a race condition. 
+        // NEW: Sleep for 2000ms to avoid a race condition.
         // The frontend inserts the absence (triggering this webhook) and THEN executes
         // the mark_shifts_urgent RPC. We must wait for the RPC to commit so we can find the urgent shifts.
         console.log("Waiting 2s for frontend RPCs to commit...")

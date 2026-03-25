@@ -113,6 +113,51 @@ const buildLines = (segments) => {
     return lines
 }
 
+/** Build a single PDF row for a night-shift segment line, with optional correction comparison */
+const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction, dayStr) => {
+    const intNote = line.note || ''
+    let intCorrection = null
+
+    if (origLines && line.work) {
+        const origWorkLine = origLines[lineIdx]
+        if (origWorkLine?.work) {
+            const origAzVon = timeToDecimal(origWorkLine.work.start.toISOString())
+            const origAzBis = timeToDecimal(origWorkLine.work.end.toISOString())
+            const curAzVon = timeToDecimal(line.work.start.toISOString())
+            const curAzBis = timeToDecimal(line.work.end.toISOString())
+            if (origAzVon !== curAzVon || origAzBis !== curAzBis) {
+                intCorrection = {
+                    originalStart: origWorkLine.work.start.toISOString(),
+                    originalEnd: origWorkLine.work.end.toISOString(),
+                    currentStart: line.work.start.toISOString(),
+                    currentEnd: line.work.end.toISOString()
+                }
+            }
+        } else {
+            intCorrection = { isNew: true }
+        }
+    }
+
+    const isFirst = lineIdx === 0
+    const anm = isFirst
+        ? [isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' ')
+        : ''
+
+    return {
+        datum:      isFirst ? getDayNumber(dayStr) : '',
+        tag:        isFirst ? getDayAbbr(dayStr) : '',
+        diensttyp:  isFirst ? shiftType : '',
+        azVon:      line.work    ? timeToDecimal(line.work.start.toISOString()) : '',
+        azBis:      line.work    ? timeToDecimal(line.work.end.toISOString()) : '',
+        bzVon:      line.standby ? timeToDecimal(line.standby.start.toISOString()) : '',
+        bzBis:      line.standby ? timeToDecimal(line.standby.end.toISOString()) : '',
+        correction: isFirst ? correction : null,
+        anm,
+        intNote,
+        intCorrection,
+    }
+}
+
 /**
  * Pre-process entries into PDF row objects
  * For ND shifts: expands into multiple rows (one per segment pair)
@@ -154,48 +199,7 @@ const buildPdfRows = (entries, correctionMap) => {
             }
 
             lines.forEach((line, lineIdx) => {
-                // For interruption rows (WORK segments within readiness), show the note
-                const intNote = line.note || ''
-
-                // Check if this WORK line has a corresponding original with different times
-                let intCorrection = null
-                if (origLines && line.work) {
-                    // Find matching original WORK line by index among WORK-only lines
-                    const origWorkLine = origLines[lineIdx]
-                    if (origWorkLine?.work) {
-                        const origAzVon = timeToDecimal(origWorkLine.work.start.toISOString())
-                        const origAzBis = timeToDecimal(origWorkLine.work.end.toISOString())
-                        const curAzVon = timeToDecimal(line.work.start.toISOString())
-                        const curAzBis = timeToDecimal(line.work.end.toISOString())
-                        if (origAzVon !== curAzVon || origAzBis !== curAzBis) {
-                            intCorrection = {
-                                originalStart: origWorkLine.work.start.toISOString(),
-                                originalEnd: origWorkLine.work.end.toISOString(),
-                                currentStart: line.work.start.toISOString(),
-                                currentEnd: line.work.end.toISOString()
-                            }
-                        }
-                    } else if (!origWorkLine?.work) {
-                        // New interruption that didn't exist before — mark as added
-                        intCorrection = { isNew: true }
-                    }
-                }
-
-                rows.push({
-                    datum:    lineIdx === 0 ? getDayNumber(dayStr) : '',
-                    tag:      lineIdx === 0 ? getDayAbbr(dayStr) : '',
-                    diensttyp: lineIdx === 0 ? shiftType : '',
-                    azVon:    line.work    ? timeToDecimal(line.work.start.toISOString()) : '',
-                    azBis:    line.work    ? timeToDecimal(line.work.end.toISOString()) : '',
-                    bzVon:    line.standby ? timeToDecimal(line.standby.start.toISOString()) : '',
-                    bzBis:    line.standby ? timeToDecimal(line.standby.end.toISOString()) : '',
-                    correction:    lineIdx === 0 ? correction : null,
-                    anm:           lineIdx === 0
-                                       ? [isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' ')
-                                       : '',
-                    intNote,
-                    intCorrection,
-                })
+                rows.push(buildSegmentRow(line, lineIdx, origLines, shiftType, isFlex, correction, dayStr))
             })
         } else {
             // Regular entry (TD1, TD2, TEAM, Krank, Urlaub, etc.)

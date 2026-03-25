@@ -1,19 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabase'
-import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, subYears, addYears } from 'date-fns'
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, subYears, addYears, eachDayOfInterval, isWeekend, getDay, differenceInDays, getYear } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, ChevronDown, ChevronUp, Layers, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { calculateWorkHours, processInterruptions } from '../../utils/timeCalculations'
 import { calculateGenericBalance } from '../../utils/balanceHelpers'
 import { getHolidays, isHoliday } from '../../utils/holidays'
 import { calculateAllFairnessIndices } from '../../utils/fairnessIndex'
-import { eachDayOfInterval, isWeekend, getDay, differenceInDays, getYear } from 'date-fns'
 
 // ─── Insights Engine ───
 function generateInsights(stats, employeeStats, monthlyData) {
     if (!stats || !employeeStats?.length) return []
     const insights = []
-    const prev = monthlyData?.length >= 2 ? monthlyData[monthlyData.length - 2]?.stats : null
+    const prev = monthlyData?.length >= 2 ? monthlyData.at(-2)?.stats : null
 
     // 1. Häufigster Kranktag
     const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
@@ -34,7 +33,7 @@ function generateInsights(stats, employeeStats, monthlyData) {
     }
 
     // 3. MA mit niedrigstem Puffer (Defizit)
-    const lowest = sorted[sorted.length - 1]
+    const lowest = sorted.at(-1)
     if (lowest?.puffer < -10) {
         insights.push({ color: 'rose', text: `${lowest.name.split(' ')[0]}`, detail: `hat ${lowest.puffer}h Defizit — höchster negativer Puffer`, priority: Math.abs(lowest.puffer) })
     }
@@ -68,7 +67,7 @@ function generateInsights(stats, employeeStats, monthlyData) {
         insights.push({ color: 'amber', text: `${e.name.split(' ')[0]}`, detail: `${e.maxGapDays} Arbeitstage ohne Dienst`, priority: e.maxGapDays * 5 })
     })
 
-    return insights.sort((a, b) => b.priority - a.priority).slice(0, 3)
+    return [...insights].sort((a, b) => b.priority - a.priority).slice(0, 3)
 }
 
 // ─── Sparkline Component ───
@@ -82,7 +81,7 @@ function Sparkline({ data, width = 80, height = 20 }) {
         const y = height - ((v - min) / range) * (height - 4) - 2
         return `${x},${y}`
     }).join(' ')
-    const lastVal = data[data.length - 1]
+    const lastVal = data.at(-1)
     const lastX = width - 2
     const lastY = height - ((lastVal - min) / range) * (height - 4) - 2
     const color = lastVal >= 0 ? '#059669' : '#f43f5e'
@@ -106,6 +105,148 @@ function Delta({ current, previous, inverted = false }) {
         <span className={`text-[9px] font-bold ${isPositive ? 'text-emerald-600' : 'text-rose-500'}`}>
             {isUp ? '+' : '−'}{Math.abs(diff)}
         </span>
+    )
+}
+
+// ─── Stacked Area Chart ───
+function AreaChart({ data, selectedAreaMonth, setSelectedAreaMonth }) {
+    if (!data || data.length < 2) return null
+    const w = 500, h = 140, px = 45, py = 20
+    const chartW = w - px - 10
+    const chartH = h - py
+
+    const maxVal = Math.max(...data.map(d => Math.max(
+        d.stats.totalWorkedHours + d.stats.totalVacationHours + d.stats.totalSickHours,
+        d.stats.totalSollHours
+    )), 1)
+    // Round up to nice number for Y axis
+    const yMax = Math.ceil(maxVal / 500) * 500 || 500
+    const ySteps = [yMax, yMax * 0.75, yMax * 0.5, yMax * 0.25, 0]
+
+    const getX = (i) => px + (i / (data.length - 1)) * chartW
+    const getY = (val) => py + (1 - val / yMax) * chartH
+
+    const workY = data.map(d => getY(d.stats.totalWorkedHours))
+    const vacY = data.map(d => getY(d.stats.totalWorkedHours + d.stats.totalVacationHours))
+    const sickY = data.map(d => getY(d.stats.totalWorkedHours + d.stats.totalVacationHours + d.stats.totalSickHours))
+    const baseY = getY(0)
+
+    const makeArea = (topY, bottomY) => {
+        const top = topY.map((y, i) => `${getX(i)},${y}`).join(' ')
+        const bottom = [...bottomY].reverse().map((y, i) => `${getX(data.length - 1 - i)},${y}`).join(' ')
+        return `${top} ${bottom}`
+    }
+
+    const sollVal = data.at(-1).stats.totalSollHours
+    const sollY = getY(sollVal)
+
+    // Month initial letters
+    const monthLetters = data.map(m => {
+        const l = m.label
+        return l.charAt(0).toUpperCase()
+    })
+
+    return (
+        <div className="relative">
+            <svg viewBox={`0 0 ${w} ${h + 40}`} className="w-full" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                    <linearGradient id="gWork" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.03" />
+                    </linearGradient>
+                    <linearGradient id="gVac" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.35" />
+                        <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.03" />
+                    </linearGradient>
+                    <linearGradient id="gSick" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#ef4444" stopOpacity="0.35" />
+                        <stop offset="100%" stopColor="#ef4444" stopOpacity="0.03" />
+                    </linearGradient>
+                </defs>
+
+                {/* Grid lines + Y labels */}
+                {ySteps.map((val) => {
+                    const y = getY(val)
+                    return (
+                        <g key={val}>
+                            <line x1={px} y1={y} x2={w - 10} y2={y} stroke="#f3f4f6" strokeWidth="0.5" />
+                            <text x={px - 4} y={y + 3} textAnchor="end" fill="#9ca3af" style={{ fontSize: '8px', fontWeight: 500 }}>{Math.round(val)}</text>
+                        </g>
+                    )
+                })}
+
+                {/* Soll line */}
+                <line x1={px} y1={sollY} x2={w - 10} y2={sollY} stroke="#1f2937" strokeWidth="1" strokeDasharray="4 3" opacity="0.5" />
+                <text x={w - 8} y={sollY + 3} fill="#6b7280" style={{ fontSize: '7px', fontWeight: 600 }}>Soll</text>
+
+                {/* Areas */}
+                <polygon points={makeArea(workY, data.map(() => baseY))} fill="url(#gWork)" />
+                <polygon points={makeArea(vacY, workY)} fill="url(#gVac)" />
+                <polygon points={makeArea(sickY, vacY)} fill="url(#gSick)" />
+
+                {/* Contour lines */}
+                <polyline fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeLinejoin="round"
+                    points={workY.map((y, i) => `${getX(i)},${y}`).join(' ')} />
+                <polyline fill="none" stroke="#f59e0b" strokeWidth="1.2" strokeLinejoin="round" opacity="0.7"
+                    points={vacY.map((y, i) => `${getX(i)},${y}`).join(' ')} />
+                <polyline fill="none" stroke="#ef4444" strokeWidth="1" strokeLinejoin="round" opacity="0.7"
+                    points={sickY.map((y, i) => `${getX(i)},${y}`).join(' ')} />
+
+                {/* Month labels + puffer */}
+                {data.map((m, i) => {
+                    const x = getX(i)
+                    const puffer = Math.round(m.stats.totalIstHours - m.stats.totalSollHours)
+                    const isCurrent = i === data.length - 1
+                    return (
+                        <g key={m.label} className="cursor-pointer" onClick={() => setSelectedAreaMonth(selectedAreaMonth === i ? null : i)}>
+                            <text x={x} y={h + 18} textAnchor="middle" fill={isCurrent ? '#1f2937' : '#9ca3af'}
+                                style={{ fontSize: '7.5px', fontWeight: isCurrent ? 700 : 600 }}>{monthLetters[i]}</text>
+                            <text x={x} y={h + 30} textAnchor="middle"
+                                fill={puffer >= 0 ? '#059669' : '#e11d48'} style={{ fontSize: '6.5px', fontWeight: 700 }}>
+                                {puffer > 0 ? '+' : ''}{puffer}
+                            </text>
+
+                            {selectedAreaMonth === i && (
+                                <g>
+                                    <rect x={Math.max(2, Math.min(x - 38, w - 78))} y={Math.max(0, sickY[i] - 52)} width="76" height="48" rx="8" fill="#111827" opacity="0.95" />
+                                    <text x={Math.max(6, Math.min(x - 34, w - 74))} y={sickY[i] - 38} fill="#93c5fd" style={{ fontSize: '8px', fontWeight: 700 }}>Arbeit: {Math.round(m.stats.totalWorkedHours)}h</text>
+                                    <text x={Math.max(6, Math.min(x - 34, w - 74))} y={sickY[i] - 27} fill="#fcd34d" style={{ fontSize: '8px', fontWeight: 700 }}>Urlaub: {Math.round(m.stats.totalVacationHours)}h</text>
+                                    <text x={Math.max(6, Math.min(x - 34, w - 74))} y={sickY[i] - 16} fill="#fca5a5" style={{ fontSize: '8px', fontWeight: 700 }}>Krank: {Math.round(m.stats.totalSickHours)}h</text>
+                                    <text x={Math.max(6, Math.min(x - 34, w - 74))} y={sickY[i] - 5} fill="white" style={{ fontSize: '8px', fontWeight: 700 }}>Soll: {Math.round(m.stats.totalSollHours)}h</text>
+                                </g>
+                            )}
+                        </g>
+                    )
+                })}
+            </svg>
+        </div>
+    )
+}
+
+// ─── Mini Donut ───
+function MiniDonut({ work, vacation, sick, soll }) {
+    const total = work + vacation + sick
+    const circumference = 2 * Math.PI * 14 // r=14
+    const workPct = total > 0 ? (work / total) * circumference : 0
+    const vacPct = total > 0 ? (vacation / total) * circumference : 0
+    const sickPct = total > 0 ? (sick / total) * circumference : 0
+    const pct = soll > 0 ? Math.round((total / soll) * 100) : 0
+
+    return (
+        <div className="relative w-16 h-16 shrink-0">
+            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                <circle cx="18" cy="18" r="14" fill="none" stroke="#f3f4f6" strokeWidth="3.5" />
+                <circle cx="18" cy="18" r="14" fill="none" stroke="#3b82f6" strokeWidth="3.5"
+                    strokeDasharray={`${workPct} ${circumference}`} strokeLinecap="round" />
+                <circle cx="18" cy="18" r="14" fill="none" stroke="#f59e0b" strokeWidth="3.5"
+                    strokeDasharray={`${vacPct} ${circumference}`} strokeDashoffset={`${-workPct}`} strokeLinecap="round" />
+                <circle cx="18" cy="18" r="14" fill="none" stroke="#ef4444" strokeWidth="3.5"
+                    strokeDasharray={`${sickPct} ${circumference}`} strokeDashoffset={`${-(workPct + vacPct)}`} strokeLinecap="round" />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[9px] font-bold text-gray-600">{pct}%</span>
+            </div>
+        </div>
     )
 }
 
@@ -181,15 +322,6 @@ export default function AdminOverview() {
             }
         })
 
-        const getShiftHours = (shift, userId) => {
-            const shiftEntries = entryMap[shift.id]
-            const entry = userId ? shiftEntries?.[userId] : Object.values(shiftEntries || {})[0]
-            if (entry && (entry.calculated_hours || entry.calculated_hours === 0)) {
-                return Number(entry.calculated_hours)
-            }
-            return calculateWorkHours(shift.start_time, shift.end_time, shift.type)
-        }
-
         const shiftHours = { TD: 0, TD1: 0, TD2: 0, ND: 0, DBD: 0, AST: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0, SUPERVISION: 0 }
         const sickHours = { TD1: 0, TD2: 0, ND: 0, DBD: 0, AST: 0, TEAM: 0, FORTBILDUNG: 0, EINSCHULUNG: 0, MITARBEITERGESPRAECH: 0, SONSTIGES: 0, SUPERVISION: 0 }
         let flexCount = 0
@@ -201,8 +333,8 @@ export default function AdminOverview() {
         const empAbsenceDays = {}
         absences?.forEach(abs => {
             if (!abs.user_id || !abs.start_date || !abs.end_date) return
-            const absStart = new Date(abs.start_date) < start ? start : new Date(abs.start_date)
-            const absEnd = new Date(abs.end_date) > end ? end : new Date(abs.end_date)
+            const absStart = new Date(Math.max(start, new Date(abs.start_date)))
+            const absEnd = new Date(Math.min(end, new Date(abs.end_date)))
             if (absStart <= absEnd) {
                 if (!empAbsenceDays[abs.user_id]) empAbsenceDays[abs.user_id] = new Set()
                 eachDayOfInterval({ start: absStart, end: absEnd }).forEach(d => {
@@ -213,9 +345,10 @@ export default function AdminOverview() {
         const allAbsenceDaysByUser = empAbsenceDays
 
         // Planned hours
+        const SPECIAL_TYPES = new Set(['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'])
         let totalPlannedHours = 0
         shifts?.forEach(s => {
-            if (!['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'].includes(s.type)) {
+            if (s.type !== 'TEAM' && !SPECIAL_TYPES.has(s.type)) {
                 totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type)
             }
         })
@@ -224,7 +357,7 @@ export default function AdminOverview() {
             const availableCount = employees.filter(emp => !allAbsenceDaysByUser[emp.id]?.has(dateKey)).length
             totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * availableCount
         })
-        shifts?.filter(s => ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'].includes(s.type)).forEach(s => {
+        shifts?.filter(s => SPECIAL_TYPES.has(s.type)).forEach(s => {
             totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * monthInterests.filter(i => i.shift_id === s.id).length
         })
 
@@ -232,8 +365,6 @@ export default function AdminOverview() {
         const daysInMonth = eachDayOfInterval({ start, end })
         const holidays = getHolidays(getYear(start))
         let totalSollHours = 0 // Will be derived from per-employee calculateGenericBalance results
-
-        const SPECIAL_TYPES = ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
 
         // Sick
         absences?.forEach(abs => {
@@ -249,8 +380,8 @@ export default function AdminOverview() {
         let totalVacationHours = 0
         absences?.forEach(abs => {
             if (abs.type !== 'Urlaub') return
-            const absStart = new Date(abs.start_date) < start ? start : new Date(abs.start_date)
-            const absEnd = new Date(abs.end_date) > end ? end : new Date(abs.end_date)
+            const absStart = new Date(Math.max(start, new Date(abs.start_date)))
+            const absEnd = new Date(Math.min(end, new Date(abs.end_date)))
             if (absStart <= absEnd) {
                 const vacWorkDays = eachDayOfInterval({ start: absStart, end: absEnd }).filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
                 const user = employees.find(e => e.id === abs.user_id)
@@ -269,7 +400,7 @@ export default function AdminOverview() {
         entries?.forEach(entry => {
             if (!entry.interruptions?.length) return
             const shiftStart = new Date(entry.actual_start || entry.shifts?.start_time)
-            if (isNaN(shiftStart.getTime())) return
+            if (Number.isNaN(shiftStart.getTime())) return
             let rStart = new Date(shiftStart)
             if (shiftStart.getHours() >= 12) rStart = new Date(rStart.getTime() + 86400000)
             rStart.setHours(0, 30, 0, 0)
@@ -295,7 +426,7 @@ export default function AdminOverview() {
             const empShifts = shifts?.filter(s => {
                 const type = s.type?.toUpperCase()
                 if (type === 'TEAM') return true // TEAM for everyone (absence exclusion handled by calculateGenericBalance)
-                if (SPECIAL_TYPES.includes(type)) {
+                if (SPECIAL_TYPES.has(type)) {
                     return monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
                 }
                 return s.assigned_to === emp.id
@@ -319,7 +450,7 @@ export default function AdminOverview() {
 
             // Operative metrics (NOT part of hour calculation, remain local)
             let empFlex = 0
-            urgentShifts.forEach(s => { if (monthInterests.find(i => i.shift_id === s.id && i.user_id === emp.id)) empFlex++ })
+            urgentShifts.forEach(s => { if (monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)) empFlex++ })
             let empSwap = 0
             monthSwaps.forEach(sw => { if (sw.new_user_id === emp.id || sw.old_user_id === emp.id) empSwap++ })
 
@@ -327,8 +458,8 @@ export default function AdminOverview() {
             let empVacDays = 0, leadTime = 0, vacCount = 0, maxBlock = 0, bridgeDays = 0
             absences?.forEach(abs => {
                 if (abs.user_id !== emp.id || abs.type !== 'Urlaub') return
-                const s0 = new Date(abs.start_date) < start ? start : new Date(abs.start_date)
-                const e0 = new Date(abs.end_date) > end ? end : new Date(abs.end_date)
+                const s0 = new Date(Math.max(start, new Date(abs.start_date)))
+                const e0 = new Date(Math.min(end, new Date(abs.end_date)))
                 if (s0 <= e0) {
                     const full = eachDayOfInterval({ start: new Date(abs.start_date), end: new Date(abs.end_date) })
                     const net = full.filter(d => !isWeekend(d) && !isHoliday(d, holidays))
@@ -345,8 +476,8 @@ export default function AdminOverview() {
             const absenceDates = new Set()
             empAbsences.forEach(a => {
                 if (a.status !== 'genehmigt' && a.type !== 'Krank') return
-                const aStart = new Date(a.start_date) < start ? start : new Date(a.start_date)
-                const aEnd = new Date(a.end_date) > end ? end : new Date(a.end_date)
+                const aStart = new Date(Math.max(start, new Date(a.start_date)))
+                const aEnd = new Date(Math.min(end, new Date(a.end_date)))
                 if (aStart <= aEnd) {
                     eachDayOfInterval({ start: aStart, end: aEnd }).forEach(d => absenceDates.add(format(d, 'yyyy-MM-dd')))
                 }
@@ -477,14 +608,14 @@ export default function AdminOverview() {
                 setStats(aggregated.stats)
                 setEmployeeStats(aggregated.employeeStats)
             } else {
-                const current = results[results.length - 1]
+                const current = results.at(-1)
                 setStats(current.stats)
                 setEmployeeStats(current.employeeStats)
             }
 
             // Fairness index
             try {
-                const empIds = (globalMode === 'jahr' ? aggregateYearStats(results).employeeStats : results[results.length - 1].employeeStats).map(e => e.id)
+                const empIds = (globalMode === 'jahr' ? aggregateYearStats(results).employeeStats : results.at(-1).employeeStats).map(e => e.id)
                 const sixMonthsAgo = subMonths(selectedMonth, 6).toISOString()
                 const [flexRes, votesRes] = await Promise.all([
                     supabase.from('shift_interests').select('user_id').eq('is_flex', true).gte('created_at', sixMonthsAgo),
@@ -492,7 +623,7 @@ export default function AdminOverview() {
                 ])
                 if (flexRes.data && votesRes.data) {
                     const fi = calculateAllFairnessIndices(empIds, flexRes.data, votesRes.data)
-                    const currentEmpStats = globalMode === 'jahr' ? aggregateYearStats(results).employeeStats : results[results.length - 1].employeeStats
+                    const currentEmpStats = globalMode === 'jahr' ? aggregateYearStats(results).employeeStats : results.at(-1).employeeStats
                     const named = fi.map(f => ({ ...f, name: currentEmpStats.find(e => e.id === f.userId)?.name || '?' }))
                     setFairnessData(named)
                 }
@@ -515,7 +646,7 @@ export default function AdminOverview() {
             flexCount: 0, sickCount: 0, swapCount: 0,
             totalWorkedHours: 0, totalSickHours: 0,
             totalVacationHours: 0, totalSollHours: 0, totalIstHours: 0, totalPlannedHours: 0,
-            puffer: 0, employeeCount: validResults[validResults.length - 1].stats.employeeCount,
+            puffer: 0, employeeCount: validResults.at(-1).stats.employeeCount,
             totalInterruptionCount: 0, totalInterruptionNetGain: 0,
             sickByDayOfWeek: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
             nightShiftCount: 0, weekendShiftCount: 0
@@ -553,9 +684,7 @@ export default function AdminOverview() {
         const empMap = {}
         validResults.forEach(r => {
             r.employeeStats.forEach(e => {
-                if (!empMap[e.id]) {
-                    empMap[e.id] = { ...e, shiftTypeHours: { ...e.shiftTypeHours } }
-                } else {
+                if (empMap[e.id]) {
                     const m = empMap[e.id]
                     m.sollHours += e.sollHours
                     m.workedHours = Math.round((m.workedHours + e.workedHours) * 100) / 100
@@ -575,6 +704,8 @@ export default function AdminOverview() {
                     Object.entries(e.shiftTypeHours || {}).forEach(([k, v]) => {
                         m.shiftTypeHours[k] = (m.shiftTypeHours[k] || 0) + v
                     })
+                } else {
+                    empMap[e.id] = { ...e, shiftTypeHours: { ...e.shiftTypeHours } }
                 }
             })
         })
@@ -584,7 +715,7 @@ export default function AdminOverview() {
     }
 
     // Previous month/year stats for deltas
-    const prevStats = globalMode === 'jahr' ? null : (monthlyData.length >= 2 ? monthlyData[monthlyData.length - 2]?.stats : null)
+    const prevStats = globalMode !== 'jahr' && monthlyData.length >= 2 ? monthlyData.at(-2)?.stats : null
     const insights = stats ? generateInsights(stats, employeeStats, monthlyData) : []
 
     // Shift type config for Dienstprofil
@@ -599,148 +730,6 @@ export default function AdminOverview() {
         { key: 'EINSCHULUNG', label: 'Einsch.', color: 'bg-pink-500' },
         { key: 'SONSTIGES', label: 'Sonst.', color: 'bg-gray-400' },
     ]
-
-    // ─── Stacked Area Chart ───
-    const AreaChart = ({ data }) => {
-        if (!data || data.length < 2) return null
-        const w = 500, h = 140, px = 45, py = 20
-        const chartW = w - px - 10
-        const chartH = h - py
-
-        const maxVal = Math.max(...data.map(d => Math.max(
-            d.stats.totalWorkedHours + d.stats.totalVacationHours + d.stats.totalSickHours,
-            d.stats.totalSollHours
-        )), 1)
-        // Round up to nice number for Y axis
-        const yMax = Math.ceil(maxVal / 500) * 500 || 500
-        const ySteps = [yMax, yMax * 0.75, yMax * 0.5, yMax * 0.25, 0]
-
-        const getX = (i) => px + (i / (data.length - 1)) * chartW
-        const getY = (val) => py + (1 - val / yMax) * chartH
-
-        const workY = data.map(d => getY(d.stats.totalWorkedHours))
-        const vacY = data.map(d => getY(d.stats.totalWorkedHours + d.stats.totalVacationHours))
-        const sickY = data.map(d => getY(d.stats.totalWorkedHours + d.stats.totalVacationHours + d.stats.totalSickHours))
-        const baseY = getY(0)
-
-        const makeArea = (topY, bottomY) => {
-            const top = topY.map((y, i) => `${getX(i)},${y}`).join(' ')
-            const bottom = [...bottomY].reverse().map((y, i) => `${getX(data.length - 1 - i)},${y}`).join(' ')
-            return `${top} ${bottom}`
-        }
-
-        const sollVal = data[data.length - 1].stats.totalSollHours
-        const sollY = getY(sollVal)
-
-        // Month initial letters
-        const monthLetters = data.map(m => {
-            const l = m.label
-            return l.charAt(0).toUpperCase()
-        })
-
-        return (
-            <div className="relative">
-                <svg viewBox={`0 0 ${w} ${h + 40}`} className="w-full" preserveAspectRatio="xMidYMid meet">
-                    <defs>
-                        <linearGradient id="gWork" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
-                            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.03" />
-                        </linearGradient>
-                        <linearGradient id="gVac" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.35" />
-                            <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.03" />
-                        </linearGradient>
-                        <linearGradient id="gSick" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#ef4444" stopOpacity="0.35" />
-                            <stop offset="100%" stopColor="#ef4444" stopOpacity="0.03" />
-                        </linearGradient>
-                    </defs>
-
-                    {/* Grid lines + Y labels */}
-                    {ySteps.map((val, i) => {
-                        const y = getY(val)
-                        return (
-                            <g key={i}>
-                                <line x1={px} y1={y} x2={w - 10} y2={y} stroke="#f3f4f6" strokeWidth="0.5" />
-                                <text x={px - 4} y={y + 3} textAnchor="end" fill="#9ca3af" style={{ fontSize: '8px', fontWeight: 500 }}>{Math.round(val)}</text>
-                            </g>
-                        )
-                    })}
-
-                    {/* Soll line */}
-                    <line x1={px} y1={sollY} x2={w - 10} y2={sollY} stroke="#1f2937" strokeWidth="1" strokeDasharray="4 3" opacity="0.5" />
-                    <text x={w - 8} y={sollY + 3} fill="#6b7280" style={{ fontSize: '7px', fontWeight: 600 }}>Soll</text>
-
-                    {/* Areas */}
-                    <polygon points={makeArea(workY, data.map(() => baseY))} fill="url(#gWork)" />
-                    <polygon points={makeArea(vacY, workY)} fill="url(#gVac)" />
-                    <polygon points={makeArea(sickY, vacY)} fill="url(#gSick)" />
-
-                    {/* Contour lines */}
-                    <polyline fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeLinejoin="round"
-                        points={workY.map((y, i) => `${getX(i)},${y}`).join(' ')} />
-                    <polyline fill="none" stroke="#f59e0b" strokeWidth="1.2" strokeLinejoin="round" opacity="0.7"
-                        points={vacY.map((y, i) => `${getX(i)},${y}`).join(' ')} />
-                    <polyline fill="none" stroke="#ef4444" strokeWidth="1" strokeLinejoin="round" opacity="0.7"
-                        points={sickY.map((y, i) => `${getX(i)},${y}`).join(' ')} />
-
-                    {/* Month labels + puffer */}
-                    {data.map((m, i) => {
-                        const x = getX(i)
-                        const puffer = Math.round(m.stats.totalIstHours - m.stats.totalSollHours)
-                        const isCurrent = i === data.length - 1
-                        return (
-                            <g key={i} className="cursor-pointer" onClick={() => setSelectedAreaMonth(selectedAreaMonth === i ? null : i)}>
-                                <text x={x} y={h + 18} textAnchor="middle" fill={isCurrent ? '#1f2937' : '#9ca3af'}
-                                    style={{ fontSize: '7.5px', fontWeight: isCurrent ? 700 : 600 }}>{monthLetters[i]}</text>
-                                <text x={x} y={h + 30} textAnchor="middle"
-                                    fill={puffer >= 0 ? '#059669' : '#e11d48'} style={{ fontSize: '6.5px', fontWeight: 700 }}>
-                                    {puffer > 0 ? '+' : ''}{puffer}
-                                </text>
-
-                                {selectedAreaMonth === i && (
-                                    <g>
-                                        <rect x={Math.max(2, Math.min(x - 38, w - 78))} y={Math.max(0, sickY[i] - 52)} width="76" height="48" rx="8" fill="#111827" opacity="0.95" />
-                                        <text x={Math.max(6, Math.min(x - 34, w - 74))} y={sickY[i] - 38} fill="#93c5fd" style={{ fontSize: '8px', fontWeight: 700 }}>Arbeit: {Math.round(m.stats.totalWorkedHours)}h</text>
-                                        <text x={Math.max(6, Math.min(x - 34, w - 74))} y={sickY[i] - 27} fill="#fcd34d" style={{ fontSize: '8px', fontWeight: 700 }}>Urlaub: {Math.round(m.stats.totalVacationHours)}h</text>
-                                        <text x={Math.max(6, Math.min(x - 34, w - 74))} y={sickY[i] - 16} fill="#fca5a5" style={{ fontSize: '8px', fontWeight: 700 }}>Krank: {Math.round(m.stats.totalSickHours)}h</text>
-                                        <text x={Math.max(6, Math.min(x - 34, w - 74))} y={sickY[i] - 5} fill="white" style={{ fontSize: '8px', fontWeight: 700 }}>Soll: {Math.round(m.stats.totalSollHours)}h</text>
-                                    </g>
-                                )}
-                            </g>
-                        )
-                    })}
-                </svg>
-            </div>
-        )
-    }
-
-    // ─── Mini Donut ───
-    const MiniDonut = ({ work, vacation, sick, soll }) => {
-        const total = work + vacation + sick
-        const circumference = 2 * Math.PI * 14 // r=14
-        const workPct = total > 0 ? (work / total) * circumference : 0
-        const vacPct = total > 0 ? (vacation / total) * circumference : 0
-        const sickPct = total > 0 ? (sick / total) * circumference : 0
-        const pct = soll > 0 ? Math.round((total / soll) * 100) : 0
-
-        return (
-            <div className="relative w-16 h-16 shrink-0">
-                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                    <circle cx="18" cy="18" r="14" fill="none" stroke="#f3f4f6" strokeWidth="3.5" />
-                    <circle cx="18" cy="18" r="14" fill="none" stroke="#3b82f6" strokeWidth="3.5"
-                        strokeDasharray={`${workPct} ${circumference}`} strokeLinecap="round" />
-                    <circle cx="18" cy="18" r="14" fill="none" stroke="#f59e0b" strokeWidth="3.5"
-                        strokeDasharray={`${vacPct} ${circumference}`} strokeDashoffset={`${-workPct}`} strokeLinecap="round" />
-                    <circle cx="18" cy="18" r="14" fill="none" stroke="#ef4444" strokeWidth="3.5"
-                        strokeDasharray={`${sickPct} ${circumference}`} strokeDashoffset={`${-(workPct + vacPct)}`} strokeLinecap="round" />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[9px] font-bold text-gray-600">{pct}%</span>
-                </div>
-            </div>
-        )
-    }
 
     // Navigation helpers
     const navigateBack = () => {
@@ -826,7 +815,7 @@ export default function AdminOverview() {
                                                 : <TrendingDown size={12} className="text-rose-500" />
                                         })()}
                                         <span className={`text-[10px] font-bold ${(stats.puffer - (prevStats?.puffer || 0)) >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                            {(() => { const d = Math.round((stats.puffer - (prevStats?.puffer || 0)) * 100) / 100; return `${d > 0 ? '+' : ''}${d.toFixed(2)} vs. ${monthlyData.length >= 2 ? monthlyData[monthlyData.length - 2]?.label : 'Vormonat'}` })()}
+                                            {(() => { const d = Math.round((stats.puffer - (prevStats?.puffer || 0)) * 100) / 100; return `${d > 0 ? '+' : ''}${d.toFixed(2)} vs. ${monthlyData.length >= 2 ? monthlyData.at(-2)?.label : 'Vormonat'}` })()}
                                         </span>
                                     </div>
                                 )}
@@ -891,11 +880,11 @@ export default function AdminOverview() {
                         {/* Insights */}
                         {insights.length > 0 && (
                             <div className="space-y-2">
-                                {insights.map((ins, i) => {
+                                {insights.map((ins) => {
                                     const bgMap = { amber: 'bg-amber-50', rose: 'bg-rose-50', emerald: 'bg-emerald-50', orange: 'bg-orange-50' }
                                     const barMap = { amber: 'bg-amber-400', rose: 'bg-rose-400', emerald: 'bg-emerald-500', orange: 'bg-orange-400' }
                                     return (
-                                        <div key={i} className={`flex items-start gap-2 ${bgMap[ins.color] || 'bg-gray-50'} rounded-lg px-3 py-2`}>
+                                        <div key={`${ins.color}-${ins.text}`} className={`flex items-start gap-2 ${bgMap[ins.color] || 'bg-gray-50'} rounded-lg px-3 py-2`}>
                                             <div className={`w-[3px] rounded self-stretch shrink-0 ${barMap[ins.color] || 'bg-gray-400'}`} />
                                             <p className="text-[11px] text-gray-700 leading-snug">
                                                 <span className="font-bold">{ins.text}</span> {ins.detail}
@@ -1024,15 +1013,15 @@ export default function AdminOverview() {
                                 const maxSick = Math.max(...Object.values(stats.sickByDayOfWeek || {}), 1)
                                 return (
                                     <div className="flex items-end justify-between gap-1 h-16 px-1">
-                                        {dayOrder.map(i => {
-                                            const count = stats.sickByDayOfWeek?.[i] || 0
+                                        {dayOrder.map(dayIdx => {
+                                            const count = stats.sickByDayOfWeek?.[dayIdx] || 0
                                             const pct = count > 0 ? Math.max((count / maxSick) * 100, 5) : 2
                                             const isHighest = count === maxSick && count > 0
                                             return (
-                                                <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
+                                                <div key={dayIdx} className="flex-1 flex flex-col items-center justify-end h-full">
                                                     <div className={`w-full rounded-t transition-all ${count > 0 ? (isHighest ? 'bg-red-400' : 'bg-red-300') : 'bg-red-200'}`}
                                                         style={{ height: `${pct}%`, minHeight: '2px' }} />
-                                                    <span className="text-[9px] text-gray-400 font-bold mt-1">{dayLabels[i]}</span>
+                                                    <span className="text-[9px] text-gray-400 font-bold mt-1">{dayLabels[dayIdx]}</span>
                                                 </div>
                                             )
                                         })}
@@ -1045,12 +1034,12 @@ export default function AdminOverview() {
                     {/* ═══ SECTION 3b: DIENSTPROFIL-VERGLEICH ═══ */}
                     {employeeStats.length > 0 && (
                         <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
-                            <div className="flex items-center gap-2 mb-3 cursor-pointer" onClick={() => setShowProfil(!showProfil)}>
+                            <button type="button" className="flex items-center gap-2 mb-3 cursor-pointer w-full text-left" onClick={() => setShowProfil(!showProfil)}>
                                 <Users size={16} className="text-gray-500" />
                                 <h2 className="text-sm font-bold text-gray-900 flex-1">Dienstprofil-Vergleich</h2>
                                 <span className="text-[10px] text-gray-400 font-medium mr-1">{employeeStats.length} MA</span>
                                 {showProfil ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-                            </div>
+                            </button>
 
                             {/* Team Average Bar */}
                             {(() => {
@@ -1134,7 +1123,7 @@ export default function AdminOverview() {
                                 <BarChart3 size={16} className="text-gray-500" />
                                 <h2 className="text-sm font-bold text-gray-900">12-Monats-Verlauf</h2>
                             </div>
-                            <AreaChart data={monthlyData} />
+                            <AreaChart data={monthlyData} selectedAreaMonth={selectedAreaMonth} setSelectedAreaMonth={setSelectedAreaMonth} />
                             <div className="flex items-center justify-center gap-4 mt-2">
                                 <span className="flex items-center gap-1.5 text-[9px] font-bold text-gray-500"><span className="w-3 h-1.5 rounded-full bg-blue-500 inline-block" />Arbeit</span>
                                 <span className="flex items-center gap-1.5 text-[9px] font-bold text-gray-500"><span className="w-3 h-1.5 rounded-full bg-amber-400 inline-block" />Urlaub</span>
@@ -1220,15 +1209,18 @@ export default function AdminOverview() {
                                     else if (emp.puffer < -5) badgeClass = 'bg-rose-50 text-rose-700'
 
                                     const isExpanded = expandedEmployeeIds.includes(emp.id)
+                                    let pufferSign = ''
+                                    if (emp.puffer > 0) pufferSign = '+'
+                                    else if (emp.puffer < 0) pufferSign = '−'
 
                                     return (
                                         <div key={emp.id} className="border-b border-gray-50 last:border-b-0">
                                             {/* Summary Row */}
-                                            <div className="flex items-center gap-2 py-3 px-1 cursor-pointer active:bg-gray-50 transition-colors" onClick={() => toggleEmployee(emp.id)}>
+                                            <button type="button" className="flex items-center gap-2 py-3 px-1 cursor-pointer active:bg-gray-50 transition-colors w-full text-left" onClick={() => toggleEmployee(emp.id)}>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-sm font-bold text-gray-800 truncate">{emp.name}</span>
-                                                        {flags.map((f, i) => <span key={i} className="text-[9px]" title={f.tip}>{f.emoji}</span>)}
+                                                        {flags.map((f) => <span key={f.tip} className="text-[9px]" title={f.tip}>{f.emoji}</span>)}
                                                     </div>
                                                     <Sparkline data={sparkData} />
                                                 </div>
@@ -1245,11 +1237,11 @@ export default function AdminOverview() {
                                                 {/* Puffer Badge */}
                                                 <div className="flex items-center gap-1.5 shrink-0">
                                                     <span className={`${badgeClass} text-[10px] font-bold px-2 py-0.5 rounded-full font-mono`}>
-                                                        {emp.puffer > 0 ? '+' : emp.puffer < 0 ? '−' : ''}{Math.abs(emp.puffer).toFixed(2)}
+                                                        {pufferSign}{Math.abs(emp.puffer).toFixed(2)}
                                                     </span>
                                                     {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                                                 </div>
-                                            </div>
+                                            </button>
 
                                             {/* Expanded Detail */}
                                             {isExpanded && (

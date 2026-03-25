@@ -59,6 +59,39 @@ function normalizeType(type) {
     return type
 }
 
+function renderInterruptionDetail(d) {
+    const actualH = Math.round(d.actualMinutes / 60 * 100) / 100
+    const creditedH = Math.round(d.creditedMinutes / 60 * 100) / 100
+    const detailNet = Math.round((d.creditedMinutes - d.actualMinutes * 0.5) / 60 * 100) / 100
+    const timeLabel = creditedH === actualH ? '' : ` → ${creditedH}h`
+    return (
+        <div key={`${format(new Date(d.start), 'HHmm')}-${format(new Date(d.end), 'HHmm')}`} className="flex items-center justify-between py-0.5 px-2 text-[11px]">
+            <span className="text-gray-500">
+                {format(new Date(d.start), 'HH:mm')}–{format(new Date(d.end), 'HH:mm')}
+                <span className="text-gray-400 ml-1">({actualH}h{timeLabel})</span>
+            </span>
+            <span className="text-orange-600 font-bold">+{detailNet}h</span>
+        </div>
+    )
+}
+
+function renderAdjustmentRow(adj) {
+    const dateStr = format(new Date(adj.date), 'dd.MM.', { locale: de })
+    const colors = SHIFT_TYPE_COLORS[adj.shiftType] || 'bg-gray-100 text-gray-700'
+    return (
+        <div key={`${adj.shiftType}-${adj.date}`} className="flex items-center justify-between py-0.5 px-2 text-[11px]">
+            <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-gray-200 text-gray-600">{dateStr}</span>
+                <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${colors}`}>{adj.shiftType}</span>
+                <span className="text-gray-500">{adj.plannedHours}h → {adj.actualHours}h</span>
+            </div>
+            <span className={`font-bold ${adj.diff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                {adj.diff > 0 ? '+' : ''}{adj.diff}h
+            </span>
+        </div>
+    )
+}
+
 export default function ProfileStats() {
     const { user } = useAuth()
     const [balance, setBalance] = useState(null)
@@ -190,8 +223,8 @@ export default function ProfileStats() {
         const myAbsenceDays = new Set()
         myAbsences.forEach(abs => {
             if (!abs.start_date || !abs.end_date) return
-            const absStart = new Date(abs.start_date) < mStart ? mStart : new Date(abs.start_date)
-            const absEnd = new Date(abs.end_date) > mEnd ? mEnd : new Date(abs.end_date)
+            const absStart = new Date(Math.max(mStart, new Date(abs.start_date)))
+            const absEnd = new Date(Math.min(mEnd, new Date(abs.end_date)))
             if (absStart <= absEnd) {
                 eachDayOfInterval({ start: absStart, end: absEnd }).forEach(d => {
                     if (!isWeekend(d)) myAbsenceDays.add(d.toISOString().split('T')[0])
@@ -395,8 +428,8 @@ export default function ProfileStats() {
             if (!abs.start_date || !abs.end_date) return
             const absStart = new Date(abs.start_date)
             const absEnd = new Date(abs.end_date)
-            const start = absStart < mStart ? mStart : absStart
-            const end = absEnd > mEnd ? mEnd : absEnd
+            const start = new Date(Math.max(mStart, absStart))
+            const end = new Date(Math.min(mEnd, absEnd))
             if (start > end) return
             if (!(absStart <= mEnd && absEnd >= mStart)) return
 
@@ -601,6 +634,7 @@ export default function ProfileStats() {
             running = Math.round((running + corr.correction_hours) * 100) / 100
             rows.push({ kind: 'correction', hours: corr.correction_hours,
                 reason: corr.reason, running, corr,
+                corrId: corr.id || `corr-${corr.reason || ''}`,
                 isFirstCorrection: i === 0 })
         })
         return { rows, totalGeleistet: running }
@@ -722,9 +756,13 @@ export default function ProfileStats() {
                                     const isLastShift = i === lastShiftIdx
                                     const isLastAbs = i === lastAbsIdx
                                     const showSeparator = row.isFirstAbsence || row.isFirstCorrection
+                                    let runningStyle = 'text-gray-300'
+                                    if (isLastShift && lastAbsIdx === -1) runningStyle = 'font-bold text-blue-700'
+                                    else if (isLastShift) runningStyle = 'text-gray-400'
+                                    else if (isLastAbs) runningStyle = 'font-bold text-gray-700'
 
                                     return (
-                                        <div key={`${row.kind}-${row.type || i}`}>
+                                        <div key={`${row.kind}-${row.type || row.corrId}`}>
                                             {showSeparator && <div className="border-t border-gray-200 my-1.5" />}
                                             <div className="flex items-center py-1.5 px-2 rounded-lg hover:bg-gray-50/50">
                                                 {/* Links: Badge + Label */}
@@ -762,12 +800,7 @@ export default function ProfileStats() {
                                                 </div>
 
                                                 {/* Rechts: Laufende Summe */}
-                                                <div className={`text-right w-16 shrink-0 font-mono text-sm ${
-                                                    isLastShift && lastAbsIdx === -1 ? 'font-bold text-blue-700' :
-                                                    isLastShift ? 'text-gray-400' :
-                                                    isLastAbs ? 'font-bold text-gray-700' :
-                                                    'text-gray-300'
-                                                }`}>
+                                                <div className={`text-right w-16 shrink-0 font-mono text-sm ${runningStyle}`}>
                                                     {row.running}h
                                                 </div>
                                             </div>
@@ -788,14 +821,15 @@ export default function ProfileStats() {
                                 {/* Unterbrechungen (aufklappbar, nach den Dienst-Rows) */}
                                 {interruptionDetails.length > 0 && (
                                     <div className="mt-1 space-y-1">
-                                        {interruptionDetails.map((item, idx) => {
+                                        {interruptionDetails.map((item) => {
+                                            const intKey = `int-${item.date}-${item.shiftType}`
                                             const dateStr = format(new Date(item.date), 'dd.MM.', { locale: de })
-                                            const isExpanded = expandedInterruptions[`int-${idx}`]
+                                            const isExpanded = expandedInterruptions[intKey]
                                             const netGain = Math.round((item.creditedMinutes - item.deductedMinutes * 0.5) / 60 * 100) / 100
                                             return (
-                                                <div key={`int-${idx}`}>
+                                                <div key={intKey}>
                                                     <button
-                                                        onClick={() => setExpandedInterruptions(prev => ({ ...prev, [`int-${idx}`]: !prev[`int-${idx}`] }))}
+                                                        onClick={() => setExpandedInterruptions(prev => ({ ...prev, [intKey]: !prev[intKey] }))}
                                                         className="w-full flex items-center justify-between py-1 px-3 rounded-lg bg-orange-50/60 hover:bg-orange-100 transition-colors text-xs"
                                                     >
                                                         <div className="flex items-center gap-1.5">
@@ -810,20 +844,7 @@ export default function ProfileStats() {
                                                     </button>
                                                     {isExpanded && (
                                                         <div className="ml-4 mt-1 space-y-0.5 mb-1">
-                                                            {item.details.map((d, di) => {
-                                                                const actualH = Math.round(d.actualMinutes / 60 * 100) / 100
-                                                                const creditedH = Math.round(d.creditedMinutes / 60 * 100) / 100
-                                                                const detailNet = Math.round((d.creditedMinutes - d.actualMinutes * 0.5) / 60 * 100) / 100
-                                                                return (
-                                                                    <div key={di} className="flex items-center justify-between py-0.5 px-2 text-[11px]">
-                                                                        <span className="text-gray-500">
-                                                                            {format(new Date(d.start), 'HH:mm')}–{format(new Date(d.end), 'HH:mm')}
-                                                                            <span className="text-gray-400 ml-1">({actualH}h{creditedH !== actualH ? ` → ${creditedH}h` : ''})</span>
-                                                                        </span>
-                                                                        <span className="text-orange-600 font-bold">+{detailNet}h</span>
-                                                                    </div>
-                                                                )
-                                                            })}
+                                                            {item.details.map((d) => renderInterruptionDetail(d))}
                                                             <p className="text-[10px] text-gray-400 px-2">100% statt 50% Bereitschaft</p>
                                                         </div>
                                                     )}
@@ -855,22 +876,7 @@ export default function ProfileStats() {
                                             </button>
                                             {isExpanded && (
                                                 <div className="ml-4 mt-1 space-y-0.5 mb-1">
-                                                    {timeAdjustments.map((adj, idx) => {
-                                                        const dateStr = format(new Date(adj.date), 'dd.MM.', { locale: de })
-                                                        const colors = SHIFT_TYPE_COLORS[adj.shiftType] || 'bg-gray-100 text-gray-700'
-                                                        return (
-                                                            <div key={idx} className="flex items-center justify-between py-0.5 px-2 text-[11px]">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-gray-200 text-gray-600">{dateStr}</span>
-                                                                    <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${colors}`}>{adj.shiftType}</span>
-                                                                    <span className="text-gray-500">{adj.plannedHours}h → {adj.actualHours}h</span>
-                                                                </div>
-                                                                <span className={`font-bold ${adj.diff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                                                    {adj.diff > 0 ? '+' : ''}{adj.diff}h
-                                                                </span>
-                                                            </div>
-                                                        )
-                                                    })}
+                                                    {timeAdjustments.map((adj) => renderAdjustmentRow(adj))}
                                                 </div>
                                             )}
                                         </div>
@@ -932,9 +938,9 @@ export default function ProfileStats() {
                     <div className="mt-2">
                         <div className="flex items-center justify-between mb-6">
                             <p className="text-xs text-gray-400">Kumulierter Gesamtsaldo am Monatsende</p>
-                            <span className={`text-xs font-bold ${(cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0) >= 0 ? 'text-teal-700' : 'text-red-600'}`}>
-                                {(cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0) > 0 ? '+' : ''}
-                                {cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0}h
+                            <span className={`text-xs font-bold ${(cumulativeData.at(-1)?.cumulative ?? 0) >= 0 ? 'text-teal-700' : 'text-red-600'}`}>
+                                {(cumulativeData.at(-1)?.cumulative ?? 0) > 0 ? '+' : ''}
+                                {cumulativeData.at(-1)?.cumulative ?? 0}h
                             </span>
                         </div>
                         <div className="relative h-28">
