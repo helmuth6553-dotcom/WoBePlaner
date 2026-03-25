@@ -81,10 +81,7 @@ import webpush from "https://esm.sh/web-push@3.6.3?bundle"
 // Let's assume Supabase supports npm specifiers now (it does).
 import webpushNpm from "npm:web-push@3.6.3";
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': 'https://wobeplaner.pages.dev',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, verifyCronSecret } from '../_shared/cors.ts'
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -92,17 +89,8 @@ serve(async (req) => {
     }
 
     try {
-        // Verify webhook secret if configured (set CRON_SECRET in Supabase dashboard webhook config)
-        const cronSecret = Deno.env.get('CRON_SECRET')
-        if (cronSecret) {
-            const authHeader = req.headers.get('Authorization')
-            if (authHeader !== `Bearer ${cronSecret}`) {
-                return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                    status: 401,
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                })
-            }
-        }
+        const authError = verifyCronSecret(req)
+        if (authError) return authError
 
         // Check if we are crashing before even starting
         console.log("Function invoked - v2.0")
