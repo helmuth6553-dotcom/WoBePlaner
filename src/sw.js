@@ -16,8 +16,9 @@ registerRoute(
         plugins: [new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 300 })]
     })
 )
-// Handle SKIP_WAITING from frontend
+// Handle SKIP_WAITING from frontend (verify origin to prevent cross-origin abuse)
 self.addEventListener('message', (event) => {
+    if (event.origin && event.origin !== self.location.origin) return
     if (event.data && event.data.type === 'SKIP_WAITING')
         self.skipWaiting()
 })
