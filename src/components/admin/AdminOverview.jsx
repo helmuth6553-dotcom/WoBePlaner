@@ -165,10 +165,10 @@ function AreaChart({ data, selectedAreaMonth, setSelectedAreaMonth }) {
                 </defs>
 
                 {/* Grid lines + Y labels */}
-                {ySteps.map((val, i) => {
+                {ySteps.map((val) => {
                     const y = getY(val)
                     return (
-                        <g key={i}>
+                        <g key={val}>
                             <line x1={px} y1={y} x2={w - 10} y2={y} stroke="#f3f4f6" strokeWidth="0.5" />
                             <text x={px - 4} y={y + 3} textAnchor="end" fill="#9ca3af" style={{ fontSize: '8px', fontWeight: 500 }}>{Math.round(val)}</text>
                         </g>
@@ -198,7 +198,7 @@ function AreaChart({ data, selectedAreaMonth, setSelectedAreaMonth }) {
                     const puffer = Math.round(m.stats.totalIstHours - m.stats.totalSollHours)
                     const isCurrent = i === data.length - 1
                     return (
-                        <g key={i} className="cursor-pointer" onClick={() => setSelectedAreaMonth(selectedAreaMonth === i ? null : i)}>
+                        <g key={m.label} className="cursor-pointer" onClick={() => setSelectedAreaMonth(selectedAreaMonth === i ? null : i)}>
                             <text x={x} y={h + 18} textAnchor="middle" fill={isCurrent ? '#1f2937' : '#9ca3af'}
                                 style={{ fontSize: '7.5px', fontWeight: isCurrent ? 700 : 600 }}>{monthLetters[i]}</text>
                             <text x={x} y={h + 30} textAnchor="middle"
@@ -345,9 +345,10 @@ export default function AdminOverview() {
         const allAbsenceDaysByUser = empAbsenceDays
 
         // Planned hours
+        const SPECIAL_TYPES = new Set(['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'])
         let totalPlannedHours = 0
         shifts?.forEach(s => {
-            if (!['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'].includes(s.type)) {
+            if (s.type !== 'TEAM' && !SPECIAL_TYPES.has(s.type)) {
                 totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type)
             }
         })
@@ -356,7 +357,7 @@ export default function AdminOverview() {
             const availableCount = employees.filter(emp => !allAbsenceDaysByUser[emp.id]?.has(dateKey)).length
             totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * availableCount
         })
-        shifts?.filter(s => ['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'].includes(s.type)).forEach(s => {
+        shifts?.filter(s => SPECIAL_TYPES.has(s.type)).forEach(s => {
             totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * monthInterests.filter(i => i.shift_id === s.id).length
         })
 
@@ -364,8 +365,6 @@ export default function AdminOverview() {
         const daysInMonth = eachDayOfInterval({ start, end })
         const holidays = getHolidays(getYear(start))
         let totalSollHours = 0 // Will be derived from per-employee calculateGenericBalance results
-
-        const SPECIAL_TYPES = new Set(['FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION'])
 
         // Sick
         absences?.forEach(abs => {
@@ -401,7 +400,7 @@ export default function AdminOverview() {
         entries?.forEach(entry => {
             if (!entry.interruptions?.length) return
             const shiftStart = new Date(entry.actual_start || entry.shifts?.start_time)
-            if (isNaN(shiftStart.getTime())) return
+            if (Number.isNaN(shiftStart.getTime())) return
             let rStart = new Date(shiftStart)
             if (shiftStart.getHours() >= 12) rStart = new Date(rStart.getTime() + 86400000)
             rStart.setHours(0, 30, 0, 0)
@@ -881,11 +880,11 @@ export default function AdminOverview() {
                         {/* Insights */}
                         {insights.length > 0 && (
                             <div className="space-y-2">
-                                {insights.map((ins, i) => {
+                                {insights.map((ins) => {
                                     const bgMap = { amber: 'bg-amber-50', rose: 'bg-rose-50', emerald: 'bg-emerald-50', orange: 'bg-orange-50' }
                                     const barMap = { amber: 'bg-amber-400', rose: 'bg-rose-400', emerald: 'bg-emerald-500', orange: 'bg-orange-400' }
                                     return (
-                                        <div key={i} className={`flex items-start gap-2 ${bgMap[ins.color] || 'bg-gray-50'} rounded-lg px-3 py-2`}>
+                                        <div key={`${ins.color}-${ins.text}`} className={`flex items-start gap-2 ${bgMap[ins.color] || 'bg-gray-50'} rounded-lg px-3 py-2`}>
                                             <div className={`w-[3px] rounded self-stretch shrink-0 ${barMap[ins.color] || 'bg-gray-400'}`} />
                                             <p className="text-[11px] text-gray-700 leading-snug">
                                                 <span className="font-bold">{ins.text}</span> {ins.detail}
@@ -1014,15 +1013,15 @@ export default function AdminOverview() {
                                 const maxSick = Math.max(...Object.values(stats.sickByDayOfWeek || {}), 1)
                                 return (
                                     <div className="flex items-end justify-between gap-1 h-16 px-1">
-                                        {dayOrder.map(i => {
-                                            const count = stats.sickByDayOfWeek?.[i] || 0
+                                        {dayOrder.map(dayIdx => {
+                                            const count = stats.sickByDayOfWeek?.[dayIdx] || 0
                                             const pct = count > 0 ? Math.max((count / maxSick) * 100, 5) : 2
                                             const isHighest = count === maxSick && count > 0
                                             return (
-                                                <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
+                                                <div key={dayIdx} className="flex-1 flex flex-col items-center justify-end h-full">
                                                     <div className={`w-full rounded-t transition-all ${count > 0 ? (isHighest ? 'bg-red-400' : 'bg-red-300') : 'bg-red-200'}`}
                                                         style={{ height: `${pct}%`, minHeight: '2px' }} />
-                                                    <span className="text-[9px] text-gray-400 font-bold mt-1">{dayLabels[i]}</span>
+                                                    <span className="text-[9px] text-gray-400 font-bold mt-1">{dayLabels[dayIdx]}</span>
                                                 </div>
                                             )
                                         })}
@@ -1035,7 +1034,7 @@ export default function AdminOverview() {
                     {/* ═══ SECTION 3b: DIENSTPROFIL-VERGLEICH ═══ */}
                     {employeeStats.length > 0 && (
                         <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
-                            <div className="flex items-center gap-2 mb-3 cursor-pointer" onClick={() => setShowProfil(!showProfil)}>
+                            <div className="flex items-center gap-2 mb-3 cursor-pointer" role="button" tabIndex={0} onClick={() => setShowProfil(!showProfil)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowProfil(!showProfil) } }}>
                                 <Users size={16} className="text-gray-500" />
                                 <h2 className="text-sm font-bold text-gray-900 flex-1">Dienstprofil-Vergleich</h2>
                                 <span className="text-[10px] text-gray-400 font-medium mr-1">{employeeStats.length} MA</span>
@@ -1210,16 +1209,18 @@ export default function AdminOverview() {
                                     else if (emp.puffer < -5) badgeClass = 'bg-rose-50 text-rose-700'
 
                                     const isExpanded = expandedEmployeeIds.includes(emp.id)
-                                    const pufferSign = emp.puffer > 0 ? '+' : (emp.puffer < 0 ? '−' : '')
+                                    let pufferSign = ''
+                                    if (emp.puffer > 0) pufferSign = '+'
+                                    else if (emp.puffer < 0) pufferSign = '−'
 
                                     return (
                                         <div key={emp.id} className="border-b border-gray-50 last:border-b-0">
                                             {/* Summary Row */}
-                                            <div className="flex items-center gap-2 py-3 px-1 cursor-pointer active:bg-gray-50 transition-colors" onClick={() => toggleEmployee(emp.id)}>
+                                            <div className="flex items-center gap-2 py-3 px-1 cursor-pointer active:bg-gray-50 transition-colors" role="button" tabIndex={0} onClick={() => toggleEmployee(emp.id)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEmployee(emp.id) } }}>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-sm font-bold text-gray-800 truncate">{emp.name}</span>
-                                                        {flags.map((f, i) => <span key={i} className="text-[9px]" title={f.tip}>{f.emoji}</span>)}
+                                                        {flags.map((f) => <span key={f.tip} className="text-[9px]" title={f.tip}>{f.emoji}</span>)}
                                                     </div>
                                                     <Sparkline data={sparkData} />
                                                 </div>

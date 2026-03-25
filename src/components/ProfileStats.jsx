@@ -634,6 +634,7 @@ export default function ProfileStats() {
             running = Math.round((running + corr.correction_hours) * 100) / 100
             rows.push({ kind: 'correction', hours: corr.correction_hours,
                 reason: corr.reason, running, corr,
+                corrId: corr.id || `corr-${corr.reason || ''}`,
                 isFirstCorrection: i === 0 })
         })
         return { rows, totalGeleistet: running }
@@ -755,9 +756,13 @@ export default function ProfileStats() {
                                     const isLastShift = i === lastShiftIdx
                                     const isLastAbs = i === lastAbsIdx
                                     const showSeparator = row.isFirstAbsence || row.isFirstCorrection
+                                    let runningStyle = 'text-gray-300'
+                                    if (isLastShift && lastAbsIdx === -1) runningStyle = 'font-bold text-blue-700'
+                                    else if (isLastShift) runningStyle = 'text-gray-400'
+                                    else if (isLastAbs) runningStyle = 'font-bold text-gray-700'
 
                                     return (
-                                        <div key={`${row.kind}-${row.type || i}`}>
+                                        <div key={`${row.kind}-${row.type || row.corrId}`}>
                                             {showSeparator && <div className="border-t border-gray-200 my-1.5" />}
                                             <div className="flex items-center py-1.5 px-2 rounded-lg hover:bg-gray-50/50">
                                                 {/* Links: Badge + Label */}
@@ -795,12 +800,7 @@ export default function ProfileStats() {
                                                 </div>
 
                                                 {/* Rechts: Laufende Summe */}
-                                                <div className={`text-right w-16 shrink-0 font-mono text-sm ${(() => {
-                                                    if (isLastShift && lastAbsIdx === -1) return 'font-bold text-blue-700'
-                                                    if (isLastShift) return 'text-gray-400'
-                                                    if (isLastAbs) return 'font-bold text-gray-700'
-                                                    return 'text-gray-300'
-                                                })()}`}>
+                                                <div className={`text-right w-16 shrink-0 font-mono text-sm ${runningStyle}`}>
                                                     {row.running}h
                                                 </div>
                                             </div>
@@ -938,9 +938,9 @@ export default function ProfileStats() {
                     <div className="mt-2">
                         <div className="flex items-center justify-between mb-6">
                             <p className="text-xs text-gray-400">Kumulierter Gesamtsaldo am Monatsende</p>
-                            <span className={`text-xs font-bold ${(cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0) >= 0 ? 'text-teal-700' : 'text-red-600'}`}>
-                                {(cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0) > 0 ? '+' : ''}
-                                {cumulativeData[cumulativeData.length - 1]?.cumulative ?? 0}h
+                            <span className={`text-xs font-bold ${(cumulativeData.at(-1)?.cumulative ?? 0) >= 0 ? 'text-teal-700' : 'text-red-600'}`}>
+                                {(cumulativeData.at(-1)?.cumulative ?? 0) > 0 ? '+' : ''}
+                                {cumulativeData.at(-1)?.cumulative ?? 0}h
                             </span>
                         </div>
                         <div className="relative h-28">
