@@ -1034,12 +1034,12 @@ export default function AdminOverview() {
                     {/* ═══ SECTION 3b: DIENSTPROFIL-VERGLEICH ═══ */}
                     {employeeStats.length > 0 && (
                         <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
-                            <div className="flex items-center gap-2 mb-3 cursor-pointer" role="button" tabIndex={0} onClick={() => setShowProfil(!showProfil)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowProfil(!showProfil) } }}>
+                            <button type="button" className="flex items-center gap-2 mb-3 cursor-pointer w-full text-left" onClick={() => setShowProfil(!showProfil)}>
                                 <Users size={16} className="text-gray-500" />
                                 <h2 className="text-sm font-bold text-gray-900 flex-1">Dienstprofil-Vergleich</h2>
                                 <span className="text-[10px] text-gray-400 font-medium mr-1">{employeeStats.length} MA</span>
                                 {showProfil ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-                            </div>
+                            </button>
 
                             {/* Team Average Bar */}
                             {(() => {
@@ -1216,7 +1216,7 @@ export default function AdminOverview() {
                                     return (
                                         <div key={emp.id} className="border-b border-gray-50 last:border-b-0">
                                             {/* Summary Row */}
-                                            <div className="flex items-center gap-2 py-3 px-1 cursor-pointer active:bg-gray-50 transition-colors" role="button" tabIndex={0} onClick={() => toggleEmployee(emp.id)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEmployee(emp.id) } }}>
+                                            <button type="button" className="flex items-center gap-2 py-3 px-1 cursor-pointer active:bg-gray-50 transition-colors w-full text-left" onClick={() => toggleEmployee(emp.id)}>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-sm font-bold text-gray-800 truncate">{emp.name}</span>
@@ -1241,7 +1241,7 @@ export default function AdminOverview() {
                                                     </span>
                                                     {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                                                 </div>
-                                            </div>
+                                            </button>
 
                                             {/* Expanded Detail */}
                                             {isExpanded && (
