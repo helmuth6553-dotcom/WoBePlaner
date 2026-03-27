@@ -25,6 +25,8 @@ import { downloadICalFile } from '../utils/calendarExport'
 import { calculateAllFairnessIndices } from '../utils/fairnessIndex'
 import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
 import { debounce } from '../utils/debounce'
+import { USE_COVERAGE_VOTING } from '../featureFlags'
+import { checkEligibility } from '../utils/coverageEligibility'
 
 /**
  * Merge arrays by ID, avoiding duplicates.
@@ -189,30 +191,32 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
 
         if (shiftData) { setShifts(shiftData); shiftsRef.current = shiftData }
 
-        // Fetch coverage data
-        const { data: coverageReqs } = await supabase
-            .from('coverage_requests')
-            .select('id, shift_id, status, created_at')
-            .eq('status', 'open')
-        setCoverageRequests(coverageReqs || [])
+        // Fetch coverage data (only when voting system is active)
+        if (USE_COVERAGE_VOTING) {
+            const { data: coverageReqs } = await supabase
+                .from('coverage_requests')
+                .select('id, shift_id, status, created_at')
+                .eq('status', 'open')
+            setCoverageRequests(coverageReqs || [])
 
-        const { data: covVotes } = await supabase
-            .from('coverage_votes')
-            .select('id, shift_id, user_id, was_eligible, responded, availability_preference')
-        setCoverageVotes(covVotes || [])
+            const { data: covVotes } = await supabase
+                .from('coverage_votes')
+                .select('id, shift_id, user_id, was_eligible, responded, availability_preference')
+            setCoverageVotes(covVotes || [])
 
-        // Fetch flex history (is_flex interests) for Fairness-Index
-        const { data: flexData } = await supabase
-            .from('shift_interests')
-            .select('user_id, is_flex, shift:shifts(start_time)')
-            .eq('is_flex', true)
-        setAllFlexHistory(flexData || [])
+            // Fetch flex history (is_flex interests) for Fairness-Index
+            const { data: flexData } = await supabase
+                .from('shift_interests')
+                .select('user_id, is_flex, shift:shifts(start_time)')
+                .eq('is_flex', true)
+            setAllFlexHistory(flexData || [])
 
-        // Fetch all coverage vote history for penalty calculation
-        const { data: voteHistoryData } = await supabase
-            .from('coverage_votes')
-            .select('user_id, was_eligible, responded')
-        setAllCoverageVoteHistory(voteHistoryData || [])
+            // Fetch all coverage vote history for penalty calculation
+            const { data: voteHistoryData } = await supabase
+                .from('coverage_votes')
+                .select('user_id, was_eligible, responded')
+            setAllCoverageVoteHistory(voteHistoryData || [])
+        }
 
         const monthStartStr = format(monthStart, 'yyyy-MM-dd')
         const monthEndStr = format(monthEnd, 'yyyy-MM-dd')
@@ -542,7 +546,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     // NOTE: We only write to coverage_votes here. shift_interests is NOT touched until resolve,
     // so the shift does NOT appear "assigned" while voting is in progress.
     const submitCoverageVote = async (shiftId, preference) => {
-        if (!user) return
+        if (!USE_COVERAGE_VOTING || !user) return
 
         if (preference === null) {
             // Remove vote ("Ändern" clicked) - clear preference + responded flag
@@ -565,6 +569,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     // Coverage System: Resolve all open coverage requests greedily
     // Optimizes assignments by prioritizing hardest-to-fill shifts first and distributing shifts among users.
     const resolveAllCoverageRequests = async () => {
+        if (!USE_COVERAGE_VOTING) return
         // 1. Get all open coverage requests
         const openRequests = coverageRequests.filter(req => req.status === 'open')
         if (openRequests.length === 0) return
@@ -672,6 +677,68 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
 
         fetchData()
         onCoverageVoteChanged?.()
+    }
+
+    // Direct takeover: Employee takes an urgent shift without voting (Beta mode)
+    const handleDirectTakeover = async (shiftId) => {
+        if (!user) return
+
+        const shift = shiftsRef.current.find(s => s.id === shiftId)
+        if (!shift) {
+            setAlertConfig({ isOpen: true, title: 'Fehler', message: 'Dienst nicht gefunden.', type: 'error' })
+            return
+        }
+
+        // Check eligibility using existing conflict rules
+        const userShifts = shiftsRef.current.filter(s =>
+            s.assigned_to === user.id || s.interests?.some(i => i.user_id === user.id)
+        )
+        const { eligible, reason } = checkEligibility(shift, user.id, null, userShifts, allAbsences)
+        if (!eligible) {
+            setAlertConfig({ isOpen: true, title: 'Nicht möglich', message: reason || 'Du kannst diesen Dienst nicht übernehmen.', type: 'warning' })
+            return
+        }
+
+        const dateLabel = format(new Date(shift.start_time), 'EEEE, d. MMMM', { locale: de })
+        setConfirmConfig({
+            isOpen: true,
+            title: 'Dienst übernehmen?',
+            message: `Du wirst für ${shift.type} am ${dateLabel} eingetragen.`,
+            confirmText: 'Übernehmen',
+            type: 'info',
+            onConfirm: async () => {
+                try {
+                    // Try assign_coverage RPC first (handles coverage_request if it exists)
+                    const { error: rpcError } = await supabase.rpc('assign_coverage', {
+                        p_shift_id: shiftId,
+                        p_user_id: user.id,
+                        p_resolved_by: user.id,
+                    })
+
+                    if (rpcError) {
+                        // Fallback: Direct insert if no coverage_request exists yet
+                        const { error: insertError } = await supabase
+                            .from('shift_interests')
+                            .upsert({
+                                shift_id: shiftId,
+                                user_id: user.id,
+                                is_flex: true
+                            }, { onConflict: 'shift_id,user_id' })
+
+                        if (insertError) {
+                            setAlertConfig({ isOpen: true, title: 'Fehler', message: insertError.message, type: 'error' })
+                            return
+                        }
+                    }
+
+                    setAlertConfig({ isOpen: true, title: 'Übernommen!', message: `Du bist jetzt für ${shift.type} am ${dateLabel} eingetragen.`, type: 'success' })
+                    fetchData()
+                    onCoverageVoteChanged?.()
+                } catch (err) {
+                    setAlertConfig({ isOpen: true, title: 'Fehler', message: 'Unerwarteter Fehler beim Übernehmen.', type: 'error' })
+                }
+            }
+        })
     }
 
     const handleSickReport = async (startDate, endDate) => {
@@ -888,8 +955,9 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         return calculateGenericBalance(profile, userShifts, userAbsences, userEntries, currentDate, userCorrections)
     }
 
-    // Calculate Fairness-Index for all non-admin users
+    // Calculate Fairness-Index for all non-admin users (only when voting system is active)
     const fairnessIndices = useMemo(() => {
+        if (!USE_COVERAGE_VOTING) return []
         const nonAdminIds = allProfiles.filter(p => p.role !== 'admin').map(p => p.id)
         if (nonAdminIds.length === 0) return []
 
@@ -1159,6 +1227,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                         userBalance={balance}
                                                         onCoverageVote={submitCoverageVote}
                                                         onCoverageResolve={resolveAllCoverageRequests}
+                                                        onDirectTakeover={handleDirectTakeover}
                                                     />
                                                     </div>
                                                 )

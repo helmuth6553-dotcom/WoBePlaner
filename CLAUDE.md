@@ -257,6 +257,22 @@ Punkte = (Flex-Einsätze × 10) + (Abstimmungs-Teilnahmen × 2)
 ## Feature flags
 
 ```js
-// App.jsx
+// src/featureFlags.js
+export const USE_COVERAGE_VOTING = false  // Set true to enable Soli/Coverage Voting system
+
+// src/App.jsx
 const USE_NEW_TIME_TRACKING = false  // Set true to test TimeTrackingV2
 ```
+
+### USE_COVERAGE_VOTING (Beta)
+
+Steuert das gesamte Soli/Coverage-Voting-System. Wenn `false`:
+- **CoverageVotingPanel** auf DayCards ausgeblendet (Mitarbeiter tragen sich per Klick auf "DRINGEND"-Shift ein)
+- **SoliPunktePanel** im Profil hidden
+- **Soli-Punkte** in Admin-Übersicht hidden
+- **Coverage-Banner** ("X Dienste brauchen deine Antwort") deaktiviert
+- **Fairness-Index-Berechnung** + zugehörige DB-Queries übersprungen
+- **Push-Nachricht** vereinfacht (kein Fairness-Text, nur "Kannst du den Dienst übernehmen?")
+- Edge Function erstellt weiterhin `coverage_requests`/`coverage_votes` (werden client-seitig ignoriert)
+
+**Reaktivierung**: `USE_COVERAGE_VOTING = true` in `src/featureFlags.js` — kein weiterer Code-Change nötig.

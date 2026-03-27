@@ -7,11 +7,12 @@ import ProfileStats from './ProfileStats'
 import SoliPunktePanel from './SoliPunktePanel'
 import ProfileVacation from './ProfileVacation'
 import ProfileSickLeave from './ProfileSickLeave'
+import { USE_COVERAGE_VOTING } from '../featureFlags'
 
 const SECTIONS = [
     { id: 'settings', label: 'Profil', icon: Settings },
     { id: 'stats', label: 'Statistik', icon: BarChart3, employeeOnly: true },
-    { id: 'soli', label: 'Soli-Punkte', icon: Trophy, employeeOnly: true },
+    { id: 'soli', label: 'Soli-Punkte', icon: Trophy, employeeOnly: true, hidden: !USE_COVERAGE_VOTING },
     { id: 'vacation', label: 'Urlaub', icon: Palmtree, employeeOnly: true },
     { id: 'sick', label: 'Krankenstand', icon: Thermometer, employeeOnly: true },
 ]
@@ -30,7 +31,7 @@ export default function Profile() {
         if (data) setProfile(data)
     }
 
-    const visibleSections = SECTIONS.filter(s => !s.employeeOnly || !isAdmin)
+    const visibleSections = SECTIONS.filter(s => (!s.employeeOnly || !isAdmin) && !s.hidden)
 
     if (!profile) {
         return (
