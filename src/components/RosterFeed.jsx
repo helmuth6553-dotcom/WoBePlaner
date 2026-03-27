@@ -49,6 +49,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     const [viewMode, setViewMode] = useState('cards') // 'cards' or 'table'
     const [currentDate, setCurrentDate] = useState(new Date())
     const [isMonthOpen, setIsMonthOpen] = useState(false)
+    const hasScrolledToToday = useRef(false)
     const [isMonthVisible, setIsMonthVisible] = useState(true)
     const [isSickModalOpen, setIsSickModalOpen] = useState(false)
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
@@ -379,11 +380,13 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         return filtered
     }, [shiftsByDate, currentDate, isAdmin, isMonthVisible])
 
-    // Scroll to today's DayCard when the current month is loaded
+    // Scroll to today's DayCard only on initial load (app open)
     useEffect(() => {
+        if (hasScrolledToToday.current) return
         if (!isSameMonth(currentDate, new Date())) return
         const todayStr = format(new Date(), 'yyyy-MM-dd')
         if (!visibleShiftsByDate[todayStr]) return
+        hasScrolledToToday.current = true
         requestAnimationFrame(() => {
             const container = document.getElementById('roster-scroll-container')
             const todayEl = document.getElementById(`day-${todayStr}`)
