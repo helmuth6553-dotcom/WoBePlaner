@@ -7,6 +7,7 @@ import { calculateWorkHours, processInterruptions } from '../../utils/timeCalcul
 import { calculateGenericBalance } from '../../utils/balanceHelpers'
 import { getHolidays, isHoliday } from '../../utils/holidays'
 import { calculateAllFairnessIndices } from '../../utils/fairnessIndex'
+import { USE_COVERAGE_VOTING } from '../../featureFlags'
 
 // ─── Insights Engine ───
 function generateInsights(stats, employeeStats, monthlyData) {
@@ -613,21 +614,23 @@ export default function AdminOverview() {
                 setEmployeeStats(current.employeeStats)
             }
 
-            // Fairness index
-            try {
-                const empIds = (globalMode === 'jahr' ? aggregateYearStats(results).employeeStats : results.at(-1).employeeStats).map(e => e.id)
-                const sixMonthsAgo = subMonths(selectedMonth, 6).toISOString()
-                const [flexRes, votesRes] = await Promise.all([
-                    supabase.from('shift_interests').select('user_id').eq('is_flex', true).gte('created_at', sixMonthsAgo),
-                    supabase.from('coverage_votes').select('user_id, was_eligible, responded').gte('created_at', sixMonthsAgo)
-                ])
-                if (flexRes.data && votesRes.data) {
-                    const fi = calculateAllFairnessIndices(empIds, flexRes.data, votesRes.data)
-                    const currentEmpStats = globalMode === 'jahr' ? aggregateYearStats(results).employeeStats : results.at(-1).employeeStats
-                    const named = fi.map(f => ({ ...f, name: currentEmpStats.find(e => e.id === f.userId)?.name || '?' }))
-                    setFairnessData(named)
-                }
-            } catch { /* coverage_votes table may not exist */ }
+            // Fairness index (only when voting system is active)
+            if (USE_COVERAGE_VOTING) {
+                try {
+                    const empIds = (globalMode === 'jahr' ? aggregateYearStats(results).employeeStats : results.at(-1).employeeStats).map(e => e.id)
+                    const sixMonthsAgo = subMonths(selectedMonth, 6).toISOString()
+                    const [flexRes, votesRes] = await Promise.all([
+                        supabase.from('shift_interests').select('user_id').eq('is_flex', true).gte('created_at', sixMonthsAgo),
+                        supabase.from('coverage_votes').select('user_id, was_eligible, responded').gte('created_at', sixMonthsAgo)
+                    ])
+                    if (flexRes.data && votesRes.data) {
+                        const fi = calculateAllFairnessIndices(empIds, flexRes.data, votesRes.data)
+                        const currentEmpStats = globalMode === 'jahr' ? aggregateYearStats(results).employeeStats : results.at(-1).employeeStats
+                        const named = fi.map(f => ({ ...f, name: currentEmpStats.find(e => e.id === f.userId)?.name || '?' }))
+                        setFairnessData(named)
+                    }
+                } catch { /* coverage_votes table may not exist */ }
+            }
         } catch (err) {
             console.error('AdminOverview Error:', err)
         } finally {
@@ -1134,7 +1137,7 @@ export default function AdminOverview() {
                     )}
 
                     {/* ═══ SECTION 5: FAIRNESS (SOLI-PUNKTE) ═══ */}
-                    {fairnessData.length > 0 && (() => {
+                    {USE_COVERAGE_VOTING && fairnessData.length > 0 && (() => {
                         const maxPoints = Math.max(...fairnessData.map(f => f.index.total), 1)
                         const avg = fairnessData.reduce((s, f) => s + f.index.total, 0) / fairnessData.length
                         const avgPct = (avg / maxPoints) * 100

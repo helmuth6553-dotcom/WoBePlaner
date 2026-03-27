@@ -28,6 +28,8 @@ const AdminTimeTracking = lazy(() => import('./components/AdminTimeTracking'))
 // Feature Flag: Set to true to test the new TimeTrackingV2 component
 const USE_NEW_TIME_TRACKING = false
 
+import { USE_COVERAGE_VOTING } from './featureFlags'
+
 // Loading fallbacks for lazy components - using skeleton loading
 import { RosterFeedSkeleton, TimeTrackingSkeleton, ProfileSkeleton, PageSkeleton } from './components/Skeleton'
 
@@ -82,7 +84,6 @@ function AppContent() {
       .channel('badge-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedBadgeFetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, debouncedBadgeFetch)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'coverage_requests' }, debouncedBadgeFetch)
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           if (badgeWasConnected) fetchBadgeCounts()
@@ -93,9 +94,9 @@ function AppContent() {
     return () => { supabase.removeChannel(channel) }
   }, [user, isAdmin])
 
-  // Fetch open coverage requests for non-admin users
+  // Fetch open coverage requests for non-admin users (only when voting system is active)
   const refreshCoverageCount = async () => {
-    if (!user || isAdmin) {
+    if (!USE_COVERAGE_VOTING || !user || isAdmin) {
       setOpenCoverageCount(0)
       return
     }
@@ -127,7 +128,7 @@ function AppContent() {
   }
 
   useEffect(() => {
-    if (!user || isAdmin) {
+    if (!USE_COVERAGE_VOTING || !user || isAdmin) {
       setOpenCoverageCount(0)
       return
     }
@@ -174,8 +175,8 @@ function AppContent() {
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50">
 
-        {/* Coverage Alert Banner - shown on all tabs */}
-        {openCoverageCount > 0 && (
+        {/* Coverage Alert Banner - shown on all tabs (only with voting system) */}
+        {USE_COVERAGE_VOTING && openCoverageCount > 0 && (
           <button
             onClick={() => {
               if (activeTab !== 'roster') {

@@ -278,8 +278,8 @@ serve(async (req) => {
                 const userFlexCount = flexCounts[sub.user_id] || 0
 
                 const personalPayload = JSON.stringify({
-                    title: `${shiftTypeText} am ${dateText} muss besetzt werden!`,
-                    body: `Dein Fairness-Index: ${userFlexCount}× eingesprungen (Team-Ø: ${teamAvgFlex}×). Jetzt abstimmen!`,
+                    title: `${shiftTypeText} am ${dateText} muss nachbesetzt werden!`,
+                    body: `Kannst du den Dienst übernehmen? Öffne die App für Details.`,
                     icon: '/logo2.png',
                     data: {
                         url: '/roster',

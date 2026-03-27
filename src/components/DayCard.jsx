@@ -6,6 +6,7 @@ import ActionSheet from './ActionSheet'
 import CoverageVotingPanel from './CoverageVotingPanel'
 import { calculateWorkHours } from '../utils/timeCalculations'
 import { PRIVATE_SHIFT_TYPES } from '../contexts/ShiftTemplateContext'
+import { USE_COVERAGE_VOTING } from '../featureFlags'
 
 const getUserColor = (name) => {
     const colors = [
@@ -32,7 +33,7 @@ const getUserColor = (name) => {
     return colors[Math.abs(hash) % colors.length]
 }
 
-export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, absenceReason, holiday, absences = [], allProfiles = [], coverageRequests = [], coverageVotes = [], fairnessIndices = [], userBalance = null, onCoverageVote, onCoverageResolve }) {
+export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, absenceReason, holiday, absences = [], allProfiles = [], coverageRequests = [], coverageVotes = [], fairnessIndices = [], userBalance = null, onCoverageVote, onCoverageResolve, onDirectTakeover }) {
     // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [selectedShift, setSelectedShift] = useState(null)
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
@@ -652,8 +653,8 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                         </React.Fragment>
                     ))}
 
-                    {/* Coverage Voting Panels for urgent shifts */}
-                    {['TD1', 'TD2', 'ND', 'DBD', 'AST'].map(slotCode => {
+                    {/* Coverage Voting Panels for urgent shifts (Soli system) */}
+                    {USE_COVERAGE_VOTING && ['TD1', 'TD2', 'ND', 'DBD', 'AST'].map(slotCode => {
                         const shift = shifts.find(s => s.type === slotCode)
                         if (!shift) return null
                         const isUrgentShift = !!shift.urgent_since && !shift.assigned_to && (!shift.interests || shift.interests.length === 0)
@@ -686,6 +687,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                             />
                         )
                     })}
+
 
                     {renderShiftRow('TD1', 'Tagdienst 1', <Sun size={18} />)}
                     {renderShiftRow('TD2', 'Tagdienst 2', <Sun size={18} />)}

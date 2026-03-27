@@ -99,13 +99,13 @@ describe('Profile', () => {
         })
     })
 
-    it('shows 5 section tabs for employee', async () => {
+    it('shows 4 section tabs for employee (Soli hidden in beta)', async () => {
         renderProfile()
         await waitFor(() => {
             expect(screen.getByText('Mein Profil')).toBeInTheDocument()
         })
         const buttons = screen.getAllByRole('button')
-        expect(buttons.length).toBe(5)
+        expect(buttons.length).toBe(4)
     })
 
     it('admin sees only Profil tab', async () => {
