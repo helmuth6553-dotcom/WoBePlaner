@@ -87,6 +87,43 @@ export default function NotificationToggle() {
         if (user) {
             setUserId(user.id);
             await loadPreferences(user.id);
+
+            // Auto-renew: sync current browser subscription to DB on every load
+            // This prevents stale FCM endpoints from causing silent push failures
+            if (subscription) {
+                const p256dh = arrayBufferToBase64(subscription.getKey('p256dh'));
+                const auth = arrayBufferToBase64(subscription.getKey('auth'));
+
+                // Delete stale subscriptions for this user on this endpoint prefix
+                // (FCM endpoints change over time, old ones silently fail)
+                const currentEndpoint = subscription.endpoint;
+                const { data: existingSubs } = await supabase
+                    .from('push_subscriptions')
+                    .select('endpoint')
+                    .eq('user_id', user.id);
+
+                if (existingSubs) {
+                    const staleEndpoints = existingSubs
+                        .map(s => s.endpoint)
+                        .filter(ep => ep !== currentEndpoint);
+                    if (staleEndpoints.length > 0) {
+                        await supabase
+                            .from('push_subscriptions')
+                            .delete()
+                            .eq('user_id', user.id)
+                            .in('endpoint', staleEndpoints);
+                    }
+                }
+
+                await supabase
+                    .from('push_subscriptions')
+                    .upsert({
+                        user_id: user.id,
+                        endpoint: currentEndpoint,
+                        p256dh,
+                        auth
+                    }, { onConflict: 'endpoint' });
+            }
         }
     };
 
