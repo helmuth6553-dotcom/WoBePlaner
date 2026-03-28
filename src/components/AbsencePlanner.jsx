@@ -324,7 +324,7 @@ export default function AbsencePlanner({ initialDate }) {
                 .eq('id', user.id)
                 .single()
 
-            const employeeName = profile?.full_name || user?.full_name || user?.email || 'Mitarbeiter'
+            const employeeName = profile?.full_name || request.profiles?.full_name || user?.email || 'Mitarbeiter'
             const yearlyEntitlement = profile?.vacation_days_per_year || 25
             const facilityName = profile?.facility || profile?.department || 'Chill Out'
 
