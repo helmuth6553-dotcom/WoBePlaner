@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply bg-[#F5F4F0] text-gray-900;
+  font-family: system-ui, sans-serif;
 }
 
 .scrollbar-hide::-webkit-scrollbar {

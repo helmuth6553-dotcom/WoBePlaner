@@ -40,7 +40,7 @@ export default function SwapShiftModal({ isOpen, onClose, shift, onSwap, current
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-[1.5rem] p-6 w-full max-w-sm shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 animate-in zoom-in-95 duration-200">
                 <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                     <Users className="text-blue-600" /> Dienst tauschen
                 </h3>

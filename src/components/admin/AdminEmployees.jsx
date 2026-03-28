@@ -307,7 +307,7 @@ export default function AdminEmployees() {
     const UserCard = ({ user, isInactive = false }) => (
         <div
             onClick={() => !isInactive && openEdit(user)}
-            className={`flex flex-col items-center bg-white p-4 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] cursor-pointer hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all active:scale-95 ${isInactive ? 'opacity-50 grayscale' : ''}`}
+            className={`flex flex-col items-center bg-white p-4 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] cursor-pointer hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all active:scale-95 ${isInactive ? 'opacity-50 grayscale' : ''}`}
         >
             <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3 overflow-hidden border-2 border-white shadow-sm text-gray-400">
                 <Users size={32} />
@@ -402,7 +402,7 @@ export default function AdminEmployees() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-2">
                         {invites.map(i => (
-                            <div key={i.email} className="bg-yellow-50/50 border border-yellow-100/80 rounded-[1.5rem] p-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
+                            <div key={i.email} className="bg-yellow-50/50 border border-yellow-100/80 rounded-xl p-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
                                         <div className="font-bold text-gray-900 truncate text-sm">{i.email}</div>

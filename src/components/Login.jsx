@@ -32,7 +32,7 @@ export default function Login() {
 
     return (
         <div className="flex h-screen items-center justify-center p-4 bg-gray-50">
-            <form onSubmit={handleLogin} className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+            <form onSubmit={handleLogin} className="w-full max-w-sm bg-white p-8 rounded-xl shadow-xl">
                 {/* Logo */}
                 <div className="flex justify-center mb-6">
                     <img

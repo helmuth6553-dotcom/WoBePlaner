@@ -135,7 +135,7 @@ export default function AdminVacationStats() {
             {/* Employee List */}
             <div className="space-y-3">
                 {employees.map(emp => (
-                    <div key={emp.id} className="bg-white border border-gray-100/80 rounded-[1.5rem] p-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
+                    <div key={emp.id} className="bg-white rounded-xl p-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
                         <div className="flex justify-between items-start mb-3">
                             <div>
                                 <div className="font-bold text-gray-900">{getDisplayName(emp)}</div>

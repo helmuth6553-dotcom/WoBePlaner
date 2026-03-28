@@ -171,7 +171,7 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <div className="min-h-screen flex bg-[#F5F4F0]">
       {/* Offline Status Banner */}
       <OfflineIndicator />
       <ReloadPrompt />
@@ -180,7 +180,7 @@ function AppContent() {
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} isViewer={isViewer} badges={badges} />
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
 
         {/* Coverage Alert Banner - shown on all tabs (only with voting system) */}
         {USE_COVERAGE_VOTING && !isViewer && openCoverageCount > 0 && (

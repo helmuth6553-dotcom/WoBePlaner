@@ -774,7 +774,7 @@ export default function AdminOverview() {
 
             {/* ═══ TIME NAVIGATION ═══ */}
             <div className="flex items-center justify-center mb-5">
-                <div className="flex items-center gap-1 bg-white rounded-full border border-gray-100 px-1 py-1 shadow-sm">
+                <div className="flex items-center gap-1 bg-white rounded-full px-1 py-1 shadow-sm">
                     <button onClick={navigateBack} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors">
                         <ChevronLeft size={16} className="text-gray-400" />
                     </button>
@@ -789,15 +789,15 @@ export default function AdminOverview() {
 
             {loading ? (
                 <div className="space-y-4">
-                    <div className="h-48 bg-gray-200 rounded-[1.5rem] animate-pulse" />
-                    <div className="h-32 bg-gray-200 rounded-[1.5rem] animate-pulse" />
-                    <div className="h-24 bg-gray-200 rounded-[1.5rem] animate-pulse" />
+                    <div className="h-48 bg-gray-200 rounded-xl animate-pulse" />
+                    <div className="h-32 bg-gray-200 rounded-xl animate-pulse" />
+                    <div className="h-24 bg-gray-200 rounded-xl animate-pulse" />
                 </div>
             ) : stats && (
                 <div className="space-y-4">
 
                     {/* ═══ SECTION 1: PULSE CARD ═══ */}
-                    <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
+                    <section className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
                         {/* Puffer Hero + Mini Donut */}
                         <div className="flex items-start justify-between mb-4">
                             <div>
@@ -900,7 +900,7 @@ export default function AdminOverview() {
                     </section>
 
                     {/* ═══ SECTION 2: IST-AUFSCHLÜSSELUNG ═══ */}
-                    <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
+                    <section className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
                         <div className="flex items-center gap-2 mb-3">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>
                             <h2 className="text-sm font-bold text-gray-900">IST-Aufschlüsselung</h2>
@@ -984,7 +984,7 @@ export default function AdminOverview() {
                     </section>
 
                     {/* ═══ SECTION 3: BETRIEB ═══ */}
-                    <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
+                    <section className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
                         <div className="flex items-center gap-2 mb-3">
                             <Activity size={16} className="text-gray-500" />
                             <h2 className="text-sm font-bold text-gray-900">Betrieb</h2>
@@ -1036,7 +1036,7 @@ export default function AdminOverview() {
 
                     {/* ═══ SECTION 3b: DIENSTPROFIL-VERGLEICH ═══ */}
                     {employeeStats.length > 0 && (
-                        <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
+                        <section className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
                             <button type="button" className="flex items-center gap-2 mb-3 cursor-pointer w-full text-left" onClick={() => setShowProfil(!showProfil)}>
                                 <Users size={16} className="text-gray-500" />
                                 <h2 className="text-sm font-bold text-gray-900 flex-1">Dienstprofil-Vergleich</h2>
@@ -1121,7 +1121,7 @@ export default function AdminOverview() {
 
                     {/* ═══ SECTION 4: 12-MONATS-VERLAUF ═══ */}
                     {monthlyData.length > 0 && (
-                        <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
+                        <section className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
                             <div className="flex items-center gap-2 mb-3">
                                 <BarChart3 size={16} className="text-gray-500" />
                                 <h2 className="text-sm font-bold text-gray-900">12-Monats-Verlauf</h2>
@@ -1142,7 +1142,7 @@ export default function AdminOverview() {
                         const avg = fairnessData.reduce((s, f) => s + f.index.total, 0) / fairnessData.length
                         const avgPct = (avg / maxPoints) * 100
                         return (
-                            <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
+                            <section className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-5">
                                 <div className="flex items-center gap-2 mb-3">
                                     <Layers size={16} className="text-gray-500" />
                                     <h2 className="text-sm font-bold text-gray-900">Soli-Punkte</h2>
@@ -1187,7 +1187,7 @@ export default function AdminOverview() {
 
                     {/* ═══ SECTION 6: EMPLOYEE TABLE ═══ */}
                     {employeeStats.length > 0 && (
-                        <section className="bg-white rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-4">
+                        <section className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] p-4">
                             <div className="flex items-center gap-2 mb-3 px-1">
                                 <Users size={16} className="text-gray-500" />
                                 <h2 className="text-sm font-bold text-gray-900">Mitarbeiter</h2>

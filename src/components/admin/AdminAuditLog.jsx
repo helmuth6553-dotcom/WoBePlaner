@@ -364,7 +364,7 @@ export default function AdminAuditLog() {
 
             {/* Filters */}
             {showFilters && (
-                <div className="bg-gray-50/50 rounded-[1.5rem] p-4 mb-4 border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
+                <div className="bg-gray-50/50 rounded-xl p-4 mb-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* Time Period Filter */}
                         <div>
@@ -436,7 +436,7 @@ export default function AdminAuditLog() {
                 {filteredLogs.map(log => {
                     const badge = getActionBadge(log.action)
                     return (
-                        <div key={log.id} className="bg-white border border-gray-100/80 rounded-[1.5rem] p-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
+                        <div key={log.id} className="bg-white rounded-xl p-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
                             <div className="flex justify-between items-start mb-1">
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-sm text-gray-900">{log.admin?.full_name || 'System'}</span>
@@ -457,7 +457,7 @@ export default function AdminAuditLog() {
                                 {log.entity_type === 'absence_request' && <span className="text-xs bg-yellow-100 px-1 rounded text-yellow-800">Antrag</span>}
                             </div>
 
-                            <div className="bg-gray-50 rounded p-2 border border-gray-100">
+                            <div className="bg-gray-50 rounded p-2">
                                 {renderChanges(log.changes)}
                             </div>
                         </div>

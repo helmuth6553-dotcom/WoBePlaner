@@ -120,7 +120,7 @@ export default function ProfileVacation() {
     return (
         <div className="space-y-4">
             {/* Urlaubskonto Header */}
-            <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
+            <div className="bg-white p-5 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                         <Palmtree size={20} className="text-teal-600" />
@@ -174,7 +174,7 @@ export default function ProfileVacation() {
             {/* Next Vacation + Year Comparison */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Nächster Urlaub */}
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
+                <div className="bg-white p-5 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                     <div className="flex items-center gap-2 mb-3">
                         <CalendarCheck size={18} className="text-teal-600" />
                         <h4 className="font-bold text-sm text-gray-900">Nächster Urlaub</h4>
@@ -202,7 +202,7 @@ export default function ProfileVacation() {
                 </div>
 
                 {/* Vorjahresvergleich */}
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
+                <div className="bg-white p-5 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                     <div className="flex items-center gap-2 mb-3">
                         <CalendarClock size={18} className="text-gray-600" />
                         <h4 className="font-bold text-sm text-gray-900">Vorjahr</h4>

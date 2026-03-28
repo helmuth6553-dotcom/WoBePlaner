@@ -164,7 +164,7 @@ export default function TimeEntryModal({ item, entry, userProfile, onSave, onClo
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-[1.5rem] p-6 w-full max-w-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-xl font-bold mb-4">
                     {isApproved ? 'Details' : 'Zeit erfassen'}
                 </h3>

@@ -665,7 +665,7 @@ export default function ProfileStats() {
     return (
         <div className="space-y-4">
             {/* Nächster Dienst */}
-            <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
+            <div className="bg-white p-5 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                 <div className="flex items-center gap-2 mb-3">
                     <CalendarClock size={20} className="text-indigo-600" />
                     <h3 className="font-bold text-gray-900">Nächster Dienst</h3>
@@ -696,7 +696,7 @@ export default function ProfileStats() {
 
             {/* Stundenkonto mit expandierbarer Aufschlüsselung */}
             {balance && (
-                <div className="bg-white rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80 overflow-hidden">
+                <div className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] overflow-hidden">
                     <button
                         onClick={() => setDetailExpanded(!detailExpanded)}
                         className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
@@ -927,7 +927,7 @@ export default function ProfileStats() {
 
             {/* Stundenverlauf 12 Monate */}
             {cumulativeData.length > 0 && (
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
+                <div className="bg-white p-5 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                     <div className="flex items-center gap-2 mb-1">
                         <BarChart3 size={20} className="text-gray-700" />
                         <h3 className="font-bold text-gray-900">Stundenverlauf</h3>
@@ -1020,7 +1020,7 @@ export default function ProfileStats() {
             )}
 
             {/* Einspring-Historie */}
-            <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
+            <div className="bg-white p-5 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                 <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                         <Zap size={20} className="text-emerald-600" />
@@ -1065,7 +1065,7 @@ export default function ProfileStats() {
             </div>
 
             {/* Bereitschafts-Unterbrechungen */}
-            <div className="bg-white p-5 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
+            <div className="bg-white p-5 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                 <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                         <BellRing size={20} className="text-orange-500" />

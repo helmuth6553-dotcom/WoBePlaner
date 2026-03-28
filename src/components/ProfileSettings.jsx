@@ -47,7 +47,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
     return (
         <div className="space-y-6">
             {/* Profile Header */}
-            <div className="bg-white p-6 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
+            <div className="bg-white p-6 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                 <div className="flex items-center gap-4 mb-6">
                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
                         <User size={32} />
@@ -124,7 +124,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
             <NotificationToggle />
 
             {/* Password */}
-            <div className="bg-white p-6 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80">
+            <div className="bg-white p-6 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                 <h3 className="font-bold mb-4 flex items-center gap-2">
                     <Shield size={20} /> Sicherheit
                 </h3>
@@ -149,7 +149,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
             </div>
 
             {/* Signature Info */}
-            <div className="bg-blue-50/50 border border-blue-100/80 rounded-[1.5rem] p-6 shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
+            <div className="bg-blue-50/50 border border-blue-100/80 rounded-xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
                 <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                     <Shield className="text-blue-600" size={20} />
                     Wie sicher ist meine Unterschrift?

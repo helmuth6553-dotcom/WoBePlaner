@@ -858,7 +858,7 @@ export default function AdminTimeTracking() {
             <h1 className="text-2xl font-bold mb-6">Zeitenkontrolle (Admin)</h1>
 
             {/* Controls */}
-            <div className="bg-white p-5 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] mb-8">
+            <div className="bg-white p-5 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] mb-8">
                 <div className="flex flex-col gap-4">
 
                     {/* 1. Month Picker (Top) */}
@@ -1017,7 +1017,7 @@ export default function AdminTimeTracking() {
                     }
 
                     return (
-                        <div key={e.id} className="bg-white p-4 rounded-[1.5rem] border border-gray-100/80 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
+                        <div key={e.id} className="bg-white p-4 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
                             <div className="flex justify-between items-center mb-2">
                                 <div className="font-bold flex items-center gap-2 flex-wrap">
                                     {safeFormatDay(itemDate)} {safeFormatDate(itemDate)}

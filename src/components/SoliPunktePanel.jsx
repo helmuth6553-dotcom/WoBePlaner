@@ -144,7 +144,7 @@ export default function SoliPunktePanel() {
     return (
         <div className="space-y-4">
             {/* 1. Visual Slider Card */}
-            <div className="bg-white rounded-[1.5rem] p-6 shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80 flex flex-col items-center">
+            <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.04)] flex flex-col items-center">
                 <div className="text-center w-full mb-8">
                     <span className="text-[10px] sm:text-xs font-bold tracking-widest text-gray-400 uppercase">
                         Dein Status im Team
@@ -183,7 +183,7 @@ export default function SoliPunktePanel() {
             </div>
 
             {/* 2. Tier Descriptive Card */}
-            <div className={`rounded-[1.5rem] p-5 sm:p-6 ${tierConfig.bg} border ${tierConfig.border}`}>
+            <div className={`rounded-xl p-5 sm:p-6 ${tierConfig.bg} border ${tierConfig.border}`}>
                 <div className="flex items-center gap-4">
                     <div className="bg-white p-3 rounded-2xl shadow-sm shrink-0">
                         <TierIcon size={24} className={tierConfig.text} />
@@ -202,7 +202,7 @@ export default function SoliPunktePanel() {
             </div>
 
             {/* 3. Faktor-Aufschlüsselung */}
-            <div className="bg-white rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] overflow-hidden">
                 <button
                     onClick={() => setExpanded(!expanded)}
                     className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
@@ -270,7 +270,7 @@ export default function SoliPunktePanel() {
 
             {/* 4. Verlauf-Hinweis (Trend) */}
             {myTrend !== null && teamTrend !== null && (
-                <div className="bg-gray-50 rounded-[1.5rem] p-4 border border-gray-100/80 text-center flex items-center justify-center gap-3">
+                <div className="bg-gray-50 rounded-xl p-4 text-center flex items-center justify-center gap-3">
                     {myTrend >= teamTrend ? (
                         <TrendingUp size={24} className="text-emerald-500" />
                     ) : (

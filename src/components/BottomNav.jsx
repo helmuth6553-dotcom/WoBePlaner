@@ -37,7 +37,7 @@ export default function BottomNav({ activeTab, onTabChange, isAdmin, isViewer, b
     // badges = { roster: { dot: true }, admin: { count: 3 }, ... }
 
     return (
-        <div className="absolute bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-gray-200/50 p-2 flex justify-around items-center z-50 pb-safe">
+        <div className="absolute bottom-0 left-0 right-0 bg-[#F5F4F0]/80 backdrop-blur-xl border-t border-gray-200/50 p-2 flex justify-around items-center z-50 pb-safe">
             <NavItem
                 id="roster"
                 icon={Calendar}

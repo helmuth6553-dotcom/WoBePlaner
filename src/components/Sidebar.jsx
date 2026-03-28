@@ -27,7 +27,7 @@ export default function Sidebar({ activeTab, onTabChange, isAdmin, isViewer, bad
     ]
 
     return (
-        <div className="hidden md:flex flex-col w-64 h-full bg-white border-r border-gray-200 p-5 shadow-sm">
+        <div className="hidden md:flex flex-col w-64 h-full bg-transparent p-5">
             {/* Logo */}
             <div className="mb-8 px-2">
                 <img src="/logo2.png" alt="Logo" className="w-full h-auto object-contain drop-shadow-sm" />
@@ -42,8 +42,8 @@ export default function Sidebar({ activeTab, onTabChange, isAdmin, isViewer, bad
                             key={item.id}
                             onClick={() => onTabChange(item.id)}
                             className={`w-full flex items-center justify-between gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id
-                                ? 'bg-[#00c2cb] text-white shadow-md font-bold'
-                                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                ? 'bg-white text-gray-900 shadow-sm font-semibold'
+                                : 'text-gray-500 hover:bg-white/60 hover:text-gray-900'
                                 }`}
                         >
                             <div className="flex items-center gap-4">
