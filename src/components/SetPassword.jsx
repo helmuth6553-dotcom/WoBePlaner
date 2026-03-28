@@ -258,56 +258,6 @@ export default function SetPassword({ user, onPasswordSet }) {
                         </div>
                     </div>
 
-                    {/* Who sees what - Compact Table */}
-                    <div className="mb-4 p-4 bg-gray-50 rounded-xl">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Users className="text-gray-600" size={16} />
-                            <span className="font-bold text-gray-900 text-sm">Wer sieht was?</span>
-                        </div>
-                        <table className="w-full text-xs">
-                            <thead>
-                                <tr className="border-b border-gray-200">
-                                    <th className="text-left py-1.5 font-medium text-gray-500"></th>
-                                    <th className="text-center py-1.5 font-bold text-gray-900 px-2">Du</th>
-                                    <th className="text-center py-1.5 font-bold text-gray-900 px-2">Team</th>
-                                    <th className="text-center py-1.5 font-bold text-gray-900 px-2">Admin</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-gray-600">
-                                <tr className="border-b border-gray-100">
-                                    <td className="py-1.5">Dienste</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                </tr>
-                                <tr className="border-b border-gray-100">
-                                    <td className="py-1.5">Stundenkonto</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                </tr>
-                                <tr className="border-b border-gray-100">
-                                    <td className="py-1.5">Abwesenheitsgrund</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                    <td className="text-center text-gray-400 text-[10px]">nur &quot;Abwesend&quot;</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                </tr>
-                                <tr className="border-b border-gray-100">
-                                    <td className="py-1.5">E-Mail</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                    <td className="text-center text-gray-400">&ndash;</td>
-                                    <td className="text-center text-green-600">&#10003;</td>
-                                </tr>
-                                <tr>
-                                    <td className="py-1.5">Passwort</td>
-                                    <td className="text-center text-gray-400 text-[10px]">nur du</td>
-                                    <td className="text-center text-gray-400">&ndash;</td>
-                                    <td className="text-center text-gray-400">&ndash;</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
                     {/* Kurzer Datenschutz-Hinweis */}
                     <p className="text-xs text-gray-400 mb-6 leading-relaxed">
                         Deine Daten liegen verschlüsselt bei Supabase (EU).
