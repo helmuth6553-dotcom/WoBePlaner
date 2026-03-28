@@ -137,10 +137,24 @@ export default function AdminEmployees() {
             })
 
             if (response.error) {
-                // If Edge Function failed, fall back to invitation system
-                console.warn('Edge Function failed, using invitation fallback:', response.error)
+                // Check if Edge Function returned a business logic error (not a deployment issue)
+                const edgeFnError = response.data?.error
+                if (edgeFnError) {
+                    throw new Error(edgeFnError)
+                }
 
-                const { error: inviteError } = await supabase.from('invitations').insert([formData])
+                // Network/deployment issue — fall back to invitation system
+                console.warn('Edge Function nicht erreichbar, verwende Fallback:', response.error)
+
+                const { error: inviteError } = await supabase.from('invitations').insert([{
+                    email: formData.email,
+                    full_name: formData.full_name,
+                    weekly_hours: parseFloat(formData.weekly_hours) || 40,
+                    start_date: formData.start_date,
+                    vacation_days_per_year: parseFloat(formData.vacation_days_per_year) || 25,
+                    role: formData.role,
+                    initial_balance: parseFloat(formData.initial_balance) || 0,
+                }])
                 if (inviteError) {
                     throw new Error(inviteError.message)
                 }
