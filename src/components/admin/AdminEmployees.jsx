@@ -153,6 +153,7 @@ export default function AdminEmployees() {
                     start_date: formData.start_date,
                     vacation_days_per_year: parseFloat(formData.vacation_days_per_year) || 25,
                     role: formData.role,
+                    initial_balance: parseFloat(formData.initial_balance) || 0,
                 }])
                 if (inviteError) {
                     throw new Error(inviteError.message)
