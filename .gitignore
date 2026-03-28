@@ -36,3 +36,5 @@ public/*.crdownload
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+.playwright-mcp/
+*.png

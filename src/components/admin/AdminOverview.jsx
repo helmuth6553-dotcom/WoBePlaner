@@ -65,7 +65,7 @@ function generateInsights(stats, employeeStats, monthlyData) {
     // 7. MA ohne Dienst für >5 Arbeitstage (≈1 Woche)
     const longGaps = employeeStats.filter(e => e.maxGapDays > 5)
     longGaps.forEach(e => {
-        insights.push({ color: 'amber', text: `${e.name.split(' ')[0]}`, detail: `${e.maxGapDays} Arbeitstage ohne Dienst`, priority: e.maxGapDays * 5 })
+        insights.push({ color: 'amber', text: `${e.name.split(' ')[0]}`, detail: `${e.maxGapDays} Tage ohne Dienst`, priority: e.maxGapDays * 5 })
     })
 
     return [...insights].sort((a, b) => b.priority - a.priority).slice(0, 3)
