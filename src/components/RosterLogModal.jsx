@@ -37,7 +37,7 @@ export default function RosterLogModal({ isOpen, onClose }) {
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-[1.5rem] w-full max-w-2xl h-[80vh] shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl w-full max-w-2xl h-[80vh] shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 flex flex-col animate-in zoom-in-95 duration-200">
                 <div className="p-6 border-b flex justify-between items-center">
                     <h3 className="text-xl font-bold flex items-center gap-2">
                         <History className="text-gray-600" /> Änderungsprotokoll
@@ -58,7 +58,7 @@ export default function RosterLogModal({ isOpen, onClose }) {
                     ) : (
                         <div className="space-y-4">
                             {logs.map(log => (
-                                <div key={log.id} className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm">
+                                <div key={log.id} className="bg-gray-50 rounded-xl p-4 text-sm">
                                     <div className="flex justify-between items-start mb-2">
                                         <span className="font-bold text-gray-700">
                                             {log.shift?.type} am {log.shift?.start_time ? format(new Date(log.shift.start_time), 'dd.MM.yyyy', { locale: de }) : '???'}
@@ -68,7 +68,7 @@ export default function RosterLogModal({ isOpen, onClose }) {
                                         </span>
                                     </div>
 
-                                    <div className="flex items-center gap-3 text-gray-600 bg-white p-3 rounded-lg border border-gray-100">
+                                    <div className="flex items-center gap-3 text-gray-600 bg-white p-3 rounded-lg">
                                         <div className="flex-1 text-right font-medium">
                                             {log.old_user?.full_name || log.old_user?.email || 'Unbekannt'}
                                         </div>

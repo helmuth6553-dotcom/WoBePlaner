@@ -36,7 +36,7 @@ export default function AdminSickLeaves() {
 
             <div className="space-y-3 mb-12">
                 {activeSick.map(req => (
-                    <div key={req.id} className="bg-red-50/50 border border-red-100/80 p-4 rounded-[1.5rem] flex flex-col md:flex-row justify-between items-start md:items-center shadow-[0_2px_10px_rgb(0,0,0,0.04)] gap-4">
+                    <div key={req.id} className="bg-red-50/50 border border-red-100/80 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center shadow-[0_2px_10px_rgb(0,0,0,0.04)] gap-4">
                         <div>
                             <span className="font-bold text-red-900 text-lg">
                                 {req.profiles?.full_name || req.profiles?.email}
@@ -56,7 +56,7 @@ export default function AdminSickLeaves() {
 
             <div className="space-y-3">
                 {pastSick.map(req => (
-                    <div key={req.id} className="bg-gray-50 border border-gray-100/80 p-4 rounded-[1.5rem] flex flex-col sm:flex-row justify-between items-start sm:items-center shadow-[0_2px_10px_rgb(0,0,0,0.04)] gap-4 opacity-75">
+                    <div key={req.id} className="bg-gray-50 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center shadow-[0_2px_10px_rgb(0,0,0,0.04)] gap-4 opacity-75">
                         <div>
                             <span className="font-bold text-lg text-gray-700">
                                 {req.profiles?.full_name || req.profiles?.email}

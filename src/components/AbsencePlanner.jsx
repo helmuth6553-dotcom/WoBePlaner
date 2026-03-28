@@ -389,7 +389,7 @@ export default function AbsencePlanner({ initialDate }) {
             {/* Compact Stats Card - Only for Non-Admins */}
             {!isAdmin && myStats && (
                 <div className="px-4 mb-3 shrink-0">
-                    <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+                    <div className="bg-white p-3 rounded-xl shadow-sm flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-teal-500 text-white flex items-center justify-center font-bold text-lg shadow-md">
                                 {myStats.remaining}
@@ -416,7 +416,7 @@ export default function AbsencePlanner({ initialDate }) {
             {/* Content Area */}
             <div className="flex-1 px-4 flex flex-col min-h-0">
                 {viewMode === 'grid' ? (
-                    <div className="flex-1 flex flex-col bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm overflow-hidden">
                         <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50 shrink-0">
                             {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(d => (
                                 <div key={d} className="py-2 text-center text-xs font-bold text-gray-500 uppercase">{d}</div>
@@ -488,7 +488,7 @@ export default function AbsencePlanner({ initialDate }) {
                                 const holiday = getHoliday(day)
 
                                 return (
-                                    <div key={day.toString()} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                    <div key={day.toString()} className="bg-white p-4 rounded-xl shadow-sm">
                                         <div className="flex items-center gap-3 mb-3">
                                             <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center font-bold border ${isWeekend(day) || holiday ? 'bg-red-50 text-red-500 border-red-100' : 'bg-gray-50 text-gray-900 border-gray-100'}`}>
                                                 <span className="text-xs uppercase">{format(day, 'EEE', { locale: de })}</span>
@@ -558,7 +558,7 @@ export default function AbsencePlanner({ initialDate }) {
                             const isSigned = !!req.data_hash
 
                             return (
-                                <div key={req.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                <div key={req.id} className="bg-white p-4 rounded-xl shadow-sm">
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-3">
                                             <div className={`p-2.5 rounded-xl ${req.status === 'genehmigt' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>

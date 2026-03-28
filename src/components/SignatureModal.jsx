@@ -69,7 +69,7 @@ export default function SignatureModal({ isOpen, onClose, onConfirm, payload, ti
                     </div>
 
                     <div className="space-y-4">
-                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm mb-4">
+                        <div className="bg-gray-50 p-4 rounded-xl text-sm mb-4">
                             <div className="flex items-start gap-2 text-gray-600">
                                 <FileText size={16} className="mt-0.5 shrink-0" />
                                 <div className="font-mono text-xs break-all opacity-70">

@@ -10,7 +10,7 @@ import { de } from 'date-fns/locale'
 export default function TeamPanel({ balances = [], currentDate, onRefresh, loading = false }) {
     if (loading) {
         return (
-            <div className="hidden lg:flex flex-col w-96 h-full bg-gray-50 border-l border-gray-200 p-4">
+            <div className="hidden lg:flex flex-col w-96 h-full bg-transparent p-4">
                 <div className="animate-pulse space-y-3">
                     {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-20 bg-gray-200 rounded-lg"></div>)}
                 </div>
@@ -19,9 +19,9 @@ export default function TeamPanel({ balances = [], currentDate, onRefresh, loadi
     }
 
     return (
-        <div className="hidden lg:flex flex-col w-96 h-full bg-gray-50 border-l border-gray-200">
+        <div className="hidden lg:flex flex-col w-96 h-full bg-transparent">
             {/* Header */}
-            <div className="p-4 bg-white border-b border-gray-200">
+            <div className="p-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Users size={22} className="text-gray-600" />
@@ -54,7 +54,7 @@ export default function TeamPanel({ balances = [], currentDate, onRefresh, loadi
                     const isNegative = user.total < 0
 
                     return (
-                        <div key={user.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                        <div key={user.id} className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
                             <div className="flex justify-between items-center mb-3">
                                 <span className="font-semibold text-gray-800 truncate text-base" title={user.name}>
                                     {user.name}
@@ -92,7 +92,7 @@ export default function TeamPanel({ balances = [], currentDate, onRefresh, loadi
             </div>
 
             {/* Footer */}
-            <div className="p-3 bg-white border-t border-gray-200 text-center">
+            <div className="p-3 text-center">
                 <div className="text-xs text-gray-400 uppercase tracking-wider">
                     Synchronisiert mit Dienstplan
                 </div>

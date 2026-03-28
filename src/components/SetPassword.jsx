@@ -85,11 +85,7 @@ export default function SetPassword({ user, onPasswordSet }) {
     if (step === 'welcome') {
         return (
             <div className="flex min-h-screen items-center justify-center p-4 bg-gray-50">
-                <div className="w-full max-w-2xl bg-white p-8 md:p-12 rounded-3xl shadow-xl border border-gray-100 relative overflow-hidden">
-
-                    {/* Decorative Background Blobs */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
-                    <div className="absolute bottom-0 left-0 w-48 h-48 bg-green-50 rounded-full blur-3xl -z-10 -translate-x-1/2 translate-y-1/2"></div>
+                <div className="w-full max-w-lg bg-white p-8 rounded-xl shadow-sm">
 
                     <ProgressDots current="welcome" />
 
@@ -100,35 +96,55 @@ export default function SetPassword({ user, onPasswordSet }) {
                         <p className="text-gray-500 text-lg">Alles an einem Ort. Alles miteinander verbunden.</p>
                     </div>
 
-                    {/* Core Features - 3 Columns */}
-                    <div className="grid md:grid-cols-3 gap-5 mb-8">
-                        <div className="p-5 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-2xl border border-blue-100 text-center">
-                            <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm">
-                                <Calendar className="text-blue-600" size={28} />
-                            </div>
-                            <h3 className="font-bold text-gray-900 mb-1">Dienstplan</h3>
-                            <p className="text-xs text-gray-500">Sieh deine Schichten auf einen Blick</p>
-                        </div>
-
-                        <div className="p-5 bg-gradient-to-br from-green-50 to-green-100/50 rounded-2xl border border-green-100 text-center">
-                            <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm">
-                                <Palmtree className="text-green-600" size={28} />
-                            </div>
-                            <h3 className="font-bold text-gray-900 mb-1">Urlaubsplanung</h3>
-                            <p className="text-xs text-gray-500">Beantrage Urlaub mit wenigen Klicks</p>
-                        </div>
-
-                        <div className="p-5 bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-2xl border border-purple-100 text-center">
-                            <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm">
-                                <Clock className="text-purple-600" size={28} />
-                            </div>
-                            <h3 className="font-bold text-gray-900 mb-1">Zeiterfassung</h3>
-                            <p className="text-xs text-gray-500">Stunden & Überstunden automatisch</p>
-                        </div>
+                    {/* Wer sieht was? */}
+                    <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+                        <h3 className="font-bold text-gray-900 text-sm mb-3">Wer sieht was?</h3>
+                        <table className="w-full text-xs">
+                            <thead>
+                                <tr className="border-b border-gray-200">
+                                    <th className="text-left py-1.5 font-medium text-gray-500"></th>
+                                    <th className="text-center py-1.5 font-bold text-gray-900 px-2">Du</th>
+                                    <th className="text-center py-1.5 font-bold text-gray-900 px-2">Team</th>
+                                    <th className="text-center py-1.5 font-bold text-gray-900 px-2">Admin</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-gray-600">
+                                <tr className="border-b border-gray-100">
+                                    <td className="py-1.5">Dienste</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                </tr>
+                                <tr className="border-b border-gray-100">
+                                    <td className="py-1.5">Stundenkonto</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                </tr>
+                                <tr className="border-b border-gray-100">
+                                    <td className="py-1.5">Abwesenheitsgrund</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                    <td className="text-center text-gray-400 text-[10px]">nur &quot;Abwesend&quot;</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                </tr>
+                                <tr className="border-b border-gray-100">
+                                    <td className="py-1.5">E-Mail</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                    <td className="text-center text-gray-400">&ndash;</td>
+                                    <td className="text-center text-green-600">&#10003;</td>
+                                </tr>
+                                <tr>
+                                    <td className="py-1.5">Passwort</td>
+                                    <td className="text-center text-gray-400 text-[10px]">nur du</td>
+                                    <td className="text-center text-gray-400">&ndash;</td>
+                                    <td className="text-center text-gray-400">&ndash;</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
 
                     {/* Connected Tagline */}
-                    <div className="mb-8 py-5 px-6 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="mb-8 py-5 px-6 bg-gray-50 rounded-xl">
                         <div className="flex items-center gap-2 mb-3">
                             <Link2 className="text-gray-900" size={18} />
                             <span className="font-bold text-gray-900">Alles verbunden:</span>
@@ -153,7 +169,7 @@ export default function SetPassword({ user, onPasswordSet }) {
                     <div className="text-center">
                         <button
                             onClick={() => setStep('privacy')}
-                            className="bg-teal-500 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-teal-600 transition-all flex items-center gap-2 mx-auto hover:scale-105 active:scale-95 shadow-lg shadow-teal-200"
+                            className="bg-teal-500 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-teal-600 transition-all flex items-center gap-2 mx-auto hover:scale-105 active:scale-95 shadow-lg shadow-teal-200"
                         >
                             Weiter <ArrowRight size={20} />
                         </button>
@@ -169,7 +185,7 @@ export default function SetPassword({ user, onPasswordSet }) {
     if (step === 'privacy') {
         return (
             <div className="flex min-h-screen items-center justify-center p-4 bg-gray-50">
-                <div className="w-full max-w-2xl bg-white p-8 md:p-12 rounded-3xl shadow-xl border border-gray-100 relative overflow-hidden">
+                <div className="w-full max-w-2xl bg-white p-8 md:p-12 rounded-xl shadow-xl relative overflow-hidden">
 
                     {/* Decorative Background */}
                     <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
@@ -194,7 +210,7 @@ export default function SetPassword({ user, onPasswordSet }) {
 
                     {/* Combined: What we store + What we don't */}
                     <div className="grid md:grid-cols-2 gap-3 mb-4">
-                        <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                        <div className="p-4 bg-gray-50 rounded-xl">
                             <div className="flex items-center gap-2 mb-2">
                                 <Database className="text-gray-600" size={16} />
                                 <span className="font-bold text-gray-900 text-sm">Was speichern wir?</span>
@@ -225,7 +241,7 @@ export default function SetPassword({ user, onPasswordSet }) {
                     </div>
 
                     {/* Who sees what - Compact Table */}
-                    <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="mb-4 p-4 bg-gray-50 rounded-xl">
                         <div className="flex items-center gap-2 mb-2">
                             <Users className="text-gray-600" size={16} />
                             <span className="font-bold text-gray-900 text-sm">Wer sieht was?</span>
@@ -309,8 +325,8 @@ export default function SetPassword({ user, onPasswordSet }) {
     // STEP 3: PASSWORD FORM
     // ========================================
     return (
-        <div className="flex h-screen items-center justify-center p-4 bg-gray-50">
-            <div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+        <div className="flex min-h-screen items-center justify-center p-4 bg-gray-50">
+            <div className="w-full max-w-sm bg-white p-8 rounded-xl shadow-sm">
                 {/* Back Button */}
                 <button
                     onClick={() => setStep('privacy')}

@@ -20,7 +20,7 @@ export function Skeleton({ className = '', ...props }) {
 // Skeleton for a single DayCard
 export function DayCardSkeleton() {
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+        <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
             {/* Date header */}
             <div className="flex items-center justify-between">
                 <Skeleton className="h-6 w-32 rounded-lg" />
@@ -68,7 +68,7 @@ export function RosterFeedSkeleton({ count = 5 }) {
     return (
         <div className="space-y-4 p-4">
             {/* Balance header skeleton */}
-            <div className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-2xl p-4">
+            <div className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-xl p-4">
                 <div className="flex items-center justify-between">
                     <div>
                         <Skeleton className="h-4 w-24 mb-2" />

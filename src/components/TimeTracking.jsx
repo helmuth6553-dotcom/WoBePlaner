@@ -916,7 +916,7 @@ export default function TimeTracking() {
                 </div>
             )}
 
-            <div className="bg-white p-3 rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80 mb-6">
+            <div className="bg-white p-3 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] mb-6">
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2 text-center">Monat</label>
                 <div className="flex items-center justify-between bg-gray-50 rounded-xl p-1.5 border border-gray-200">
                     <button
@@ -949,7 +949,7 @@ export default function TimeTracking() {
 
             {/* Live Balance Card */}
             {balanceData && !loading && (
-                <div className="bg-white rounded-[1.5rem] shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-gray-100/80 overflow-hidden mb-6 p-4">
+                <div className="bg-white rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] overflow-hidden mb-6 p-4">
                     <div className="flex items-center gap-2 mb-3 px-1">
                         <Clock size={18} className="text-gray-400" />
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mein Stundenkonto</h3>
@@ -1003,7 +1003,7 @@ export default function TimeTracking() {
                         if (item.type === 'SONSTIGES') displayType = "Sonstiges"
 
                         return (
-                            <div key={item.id} className={`p-4 rounded-[1.5rem] border shadow-[0_2px_10px_rgb(0,0,0,0.04)] transition-all ${isDone ? 'bg-gray-100' : 'bg-white border-gray-100/80 hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)]'}`}>
+                            <div key={item.id} className={`p-4 rounded-xl border shadow-[0_2px_10px_rgb(0,0,0,0.04)] transition-all ${isDone ? 'bg-gray-100' : 'bg-white border-gray-100/80 hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)]'}`}>
                                 <div className="flex justify-between items-center mb-2">
                                     <div>
                                         <div className="font-bold text-lg flex items-center gap-2">

@@ -1007,7 +1007,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
             <div className="flex-1 overflow-hidden">
                 <PullToRefresh onRefresh={fetchData}>
                     <div className="min-h-full pb-20">
-                        <div ref={stickyHeaderRef} className="sticky top-0 bg-white z-10 border-b shadow-sm">
+                        <div ref={stickyHeaderRef} className="sticky top-0 bg-[#F5F4F0] z-10">
                             {/* Zeile 1: Datumsnavigation + Stundensaldo */}
                             <div className="px-3 pt-2.5 pb-1 flex justify-between items-center">
                                 <div className="flex items-center bg-gray-100 rounded-lg p-0.5">

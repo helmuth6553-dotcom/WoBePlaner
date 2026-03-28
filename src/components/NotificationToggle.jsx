@@ -244,7 +244,7 @@ export default function NotificationToggle() {
     }
 
     return (
-        <div className="mt-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="mt-4 p-4 bg-white rounded-xl shadow-sm">
             <div className="flex items-center gap-2 mb-3">
                 <Bell className="text-gray-600" size={20} />
                 <h3 className="font-bold text-gray-800">Benachrichtigungen</h3>

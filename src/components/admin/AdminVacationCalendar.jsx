@@ -86,7 +86,7 @@ export default function AdminVacationCalendar() {
 
         return (
             <div
-                className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                className="bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() => setSelectedMonth(month)}
             >
                 <div className="flex justify-between items-center mb-2">

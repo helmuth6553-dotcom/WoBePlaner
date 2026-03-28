@@ -173,7 +173,7 @@ export default function CoverageVotingPanel({
                         )
                     })
                 ) : (
-                    <div className="bg-white/50 border border-gray-100 rounded-lg p-3 text-center">
+                    <div className="bg-white/50 rounded-lg p-3 text-center">
                         <div className="flex items-center gap-1.5 py-1 justify-center flex-wrap">
                             {/* Render Responded Avatars */}
                             {Array.from({ length: totalResponded }).map((_, i) => (
