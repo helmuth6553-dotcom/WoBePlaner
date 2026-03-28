@@ -37,7 +37,7 @@ import { RosterFeedSkeleton, TimeTrackingSkeleton, ProfileSkeleton, PageSkeleton
 const LazyLoadFallback = () => <PageSkeleton />
 
 function AppContent() {
-  const { user, isAdmin, passwordSet, refreshPasswordSet } = useAuth()
+  const { user, isAdmin, isViewer, passwordSet, refreshPasswordSet } = useAuth()
   const [activeTab, setActiveTab] = useState('roster')
   const [calendarDate, setCalendarDate] = useState(null)
   const [badges, setBadges] = useState({})
@@ -96,7 +96,7 @@ function AppContent() {
 
   // Fetch open coverage requests for non-admin users (only when voting system is active)
   const refreshCoverageCount = async () => {
-    if (!USE_COVERAGE_VOTING || !user || isAdmin) {
+    if (!USE_COVERAGE_VOTING || !user || isAdmin || isViewer) {
       setOpenCoverageCount(0)
       return
     }
@@ -128,7 +128,7 @@ function AppContent() {
   }
 
   useEffect(() => {
-    if (!USE_COVERAGE_VOTING || !user || isAdmin) {
+    if (!USE_COVERAGE_VOTING || !user || isAdmin || isViewer) {
       setOpenCoverageCount(0)
       return
     }
@@ -149,7 +149,14 @@ function AppContent() {
       })
 
     return () => { supabase.removeChannel(channel) }
-  }, [user, isAdmin])
+  }, [user, isAdmin, isViewer])
+
+  // Redirect viewer away from forbidden tabs
+  useEffect(() => {
+    if (isViewer && (activeTab === 'times' || activeTab === 'admin')) {
+      setActiveTab('roster')
+    }
+  }, [isViewer, activeTab])
 
   const handleNavigateToCalendar = (date) => {
     setCalendarDate(new Date(date))
@@ -170,13 +177,13 @@ function AppContent() {
       <ReloadPrompt />
 
       {/* Desktop Sidebar (Hidden on Mobile) */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} badges={badges} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} isViewer={isViewer} badges={badges} />
 
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50">
 
         {/* Coverage Alert Banner - shown on all tabs (only with voting system) */}
-        {USE_COVERAGE_VOTING && openCoverageCount > 0 && (
+        {USE_COVERAGE_VOTING && !isViewer && openCoverageCount > 0 && (
           <button
             onClick={() => {
               if (activeTab !== 'roster') {
@@ -200,7 +207,7 @@ function AppContent() {
         <div className={`flex-1 ${activeTab === 'roster' ? 'overflow-hidden' : 'overflow-y-auto'} scrollbar-hide pb-20 md:pb-0`}>
 
           {activeTab === 'roster' && <RosterFeed onCoverageVoteChanged={refreshCoverageCount} />}
-          {activeTab === 'times' && (
+          {activeTab === 'times' && !isViewer && (
             <Suspense fallback={<TimeTrackingSkeleton />}>
               {isAdmin ? <AdminTimeTracking /> : (USE_NEW_TIME_TRACKING ? <TimeTrackingV2 /> : <TimeTracking />)}
             </Suspense>
@@ -224,7 +231,7 @@ function AppContent() {
 
         {/* Bottom Nav (Mobile Only) */}
         <div className="md:hidden fixed bottom-0 left-0 right-0">
-          <BottomNav activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} badges={badges} />
+          <BottomNav activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} isViewer={isViewer} badges={badges} />
         </div>
       </div>
     </div>

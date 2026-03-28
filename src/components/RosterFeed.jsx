@@ -43,7 +43,7 @@ function mergeById(base, additions, matchKeys = ['id']) {
 
 export default function RosterFeed({ onCoverageVoteChanged }) {
 
-    const { user, isAdmin } = useAuth()
+    const { user, isAdmin, isViewer } = useAuth()
     const [shifts, setShifts] = useState([])
     const [allAbsences, setAllAbsences] = useState([])
     const [viewMode, setViewMode] = useState('cards') // 'cards' or 'table'
@@ -447,6 +447,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     }
 
     const toggleInterest = async (shiftId, currentlyInterested, targetUserId = null) => {
+        if (isViewer) return
         const actingUserId = (isAdmin && targetUserId) ? targetUserId : user.id
         const shift = shifts.find(s => s.id === shiftId)
 
@@ -549,7 +550,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     // NOTE: We only write to coverage_votes here. shift_interests is NOT touched until resolve,
     // so the shift does NOT appear "assigned" while voting is in progress.
     const submitCoverageVote = async (shiftId, preference) => {
-        if (!USE_COVERAGE_VOTING || !user) return
+        if (!USE_COVERAGE_VOTING || !user || isViewer) return
 
         if (preference === null) {
             // Remove vote ("Ändern" clicked) - clear preference + responded flag
@@ -684,7 +685,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
 
     // Direct takeover: Employee takes an urgent shift without voting (Beta mode)
     const handleDirectTakeover = async (shiftId) => {
-        if (!user) return
+        if (!user || isViewer) return
 
         const shift = shiftsRef.current.find(s => s.id === shiftId)
         if (!shift) {
@@ -1047,7 +1048,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                         </button>
                                     )}
 
-                                    {!isAdmin && (
+                                    {!isAdmin && !isViewer && (
                                         <button
                                             onClick={() => setIsSickModalOpen(true)}
                                             className="p-1.5 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors border border-red-100"
@@ -1057,7 +1058,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                         </button>
                                     )}
 
-                                    {!isAdmin && (
+                                    {!isAdmin && !isViewer && (
                                         <div
                                             className={`p-1.5 rounded-full border transition-colors ${isMonthOpen ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}
                                             title={isMonthOpen ? "Dienstplan offen" : "Dienstplan geschlossen"}
@@ -1142,6 +1143,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                         shifts={visibleShiftsByDate[dateStr]}
                                                         userId={user.id}
                                                         isAdmin={isAdmin}
+                                                        isViewer={isViewer}
                                                         onToggleInterest={toggleInterest}
                                                         onToggleFlex={toggleFlex}
                                                         onUpdateShift={async (shiftId, newStart, newEnd, newTitle) => {

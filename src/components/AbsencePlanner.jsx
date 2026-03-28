@@ -19,7 +19,7 @@ import { useToast } from './Toast'
 import { handleError } from '../utils/errorHandler'
 
 export default function AbsencePlanner({ initialDate }) {
-    const { user, isAdmin } = useAuth()
+    const { user, isAdmin, isViewer } = useAuth()
     const [currentMonth, setCurrentMonth] = useState(initialDate || new Date())
     const [absences, setAbsences] = useState([])
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { } })
@@ -129,7 +129,7 @@ export default function AbsencePlanner({ initialDate }) {
 
     // Click Handler
     const handleDayClick = (day) => {
-        if (isAdmin) return
+        if (isAdmin || isViewer) return
         if (!selectionStart || (selectionStart && selectionEnd)) {
             setSelectionStart(day)
             setSelectionEnd(null)
@@ -526,7 +526,7 @@ export default function AbsencePlanner({ initialDate }) {
             </div>
 
             {/* Floating Action Button for Request */}
-            {selectionStart && (
+            {selectionStart && !isViewer && (
                 <div className="mt-4 mx-4 z-40 animate-in slide-in-from-bottom-4 fade-in duration-300 shrink-0">
                     <button
                         onClick={handleSave}
@@ -588,7 +588,7 @@ export default function AbsencePlanner({ initialDate }) {
                                                     <Download size={18} />
                                                 </button>
                                             )}
-                                            {req.status === 'beantragt' && (
+                                            {req.status === 'beantragt' && !isViewer && (
                                                 <button onClick={() => handleDelete(req.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
                                                     <Trash2 size={18} />
                                                 </button>

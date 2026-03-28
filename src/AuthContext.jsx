@@ -114,6 +114,7 @@ export const AuthProvider = ({ children }) => {
 
 
     const isAdmin = role === 'admin'
+    const isViewer = role === 'viewer'
 
     // Function to refresh password_set status after user sets their password
     const refreshPasswordSet = () => {
@@ -130,7 +131,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ user, role, isAdmin, loading, passwordSet, refreshPasswordSet }}>
+        <AuthContext.Provider value={{ user, role, isAdmin, isViewer, loading, passwordSet, refreshPasswordSet }}>
             {children}
         </AuthContext.Provider>
     )
