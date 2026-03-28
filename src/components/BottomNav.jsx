@@ -33,7 +33,7 @@ function NavItem({ id, icon: Icon, label, isActive, onClick, badge }) {
     )
 }
 
-export default function BottomNav({ activeTab, onTabChange, isAdmin, badges = {} }) {
+export default function BottomNav({ activeTab, onTabChange, isAdmin, isViewer, badges = {} }) {
     // badges = { roster: { dot: true }, admin: { count: 3 }, ... }
 
     return (
@@ -46,6 +46,7 @@ export default function BottomNav({ activeTab, onTabChange, isAdmin, badges = {}
                 onClick={onTabChange}
                 badge={badges.roster}
             />
+            {!isViewer && (
             <NavItem
                 id="times"
                 icon={List}
@@ -54,6 +55,7 @@ export default function BottomNav({ activeTab, onTabChange, isAdmin, badges = {}
                 onClick={onTabChange}
                 badge={badges.times}
             />
+            )}
             <NavItem
                 id="absences"
                 icon={Plane}

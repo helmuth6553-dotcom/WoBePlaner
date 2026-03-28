@@ -18,7 +18,7 @@ const SECTIONS = [
 ]
 
 export default function Profile() {
-    const { user, isAdmin } = useAuth()
+    const { user, isAdmin, isViewer } = useAuth()
     const [profile, setProfile] = useState(null)
     const [activeSection, setActiveSection] = useState('settings')
 
@@ -31,7 +31,7 @@ export default function Profile() {
         if (data) setProfile(data)
     }
 
-    const visibleSections = SECTIONS.filter(s => (!s.employeeOnly || !isAdmin) && !s.hidden)
+    const visibleSections = SECTIONS.filter(s => (!s.employeeOnly || (!isAdmin && !isViewer)) && !s.hidden)
 
     if (!profile) {
         return (

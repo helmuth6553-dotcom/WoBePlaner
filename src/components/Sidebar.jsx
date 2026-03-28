@@ -17,10 +17,10 @@ function Badge({ count, dot = false }) {
     )
 }
 
-export default function Sidebar({ activeTab, onTabChange, isAdmin, badges = {} }) {
+export default function Sidebar({ activeTab, onTabChange, isAdmin, isViewer, badges = {} }) {
     const navItems = [
         { id: 'roster', icon: Calendar, label: 'Dienstplan' },
-        { id: 'times', icon: List, label: 'Zeiten' },
+        ...(!isViewer ? [{ id: 'times', icon: List, label: 'Zeiten' }] : []),
         { id: 'absences', icon: Plane, label: 'Urlaub' },
         ...(isAdmin ? [{ id: 'admin', icon: Shield, label: 'Admin' }] : []),
         { id: 'profile', icon: User, label: 'Profil' }

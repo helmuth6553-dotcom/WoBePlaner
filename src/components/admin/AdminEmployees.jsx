@@ -287,7 +287,8 @@ export default function AdminEmployees() {
     }
 
     const admins = users.filter(u => u.role === 'admin')
-    const employees = users.filter(u => u.role !== 'admin')
+    const viewers = users.filter(u => u.role === 'viewer')
+    const employees = users.filter(u => u.role !== 'admin' && u.role !== 'viewer')
 
     const UserCard = ({ user, isInactive = false }) => (
         <div
@@ -347,6 +348,18 @@ export default function AdminEmployees() {
                     {employees.map(u => <UserCard key={u.id} user={u} />)}
                 </div>
             </div>
+
+            {/* Zuschauer */}
+            {viewers.length > 0 && (
+                <div className="mb-8">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-2">
+                        Zuschauer
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-2">
+                        {viewers.map(u => <UserCard key={u.id} user={u} />)}
+                    </div>
+                </div>
+            )}
 
             {/* Inaktive Mitarbeiter */}
             {inactiveUsers.length > 0 && (
@@ -515,6 +528,7 @@ export default function AdminEmployees() {
                                 >
                                     <option value="user">Mitarbeiter</option>
                                     <option value="admin">Administrator</option>
+                                    <option value="viewer">Zuschauer</option>
                                 </select>
                             </div>
                         </div>

@@ -33,7 +33,7 @@ const getUserColor = (name) => {
     return colors[Math.abs(hash) % colors.length]
 }
 
-export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, absenceReason, holiday, absences = [], allProfiles = [], coverageRequests = [], coverageVotes = [], fairnessIndices = [], userBalance = null, onCoverageVote, onCoverageResolve, onDirectTakeover }) {
+export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, isViewer, absenceReason, holiday, absences = [], allProfiles = [], coverageRequests = [], coverageVotes = [], fairnessIndices = [], userBalance = null, onCoverageVote, onCoverageResolve, onDirectTakeover }) {
     // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [selectedShift, setSelectedShift] = useState(null)
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
@@ -111,6 +111,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
     }
 
     const handleShiftClick = (shift, label, icon) => {
+        if (isViewer) return
         if (!shift) return
 
         // Block interaction if absent (except for details viewing, but logic says 'Keine Eintragung möglich')
@@ -411,7 +412,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                     </div>
                 )}
 
-                {isSpecialOptIn && !isAdmin && (
+                {isSpecialOptIn && !isAdmin && !isViewer && (
                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
                         <span className="font-bold text-blue-900">{amIParticipating ? "Du nimmst teil" : "Möchtest du teilnehmen?"}</span>
                         <button
@@ -654,7 +655,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                     ))}
 
                     {/* Coverage Voting Panels for urgent shifts (Soli system) */}
-                    {USE_COVERAGE_VOTING && ['TD1', 'TD2', 'ND', 'DBD', 'AST'].map(slotCode => {
+                    {USE_COVERAGE_VOTING && !isViewer && ['TD1', 'TD2', 'ND', 'DBD', 'AST'].map(slotCode => {
                         const shift = shifts.find(s => s.type === slotCode)
                         if (!shift) return null
                         const isUrgentShift = !!shift.urgent_since && !shift.assigned_to && (!shift.interests || shift.interests.length === 0)
