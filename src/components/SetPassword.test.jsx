@@ -1,6 +1,6 @@
 /**
- * Tests for SetPassword onboarding wizard
- * Verifies 3-step flow (welcome → privacy → password) and password validation.
+ * Tests for SetPassword onboarding wizard (v2)
+ * Verifies 2-step flow (welcome → password) and password validation.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
@@ -26,6 +26,11 @@ beforeEach(() => {
     vi.clearAllMocks()
     mockUpdateUser.mockResolvedValue({ data: {}, error: null })
     mockFrom.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { full_name: 'Anna Muster' }, error: null })
+            })
+        }),
         update: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ data: null, error: null })
         })
@@ -34,90 +39,65 @@ beforeEach(() => {
 
 describe('SetPassword', () => {
     // =========================================================================
-    // Step 1: Welcome
+    // Step 1: Welcome + Datenschutz
     // =========================================================================
 
     it('renders welcome step by default', () => {
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
-        expect(screen.getByText(/Willkommen im Team/)).toBeInTheDocument()
+        expect(screen.getByText(/Willkommen/)).toBeInTheDocument()
     })
 
-    it('shows feature cards on welcome step', () => {
+    it('shows "Wer sieht was" table on welcome step', () => {
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
-        expect(screen.getByText('Dienstplan')).toBeInTheDocument()
-        expect(screen.getByText('Urlaubsplanung')).toBeInTheDocument()
-        expect(screen.getByText('Zeiterfassung')).toBeInTheDocument()
-    })
-
-    it('navigates to privacy step on "Weiter" click', async () => {
-        render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
-        fireEvent.click(screen.getByText(/Weiter/))
-        expect(screen.getByText(/Deine Daten bei uns/)).toBeInTheDocument()
-    })
-
-    // =========================================================================
-    // Step 2: Privacy
-    // =========================================================================
-
-    it('shows privacy info on step 2', () => {
-        render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
-        fireEvent.click(screen.getByText(/Weiter/))
-        expect(screen.getByText(/Was speichern wir/)).toBeInTheDocument()
-        expect(screen.getByText(/Was NICHT/)).toBeInTheDocument()
-    })
-
-    it('shows "Wer sieht was" table', () => {
-        render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
-        fireEvent.click(screen.getByText(/Weiter/))
         expect(screen.getByText(/Wer sieht was/)).toBeInTheDocument()
-        expect(screen.getByText('Schichten')).toBeInTheDocument()
+        expect(screen.getByText('Dienste')).toBeInTheDocument()
         expect(screen.getByText('Stundenkonto')).toBeInTheDocument()
     })
 
-    it('can navigate back from privacy to welcome', () => {
+    it('shows privacy hint on welcome step', () => {
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
-        fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Zurück/))
-        expect(screen.getByText(/Willkommen im Team/)).toBeInTheDocument()
+        expect(screen.getByText(/Supabase/)).toBeInTheDocument()
     })
 
-    it('navigates to password step from privacy', () => {
+    it('fetches and displays first name', async () => {
+        render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
+        await waitFor(() => {
+            expect(screen.getByText(/Willkommen, Anna/)).toBeInTheDocument()
+        })
+    })
+
+    it('navigates to password step on "Weiter" click', async () => {
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
         fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Verstanden, weiter/))
-        expect(screen.getByText(/Letzter Schritt/)).toBeInTheDocument()
+        expect(screen.getByText(/Passwort festlegen/)).toBeInTheDocument()
     })
 
     // =========================================================================
-    // Step 3: Password form
+    // Step 2: Password form
     // =========================================================================
 
-    it('renders password form on step 3', () => {
+    it('renders password form on step 2', () => {
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
-        // Navigate to password step
         fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Verstanden, weiter/))
 
-        expect(screen.getByPlaceholderText(/Mindestens 8 Zeichen/)).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/Passwort eingeben/)).toBeInTheDocument()
         expect(screen.getByPlaceholderText(/Passwort wiederholen/)).toBeInTheDocument()
         expect(screen.getByText(/Passwort speichern/)).toBeInTheDocument()
     })
 
-    it('can navigate back from password to privacy', () => {
+    it('can navigate back from password to welcome', () => {
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
         fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Verstanden, weiter/))
         fireEvent.click(screen.getByText(/Zurück/))
-        expect(screen.getByText(/Deine Daten bei uns/)).toBeInTheDocument()
+        expect(screen.getByText(/Willkommen/)).toBeInTheDocument()
     })
 
     it('shows error for password shorter than 8 characters', async () => {
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
         fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Verstanden, weiter/))
 
         const user = userEvent.setup()
-        await user.type(screen.getByPlaceholderText(/Mindestens 8 Zeichen/), 'short')
+        await user.type(screen.getByPlaceholderText(/Passwort eingeben/), 'short')
         await user.type(screen.getByPlaceholderText(/Passwort wiederholen/), 'short')
 
         fireEvent.submit(screen.getByText(/Passwort speichern/).closest('form'))
@@ -129,10 +109,9 @@ describe('SetPassword', () => {
     it('shows error when passwords do not match', async () => {
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
         fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Verstanden, weiter/))
 
         const user = userEvent.setup()
-        await user.type(screen.getByPlaceholderText(/Mindestens 8 Zeichen/), 'password123')
+        await user.type(screen.getByPlaceholderText(/Passwort eingeben/), 'password123')
         await user.type(screen.getByPlaceholderText(/Passwort wiederholen/), 'different99')
 
         fireEvent.submit(screen.getByText(/Passwort speichern/).closest('form'))
@@ -145,10 +124,9 @@ describe('SetPassword', () => {
         const onPasswordSet = vi.fn()
         render(<SetPassword user={defaultUser} onPasswordSet={onPasswordSet} />)
         fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Verstanden, weiter/))
 
         const user = userEvent.setup()
-        await user.type(screen.getByPlaceholderText(/Mindestens 8 Zeichen/), 'securePassword123')
+        await user.type(screen.getByPlaceholderText(/Passwort eingeben/), 'securePassword123')
         await user.type(screen.getByPlaceholderText(/Passwort wiederholen/), 'securePassword123')
 
         fireEvent.submit(screen.getByText(/Passwort speichern/).closest('form'))
@@ -165,10 +143,9 @@ describe('SetPassword', () => {
     it('updates profile password_set flag after setting password', async () => {
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
         fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Verstanden, weiter/))
 
         const user = userEvent.setup()
-        await user.type(screen.getByPlaceholderText(/Mindestens 8 Zeichen/), 'securePassword123')
+        await user.type(screen.getByPlaceholderText(/Passwort eingeben/), 'securePassword123')
         await user.type(screen.getByPlaceholderText(/Passwort wiederholen/), 'securePassword123')
 
         fireEvent.submit(screen.getByText(/Passwort speichern/).closest('form'))
@@ -183,10 +160,9 @@ describe('SetPassword', () => {
 
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
         fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Verstanden, weiter/))
 
         const user = userEvent.setup()
-        await user.type(screen.getByPlaceholderText(/Mindestens 8 Zeichen/), 'securePassword123')
+        await user.type(screen.getByPlaceholderText(/Passwort eingeben/), 'securePassword123')
         await user.type(screen.getByPlaceholderText(/Passwort wiederholen/), 'securePassword123')
 
         fireEvent.submit(screen.getByText(/Passwort speichern/).closest('form'))
@@ -202,10 +178,9 @@ describe('SetPassword', () => {
 
         render(<SetPassword user={defaultUser} onPasswordSet={vi.fn()} />)
         fireEvent.click(screen.getByText(/Weiter/))
-        fireEvent.click(screen.getByText(/Verstanden, weiter/))
 
         const user = userEvent.setup()
-        await user.type(screen.getByPlaceholderText(/Mindestens 8 Zeichen/), 'securePassword123')
+        await user.type(screen.getByPlaceholderText(/Passwort eingeben/), 'securePassword123')
         await user.type(screen.getByPlaceholderText(/Passwort wiederholen/), 'securePassword123')
 
         fireEvent.submit(screen.getByText(/Passwort speichern/).closest('form'))
