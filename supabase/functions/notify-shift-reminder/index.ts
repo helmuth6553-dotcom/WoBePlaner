@@ -27,7 +27,8 @@ serve(async (req) => {
         const in10Min = new Date(now.getTime() + 10 * 60 * 1000)
         const in15Min = new Date(now.getTime() + 15 * 60 * 1000)
 
-        console.log(`Looking for shifts between ${in10Min.toISOString()} and ${in15Min.toISOString()}`)
+        const viennaTime = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' })
+        console.log(`[${now.toISOString()}] Vienna: ${viennaTime} — Suche Dienste zwischen ${in10Min.toISOString()} und ${in15Min.toISOString()}`)
 
         // 1. Find shifts starting in 10-15 minutes with their interests
         const { data: upcomingShifts, error: shiftError } = await supabaseClient
@@ -168,7 +169,10 @@ serve(async (req) => {
                 return webpush.sendNotification({
                     endpoint: sub.endpoint,
                     keys: { p256dh: sub.p256dh, auth: sub.auth }
-                }, payload)
+                }, payload, {
+                    urgency: 'high',
+                    TTL: 300  // 5 min — abgelaufene Erinnerungen nicht mehr liefern
+                })
             })
         )
 

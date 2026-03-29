@@ -534,18 +534,37 @@ describe('calculateDailyAbsenceHours', () => {
             expect(hours).toBe(10.25)
         })
 
-        it('divides stored planned_hours by days for multi-day sick leave', () => {
-            // 3-day sick leave with total 24 planned hours
-            const date = new Date(2025, 0, 15) // One of the 3 days
+        it('divides stored planned_hours by business days for multi-day sick leave', () => {
+            // 3-day sick leave (Wed-Fri), all business days, total 24 planned hours
+            const date = new Date(2025, 0, 15) // Wednesday Jan 15
             const absence = {
                 type: 'Krankenstand',
-                planned_hours: 24, // Total for 3 days
+                planned_hours: 24, // Total for 3 business days
                 start_date: '2025-01-15',
-                end_date: '2025-01-17' // 3 days
+                end_date: '2025-01-17' // 3 business days (Wed-Fri)
             }
 
             const hours = calculateDailyAbsenceHours(date, absence, [], profile40h)
-            expect(hours).toBe(8) // 24h / 3 days = 8h
+            expect(hours).toBe(8) // 24h / 3 business days = 8h
+        })
+
+        it('returns 0 on weekend days for planned_hours sick leave (cross-month fix)', () => {
+            // Sick leave Jan 15 (Wed) – Jan 20 (Mon): 4 business days, 6 calendar days
+            // planned_hours = 24h total
+            const saturday = new Date(2025, 0, 18) // Saturday Jan 18
+            const absence = {
+                type: 'Krankenstand',
+                planned_hours: 24,
+                start_date: '2025-01-15', // Wed
+                end_date: '2025-01-20'    // Mon — spans weekend (Jan 18-19)
+            }
+
+            const hoursOnSaturday = calculateDailyAbsenceHours(saturday, absence, [], profile40h)
+            expect(hoursOnSaturday).toBe(0) // Weekend → no sick hours
+
+            const monday = new Date(2025, 0, 20) // Monday Jan 20
+            const hoursOnMonday = calculateDailyAbsenceHours(monday, absence, [], profile40h)
+            expect(hoursOnMonday).toBeCloseTo(6, 1) // 24h / 4 business days = 6h
         })
 
         it('recognizes "krank" in type name (case insensitive)', () => {

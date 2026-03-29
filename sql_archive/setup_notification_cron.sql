@@ -23,11 +23,12 @@ SELECT cron.schedule(
     $$
 );
 
--- 2. Monthly Closing Reminder: Last day of month at 15:00
--- Reminds employees to submit their time entries
+-- 2. Monthly Closing Reminder: Last day of month at 15:00 Vienna time (DST-aware)
+-- Fires at 13:00 UTC (= 15:00 CEST, summer) AND 14:00 UTC (= 15:00 CET, winter)
+-- The function itself checks if Vienna time is 15:xx and skips otherwise
 SELECT cron.schedule(
     'monthly-closing-cron',
-    '0 15 L * *',  -- 15:00 on last day of month (L = last day)
+    '0 13,14 L * *',  -- 13:00 + 14:00 UTC on last day (covers CET and CEST)
     $$
     SELECT net.http_post(
         url := 'https://snxhcaruybvfyvcxtnrw.supabase.co/functions/v1/notify-monthly-closing',
