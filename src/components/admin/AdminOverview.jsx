@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabase'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, subYears, addYears, eachDayOfInterval, isWeekend, getDay, differenceInDays, getYear } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, ChevronDown, ChevronUp, Layers, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, ChevronDown, ChevronUp, Layers, TrendingUp, TrendingDown, Minus, AlertCircle, Thermometer, Zap } from 'lucide-react'
 import { calculateWorkHours, processInterruptions } from '../../utils/timeCalculations'
 import { calculateGenericBalance } from '../../utils/balanceHelpers'
 import { getHolidays, isHoliday } from '../../utils/holidays'
@@ -65,10 +65,10 @@ function generateInsights(stats, employeeStats, monthlyData) {
     // 7. MA ohne Dienst für >5 Arbeitstage (≈1 Woche)
     const longGaps = employeeStats.filter(e => e.maxGapDays > 5)
     longGaps.forEach(e => {
-        insights.push({ color: 'amber', text: `${e.name.split(' ')[0]}`, detail: `${e.maxGapDays} Arbeitstage ohne Dienst`, priority: e.maxGapDays * 5 })
+        insights.push({ color: 'amber', text: `${e.name.split(' ')[0]}`, detail: `${e.maxGapDays} Tage ohne Dienst`, priority: e.maxGapDays * 5 })
     })
 
-    return [...insights].sort((a, b) => b.priority - a.priority).slice(0, 3)
+    return [...insights].sort((a, b) => b.priority - a.priority)
 }
 
 // ─── Sparkline Component ───
@@ -268,6 +268,7 @@ export default function AdminOverview() {
     const [selectedAreaMonth, setSelectedAreaMonth] = useState(null)
     const [showProfil, setShowProfil] = useState(false)
     const [profilSort, setProfilSort] = useState('total')
+    const [showAllInsights, setShowAllInsights] = useState(false)
 
     const toggleEmployee = (id) => {
         setExpandedEmployeeIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -882,19 +883,39 @@ export default function AdminOverview() {
 
                         {/* Insights */}
                         {insights.length > 0 && (
-                            <div className="space-y-2">
-                                {insights.map((ins) => {
-                                    const bgMap = { amber: 'bg-amber-50', rose: 'bg-rose-50', emerald: 'bg-emerald-50', orange: 'bg-orange-50' }
-                                    const barMap = { amber: 'bg-amber-400', rose: 'bg-rose-400', emerald: 'bg-emerald-500', orange: 'bg-orange-400' }
-                                    return (
-                                        <div key={`${ins.color}-${ins.text}`} className={`flex items-start gap-2 ${bgMap[ins.color] || 'bg-gray-50'} rounded-lg px-3 py-2`}>
-                                            <div className={`w-[3px] rounded self-stretch shrink-0 ${barMap[ins.color] || 'bg-gray-400'}`} />
-                                            <p className="text-[11px] text-gray-700 leading-snug">
-                                                <span className="font-bold">{ins.text}</span> {ins.detail}
-                                            </p>
-                                        </div>
-                                    )
-                                })}
+                            <div className="border border-gray-100 rounded-xl overflow-hidden">
+                                <button
+                                    onClick={() => setShowAllInsights(v => !v)}
+                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+                                >
+                                    <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Hinweise</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-bold text-gray-400">{insights.length}</span>
+                                        {showAllInsights ? <ChevronUp size={13} className="text-gray-400" /> : <ChevronDown size={13} className="text-gray-400" />}
+                                    </div>
+                                </button>
+                                <div className="divide-y divide-gray-100">
+                                    {(showAllInsights ? insights : insights.slice(0, 3)).map((ins) => {
+                                        const bgMap = { amber: 'bg-amber-50', rose: 'bg-rose-50', emerald: 'bg-emerald-50', orange: 'bg-orange-50' }
+                                        const barMap = { amber: 'bg-amber-400', rose: 'bg-rose-400', emerald: 'bg-emerald-500', orange: 'bg-orange-400' }
+                                        return (
+                                            <div key={`${ins.color}-${ins.text}`} className={`flex items-start gap-2 ${bgMap[ins.color] || 'bg-gray-50'} px-3 py-2`}>
+                                                <div className={`w-[3px] rounded self-stretch shrink-0 ${barMap[ins.color] || 'bg-gray-400'}`} />
+                                                <p className="text-[11px] text-gray-700 leading-snug">
+                                                    <span className="font-bold">{ins.text}</span> {ins.detail}
+                                                </p>
+                                            </div>
+                                        )
+                                    })}
+                                    {!showAllInsights && insights.length > 3 && (
+                                        <button
+                                            onClick={() => setShowAllInsights(true)}
+                                            className="w-full text-[10px] text-gray-400 hover:text-gray-600 py-1.5 bg-white hover:bg-gray-50 transition-colors"
+                                        >
+                                            +{insights.length - 3} weitere
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </section>
@@ -1201,10 +1222,6 @@ export default function AdminOverview() {
                                         const e = m.employeeStats.find(x => x.id === emp.id)
                                         return e ? e.puffer : 0
                                     })
-                                    const flags = []
-                                    if (emp.puffer > 30) flags.push({ emoji: '🔥', tip: 'Überstunden >30h' })
-                                    if (emp.puffer < -20) flags.push({ emoji: '⚠️', tip: 'Defizit >20h' })
-                                    if (emp.sickCount >= 2) flags.push({ emoji: '🏥', tip: `${emp.sickCount}× krank` })
 
                                     // Badge variant
                                     let badgeClass = 'bg-gray-100 text-gray-600'
@@ -1223,9 +1240,18 @@ export default function AdminOverview() {
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-sm font-bold text-gray-800 truncate">{emp.name}</span>
-                                                        {flags.map((f) => <span key={f.tip} className="text-[9px]" title={f.tip}>{f.emoji}</span>)}
+                                                        {emp.puffer > 30 && <Zap size={11} className="text-orange-400 shrink-0" title="Überstunden >30h" />}
+                                                        {emp.puffer < -20 && <AlertCircle size={11} className="text-rose-400 shrink-0" title="Defizit >20h" />}
+                                                        {emp.sickCount >= 2 && <Thermometer size={11} className="text-amber-400 shrink-0" title={`${emp.sickCount}× krank`} />}
+                                                        {(() => {
+                                                            const first = sparkData.find(v => v !== 0) ?? 0
+                                                            const last = sparkData.at(-1) ?? 0
+                                                            const diff = last - first
+                                                            if (diff > 2) return <TrendingUp size={12} className="text-rose-400 shrink-0" />
+                                                            if (diff < -2) return <TrendingDown size={12} className="text-emerald-500 shrink-0" />
+                                                            return <Minus size={12} className="text-gray-300 shrink-0" />
+                                                        })()}
                                                     </div>
-                                                    <Sparkline data={sparkData} />
                                                 </div>
 
                                                 {/* Mini IST bar */}
