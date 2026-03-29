@@ -4,11 +4,11 @@ import { debounce } from '../utils/debounce'
 import { useAuth } from '../AuthContext'
 import {
     format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-    eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths,
-    isWithinInterval, parseISO, isWeekend, isToday
+    eachDayOfInterval, eachMonthOfInterval, isSameMonth, isSameDay, addMonths, subMonths,
+    isWithinInterval, parseISO, isWeekend, isToday, getYear
 } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Trash2, Calendar, CheckCircle, Clock, AlertCircle, List, XCircle, Download, Shield } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, Calendar, CheckCircle, Clock, AlertCircle, LayoutGrid, XCircle, Download, Shield } from 'lucide-react'
 import { useHolidays } from '../hooks/useHolidays'
 import { logAdminAction } from '../utils/adminAudit'
 import ActionSheet from './ActionSheet'
@@ -40,7 +40,9 @@ export default function AbsencePlanner({ initialDate }) {
     const [selectionStart, setSelectionStart] = useState(null)
     const [selectionEnd, setSelectionEnd] = useState(null)
 
-    const [viewMode, setViewMode] = useState('grid') // 'grid' | 'list'
+    const [viewMode, setViewMode] = useState('grid') // 'grid' | 'year'
+    const [selectedYear, setSelectedYear] = useState(getYear(new Date()))
+    const [selectedMonth, setSelectedMonth] = useState(null) // For year-view detail modal
 
     const isAbsentOnDay = (absence, day) => {
         if (!absence.start_date || !absence.end_date) return false
@@ -367,21 +369,188 @@ export default function AbsencePlanner({ initialDate }) {
         }
     }
 
+    const MiniMonth = ({ month }) => {
+        const monthStart = startOfMonth(month)
+        const monthEnd = endOfMonth(month)
+        const calStart = startOfWeek(monthStart, { locale: de })
+        const calEnd = endOfWeek(monthEnd, { locale: de })
+        const days = eachDayOfInterval({ start: calStart, end: calEnd })
+
+        const uniqueEmployees = new Set()
+        eachDayOfInterval({ start: monthStart, end: monthEnd }).forEach(day => {
+            if (isWeekend(day) || getHoliday(day)) return
+            absences.forEach(a => { if (isAbsentOnDay(a, day)) uniqueEmployees.add(a.user_id) })
+        })
+
+        return (
+            <div
+                className="bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => setSelectedMonth(month)}
+            >
+                <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-gray-800 capitalize text-sm">
+                        {format(month, 'MMM', { locale: de })}
+                    </span>
+                    {uniqueEmployees.size > 0 && (
+                        <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">
+                            {uniqueEmployees.size} MA
+                        </span>
+                    )}
+                </div>
+                <div className="grid grid-cols-7 gap-px text-[8px]">
+                    {['M', 'D', 'M', 'D', 'F', 'S', 'S'].map((d, i) => (
+                        <div key={i} className="text-center text-gray-400 font-medium">{d}</div>
+                    ))}
+                    {days.map((day, i) => {
+                        const inMonth = isSameMonth(day, month)
+                        const isWeekendDay = isWeekend(day)
+                        const holiday = getHoliday(day)
+                        const dayAbsences = inMonth ? absences.filter(a => isAbsentOnDay(a, day)) : []
+                        const isWorkDay = inMonth && !isWeekendDay && !holiday
+
+                        // Sort: genehmigt first, then beantragt — fill 3 slots
+                        const sorted = [...dayAbsences].sort((a, b) =>
+                            a.status === 'genehmigt' && b.status !== 'genehmigt' ? -1 :
+                            b.status === 'genehmigt' && a.status !== 'genehmigt' ? 1 : 0
+                        )
+                        const slots = [0, 1, 2].map(j => sorted[j]?.status ?? null)
+                        const slotColor = s => s === 'genehmigt' ? 'bg-green-400' : s === 'beantragt' ? 'bg-yellow-300' : 'bg-gray-100'
+
+                        const numColor = !inMonth ? 'text-transparent' : holiday ? 'text-red-400' : isWeekendDay ? 'text-gray-300' : 'text-gray-600'
+                        const cellBg = !inMonth ? '' : holiday ? 'bg-red-50' : isWeekendDay ? 'bg-gray-50' : 'bg-white'
+
+                        return (
+                            <div
+                                key={i}
+                                className={`rounded overflow-hidden flex flex-col ${cellBg}`}
+                                title={dayAbsences.map(a => a.profiles?.full_name?.split(' ')[0]).filter(Boolean).join(', ')}
+                            >
+                                <div className={`text-center text-[8px] font-medium py-px leading-none ${numColor}`}>
+                                    {inMonth ? format(day, 'd') : '\u00A0'}
+                                </div>
+                                {inMonth ? (
+                                    <div className="flex flex-col gap-px px-px pb-px h-4">
+                                        {slots.map((status, j) => (
+                                            <div key={j} className={`flex-1 rounded-sm ${slotColor(status)}`} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="h-4" />
+                                )}
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+        )
+    }
+
+    const DetailedMonthView = ({ month, onClose }) => {
+        const monthStart = startOfMonth(month)
+        const monthEnd = endOfMonth(month)
+        const calStart = startOfWeek(monthStart, { locale: de })
+        const calEnd = endOfWeek(monthEnd, { locale: de })
+        const days = eachDayOfInterval({ start: calStart, end: calEnd })
+
+        return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div
+                    className="bg-white rounded-[1.5rem] w-full max-w-lg max-h-[90vh] flex flex-col shadow-[0_8px_30px_rgb(0,0,0,0.12)] cursor-pointer"
+                    onClick={() => { setCurrentMonth(month); setViewMode('grid'); onClose() }}
+                >
+                    <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex justify-between items-center rounded-t-[1.5rem]">
+                        <div>
+                            <h3 className="text-lg font-bold capitalize">
+                                {format(month, 'MMMM yyyy', { locale: de })}
+                            </h3>
+                            <p className="text-xs text-gray-400 mt-0.5">Tippen zum Eintragen</p>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); onClose() }} className="text-gray-400 hover:text-gray-600 p-1">
+                            <XCircle size={22} />
+                        </button>
+                    </div>
+
+                    <div className="overflow-y-auto p-4">
+                        {/* Weekday header */}
+                        <div className="grid grid-cols-7 mb-1">
+                            {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(d => (
+                                <div key={d} className="text-center text-xs font-bold text-gray-400">{d}</div>
+                            ))}
+                        </div>
+
+                        {/* Calendar grid */}
+                        <div className="grid grid-cols-7 gap-1">
+                            {days.map((day, i) => {
+                                const inMonth = isSameMonth(day, month)
+                                const dayAbsences = inMonth ? absences.filter(a => isAbsentOnDay(a, day)) : []
+                                const isWeekendDay = isWeekend(day)
+                                const holiday = getHoliday(day)
+
+                                return (
+                                    <div
+                                        key={i}
+                                        className={`min-h-[56px] rounded-lg p-1 border ${inMonth ? 'bg-white border-gray-100' : 'bg-gray-50 border-transparent'} ${holiday ? 'bg-red-50' : ''} ${isWeekendDay && inMonth ? 'bg-gray-50' : ''}`}
+                                    >
+                                        <div className={`text-xs font-bold mb-0.5 ${inMonth ? '' : 'text-gray-300'} ${holiday ? 'text-red-500' : ''}`}>
+                                            {format(day, 'd')}
+                                        </div>
+                                        <div className="space-y-px">
+                                            {dayAbsences.slice(0, 3).map((abs, j) => (
+                                                <div
+                                                    key={j}
+                                                    className={`text-[9px] px-1 rounded truncate font-medium ${abs.status === 'genehmigt' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}
+                                                >
+                                                    {abs.profiles?.full_name?.split(' ')[0]}
+                                                </div>
+                                            ))}
+                                            {dayAbsences.length > 3 && (
+                                                <div className="text-[8px] text-gray-400">+{dayAbsences.length - 3}</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="px-5 py-3 border-t border-gray-100 flex gap-4 text-xs text-gray-500 rounded-b-[1.5rem]">
+                        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-green-200"></div><span>Genehmigt</span></div>
+                        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-yellow-200"></div><span>Beantragt</span></div>
+                        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-50 border border-red-200"></div><span>Feiertag</span></div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     const myRequests = absences.filter(a => a.user_id === user.id).sort((a, b) => new Date(b.start_date) - new Date(a.start_date))
 
     return (
         <div className="flex flex-col min-h-full bg-gray-50 font-sans pb-24">
-            {/* Header with Month, Toggle, and Nav */}
+            {/* Header with Month/Year, Toggle, and Nav */}
             <div className="px-4 pt-4 pb-2 shrink-0 flex justify-between items-center bg-gray-50 z-10">
-                <h3 className="text-xl font-black text-gray-900 capitalize tracking-tight">{format(currentMonth, 'MMMM yyyy', { locale: de })}</h3>
+                {viewMode === 'year'
+                    ? <h3 className="text-xl font-black text-gray-900 tracking-tight">{selectedYear}</h3>
+                    : <h3 className="text-xl font-black text-gray-900 capitalize tracking-tight">{format(currentMonth, 'MMMM yyyy', { locale: de })}</h3>
+                }
                 <div className="flex items-center gap-2">
                     <div className="flex bg-gray-200 p-0.5 rounded-lg">
                         <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}><Calendar size={16} /></button>
-                        <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}><List size={16} /></button>
+                        <button onClick={() => { setSelectedYear(getYear(currentMonth)); setViewMode('year') }} className={`p-1.5 rounded-md transition-all ${viewMode === 'year' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}><LayoutGrid size={16} /></button>
                     </div>
                     <div className="flex gap-1">
-                        <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm"><ChevronLeft size={18} /></button>
-                        <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm"><ChevronRight size={18} /></button>
+                        {viewMode === 'year' ? (
+                            <>
+                                <button onClick={() => setSelectedYear(y => y - 1)} className="p-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm"><ChevronLeft size={18} /></button>
+                                <button onClick={() => setSelectedYear(y => y + 1)} className="p-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm"><ChevronRight size={18} /></button>
+                            </>
+                        ) : (
+                            <>
+                                <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm"><ChevronLeft size={18} /></button>
+                                <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 shadow-sm"><ChevronRight size={18} /></button>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
@@ -476,51 +645,21 @@ export default function AbsencePlanner({ initialDate }) {
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4 pb-4">
-                        {/* List View logic remains similar, can iterate on it separately if needed */}
-                        {eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) })
-                            .filter(day => {
-                                const hasAbsence = absences.some(a => isAbsentOnDay(a, day))
-                                return hasAbsence || getHoliday(day)
-                            })
-                            .map(day => {
-                                const dayAbsences = absences.filter(a => isAbsentOnDay(a, day))
-                                const holiday = getHoliday(day)
-
-                                return (
-                                    <div key={day.toString()} className="bg-white p-4 rounded-xl shadow-sm">
-                                        <div className="flex items-center gap-3 mb-3">
-                                            <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center font-bold border ${isWeekend(day) || holiday ? 'bg-red-50 text-red-500 border-red-100' : 'bg-gray-50 text-gray-900 border-gray-100'}`}>
-                                                <span className="text-xs uppercase">{format(day, 'EEE', { locale: de })}</span>
-                                                <span className="text-lg leading-none">{format(day, 'd')}</span>
-                                            </div>
-                                            <div>
-                                                {holiday && <p className="text-red-500 font-bold text-sm">{holiday.name}</p>}
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2 pl-13">
-                                            {dayAbsences.map(abs => (
-                                                <div key={abs.id} className="flex items-center gap-3">
-                                                    <div className={`w-2 h-2 rounded-full ${abs.status === 'genehmigt' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                                                    <span className="font-bold text-gray-900 text-lg">{abs.profiles?.full_name}</span>
-                                                </div>
-                                            ))}
-                                            {dayAbsences.length === 0 && !holiday && (
-                                                <p className="text-gray-400 text-sm italic">Alle anwesend</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        {eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) }).filter(day => {
-                            const hasAbsence = absences.some(a => isAbsentOnDay(a, day))
-                            return hasAbsence || getHoliday(day)
-                        }).length === 0 && (
-                                <div className="text-center py-12 text-gray-400">
-                                    <p>Keine Abwesenheiten oder Feiertage in diesem Monat.</p>
-                                </div>
-                            )}
+                    /* Year View — 12 mini-month cards */
+                    <div className="flex-1 overflow-y-auto">
+                        <div className="grid grid-cols-3 gap-3 pb-4">
+                            {eachMonthOfInterval({
+                                start: new Date(selectedYear, 0, 1),
+                                end: new Date(selectedYear, 11, 1)
+                            }).map(month => (
+                                <MiniMonth key={month.toString()} month={month} />
+                            ))}
+                        </div>
+                        <div className="flex flex-wrap gap-3 text-xs text-gray-500 pt-2 pb-4">
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-green-400"></div><span>Genehmigt</span></div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-yellow-300"></div><span>Beantragt</span></div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-50 border border-red-200"></div><span>Feiertag</span></div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -626,6 +765,11 @@ export default function AbsencePlanner({ initialDate }) {
                 payload={signatureConfig.payload}
                 title="Urlaub beantragen"
             />
+            {/* YEAR VIEW MONTH DETAIL MODAL */}
+            {selectedMonth && (
+                <DetailedMonthView month={selectedMonth} onClose={() => setSelectedMonth(null)} />
+            )}
+
             {/* ADMIN DETAIL MODAL */}
             {selectedAbsence && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
