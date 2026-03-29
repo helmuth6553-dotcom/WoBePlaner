@@ -80,8 +80,12 @@ export default function ProfileSickLeave() {
     const thisYearLeaves = sickLeaves.filter(s => parseISO(s.start_date).getFullYear() === currentYear)
     const pastLeaves = sickLeaves.filter(s => parseISO(s.start_date).getFullYear() < currentYear)
 
-    const thisYearWorkdays = thisYearLeaves.reduce((sum, s) => {
-        return sum + countWorkdays(parseISO(s.start_date), parseISO(s.end_date))
+    const thisYearCalDays = thisYearLeaves.reduce((sum, s) => {
+        return sum + getCalendarDays(parseISO(s.start_date), parseISO(s.end_date))
+    }, 0)
+
+    const thisYearMissedShifts = thisYearLeaves.reduce((sum, s) => {
+        return sum + (s.planned_shifts_snapshot?.length || 0)
     }, 0)
 
     // Group past leaves by year
@@ -165,14 +169,18 @@ export default function ProfileSickLeave() {
                     </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-center">
+                <div className="grid grid-cols-3 gap-3 text-center">
                     <div>
                         <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Krankmeldungen</p>
                         <p className="text-2xl font-black text-gray-900">{thisYearLeaves.length}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Werktage krank</p>
-                        <p className="text-2xl font-black text-gray-900">{thisYearWorkdays}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Krankentage</p>
+                        <p className="text-2xl font-black text-gray-900">{thisYearCalDays}</p>
+                    </div>
+                    <div>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Ausgefallene Dienste</p>
+                        <p className="text-2xl font-black text-gray-900">{thisYearMissedShifts}</p>
                     </div>
                 </div>
             </div>
