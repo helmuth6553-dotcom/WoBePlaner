@@ -557,6 +557,8 @@ export default function ProfileStats() {
         return Math.max(...cumulativeData.map(m => Math.abs(m.cumulative)), 1)
     }, [cumulativeData])
 
+    const currentCumulative = cumulativeData.at(-1)?.cumulative ?? 0
+
     const flexMonths = useMemo(() => {
         return monthlyData.map(m => ({
             month: m.month,
@@ -926,95 +928,67 @@ export default function ProfileStats() {
             )}
 
             {/* Stundenverlauf 12 Monate */}
-            {cumulativeData.length > 0 && (
+            {monthlyData.length > 0 && (
                 <div className="bg-white p-5 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
-                    <div className="flex items-center gap-2 mb-1">
-                        <BarChart3 size={20} className="text-gray-700" />
-                        <h3 className="font-bold text-gray-900">Stundenverlauf</h3>
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                            <BarChart3 size={20} className="text-gray-700" />
+                            <h3 className="font-bold text-gray-900">Stundenverlauf</h3>
+                        </div>
+                        <span className={`text-sm font-bold ${currentCumulative >= 0 ? 'text-teal-700' : 'text-red-600'}`}>
+                            {currentCumulative > 0 ? '+' : ''}{currentCumulative}h
+                        </span>
                     </div>
                     <p className="text-xs text-gray-400 mb-4">Monatlicher Saldo der letzten 12 Monate</p>
 
-                    {/* Cumulative Trend Line */}
-                    <div className="mt-2">
-                        <div className="flex items-center justify-between mb-6">
-                            <p className="text-xs text-gray-400">Kumulierter Gesamtsaldo am Monatsende</p>
-                            <span className={`text-xs font-bold ${(cumulativeData.at(-1)?.cumulative ?? 0) >= 0 ? 'text-teal-700' : 'text-red-600'}`}>
-                                {(cumulativeData.at(-1)?.cumulative ?? 0) > 0 ? '+' : ''}
-                                {cumulativeData.at(-1)?.cumulative ?? 0}h
-                            </span>
-                        </div>
-                        <div className="relative h-28">
-                            <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-gray-200" />
-                            <div className="absolute left-0 top-1/2 -translate-y-1/2 text-[9px] text-gray-300 -ml-1">0</div>
-                            <svg className="w-full h-full overflow-visible" viewBox="0 0 500 100" preserveAspectRatio="none">
-                                <polygon
-                                    fill="url(#trendGradient)"
-                                    opacity="0.15"
-                                    points={[
-                                        `${(0 / (cumulativeData.length - 1 || 1)) * 480 + 10},50`,
-                                        ...cumulativeData.map((m, i) => {
-                                            const x = (i / (cumulativeData.length - 1 || 1)) * 480 + 10
-                                            const y = 50 - (m.cumulative / maxAbsCumulative) * 40
-                                            return `${x},${y}`
-                                        }),
-                                        `${((cumulativeData.length - 1) / (cumulativeData.length - 1 || 1)) * 480 + 10},50`,
-                                    ].join(' ')}
-                                />
-                                <defs>
-                                    <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#0d9488" />
-                                        <stop offset="100%" stopColor="#0d9488" stopOpacity="0" />
-                                    </linearGradient>
-                                </defs>
-                                <polyline
-                                    fill="none"
-                                    stroke="#0d9488"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    vectorEffect="non-scaling-stroke"
-                                    points={cumulativeData.map((m, i) => {
-                                        const x = (i / (cumulativeData.length - 1 || 1)) * 480 + 10
-                                        const y = 50 - (m.cumulative / maxAbsCumulative) * 40
-                                        return `${x},${y}`
-                                    }).join(' ')}
-                                />
-                                {cumulativeData.map((m, i) => {
-                                    const x = (i / (cumulativeData.length - 1 || 1)) * 480 + 10
-                                    const y = 50 - (m.cumulative / maxAbsCumulative) * 40
-                                    return (
-                                        <g key={m.month}>
-                                            <circle
-                                                cx={x}
-                                                cy={y}
-                                                r="4"
-                                                fill={m.cumulative >= 0 ? '#0d9488' : '#ef4444'}
-                                                stroke="white"
-                                                strokeWidth="2"
-                                                vectorEffect="non-scaling-stroke"
-                                            />
-                                            <text
-                                                x={x}
-                                                y={y - 8}
-                                                fontSize="10"
-                                                fill="#4b5563"
-                                                textAnchor="middle"
-                                                fontWeight="600"
+                    {/* Balkendiagramm */}
+                    <div className="flex items-stretch gap-1 h-24 relative">
+                        {/* 0-Linie */}
+                        <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-gray-200 pointer-events-none" />
+
+                        {monthlyData.map((m) => {
+                            const heightPct = Math.abs(m.diff) / maxAbsDiff * 45
+                            const isPositive = m.diff >= 0
+                            return (
+                                <div key={m.month} className="flex-1 flex flex-col h-full">
+                                    {/* obere Hälfte */}
+                                    <div className="flex-1 flex items-end justify-center pb-px">
+                                        {isPositive && (
+                                            <div
+                                                className="w-full max-w-[18px] rounded-t bg-teal-500 relative"
+                                                style={{ height: `${heightPct}%` }}
                                             >
-                                                {m.cumulative > 0 ? '+' : ''}{m.cumulative}
-                                            </text>
-                                        </g>
-                                    )
-                                })}
-                            </svg>
-                        </div>
-                        <div className="flex gap-1 mt-1">
-                            {cumulativeData.map(m => (
-                                <div key={m.month} className="flex-1 text-center">
-                                    <span className="text-[9px] text-gray-400">{m.label}</span>
+                                                <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-teal-700 whitespace-nowrap">
+                                                    +{m.diff}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {/* untere Hälfte */}
+                                    <div className="flex-1 flex items-start justify-center pt-px">
+                                        {!isPositive && (
+                                            <div
+                                                className="w-full max-w-[18px] rounded-b bg-red-400 relative"
+                                                style={{ height: `${heightPct}%` }}
+                                            >
+                                                <span className="absolute top-full mt-0.5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-red-600 whitespace-nowrap">
+                                                    {m.diff}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
+                            )
+                        })}
+                    </div>
+
+                    {/* Monatslabels */}
+                    <div className="flex gap-1 mt-1">
+                        {monthlyData.map(m => (
+                            <div key={m.month} className="flex-1 text-center">
+                                <span className="text-[9px] text-gray-400">{m.label}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}

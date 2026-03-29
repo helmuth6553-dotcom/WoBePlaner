@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabase'
-import { User, Save, Shield, LogOut, Lock, FileCheck, Download, Briefcase, Calendar, Clock } from 'lucide-react'
+import { User, Save, Shield, LogOut, Lock, FileCheck, Download, Briefcase, Calendar, Clock, ChevronDown } from 'lucide-react'
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
 import NotificationToggle from './NotificationToggle'
@@ -10,6 +10,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
     const [displayName, setDisplayName] = useState(profile?.display_name || '')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
+    const [signatureInfoOpen, setSignatureInfoOpen] = useState(false)
 
     const updateProfile = async () => {
         setLoading(true)
@@ -149,45 +150,56 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
             </div>
 
             {/* Signature Info */}
-            <div className="bg-blue-50/50 border border-blue-100/80 rounded-xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
-                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <Shield className="text-blue-600" size={20} />
-                    Wie sicher ist meine Unterschrift?
-                </h3>
-                <div className="space-y-4">
-                    <div className="flex gap-3">
-                        <div className="bg-white p-2 rounded-lg shadow-sm h-fit text-blue-600 shrink-0">
-                            <Lock size={18} />
+            <div className="bg-blue-50/50 border border-blue-100/80 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] overflow-hidden">
+                <button
+                    onClick={() => setSignatureInfoOpen(o => !o)}
+                    className="w-full p-4 flex items-center justify-between gap-2 text-left"
+                >
+                    <span className="font-bold text-gray-900 flex items-center gap-2">
+                        <Shield className="text-blue-600 shrink-0" size={20} />
+                        Wie sicher ist meine Unterschrift?
+                    </span>
+                    <ChevronDown
+                        size={18}
+                        className={`text-blue-400 shrink-0 transition-transform duration-200 ${signatureInfoOpen ? 'rotate-180' : ''}`}
+                    />
+                </button>
+                {signatureInfoOpen && (
+                    <div className="px-4 pb-4 space-y-4">
+                        <div className="flex gap-3">
+                            <div className="bg-white p-2 rounded-lg shadow-sm h-fit text-blue-600 shrink-0">
+                                <Lock size={18} />
+                            </div>
+                            <div>
+                                <p className="font-bold text-sm text-gray-900">1. Identität geprüft</p>
+                                <p className="text-xs text-gray-500">Durch Login & Passwort wird bestätigt, dass du es wirklich bist.</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="font-bold text-sm text-gray-900">1. Identität geprüft</p>
-                            <p className="text-xs text-gray-500">Durch Login & Passwort bestätigen Sie, dass Sie es wirklich sind.</p>
+                        <div className="flex gap-3">
+                            <div className="bg-white p-2 rounded-lg shadow-sm h-fit text-blue-600 shrink-0">
+                                <FileCheck size={18} />
+                            </div>
+                            <div>
+                                <p className="font-bold text-sm text-gray-900">2. Daten versiegelt</p>
+                                <p className="text-xs text-gray-500">Aus dem Dokument wird ein unveränderbarer Code (Hash) berechnet.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <div className="bg-white p-2 rounded-lg shadow-sm h-fit text-blue-600 shrink-0">
+                                <Download size={18} />
+                            </div>
+                            <div>
+                                <p className="font-bold text-sm text-gray-900">3. Beweisbar</p>
+                                <p className="text-xs text-gray-500">Der Code steht auf deinem PDF. Niemand kann die Datenbank unbemerkt ändern.</p>
+                            </div>
+                        </div>
+                        <div className="pt-3 border-t border-blue-100">
+                            <p className="text-[10px] text-blue-400 font-mono text-center uppercase tracking-wider">
+                                Fortgeschrittene Elektronische Signatur (FES)
+                            </p>
                         </div>
                     </div>
-                    <div className="flex gap-3">
-                        <div className="bg-white p-2 rounded-lg shadow-sm h-fit text-blue-600 shrink-0">
-                            <FileCheck size={18} />
-                        </div>
-                        <div>
-                            <p className="font-bold text-sm text-gray-900">2. Daten versiegelt</p>
-                            <p className="text-xs text-gray-500">Aus dem Dokument wird ein unveränderbarer Code (Hash) berechnet.</p>
-                        </div>
-                    </div>
-                    <div className="flex gap-3">
-                        <div className="bg-white p-2 rounded-lg shadow-sm h-fit text-blue-600 shrink-0">
-                            <Download size={18} />
-                        </div>
-                        <div>
-                            <p className="font-bold text-sm text-gray-900">3. Beweisbar</p>
-                            <p className="text-xs text-gray-500">Der Code steht auf Ihrem PDF. Niemand kann die Datenbank unbemerkt ändern.</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="mt-4 pt-3 border-t border-blue-100">
-                    <p className="text-[10px] text-blue-400 font-mono text-center uppercase tracking-wider">
-                        Fortgeschrittene Elektronische Signatur (FES)
-                    </p>
-                </div>
+                )}
             </div>
 
             {/* Logout */}

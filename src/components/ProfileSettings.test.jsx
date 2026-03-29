@@ -127,9 +127,12 @@ describe('ProfileSettings', () => {
         })
     })
 
-    it('shows signature security info section', () => {
+    it('shows signature security info section', async () => {
         render(<ProfileSettings {...defaultProps} />)
         expect(screen.getByText(/Wie sicher ist meine Unterschrift/)).toBeInTheDocument()
+        // Details are hidden until expanded
+        expect(screen.queryByText(/Fortgeschrittene Elektronische Signatur/)).not.toBeInTheDocument()
+        await userEvent.click(screen.getByText(/Wie sicher ist meine Unterschrift/))
         expect(screen.getByText(/Fortgeschrittene Elektronische Signatur/)).toBeInTheDocument()
     })
 
