@@ -38,3 +38,5 @@ public/*.crdownload
 /playwright/.auth/
 .playwright-mcp/
 *.png
+
+.claude/
