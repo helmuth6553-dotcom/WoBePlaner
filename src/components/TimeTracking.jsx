@@ -1152,7 +1152,7 @@ export default function TimeTracking() {
                                     )
                                 })()}
                                 {!isLocked && !isAbsence && (
-                                    <button onClick={() => setEditingItem(item)} className={`w-full py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 bg-teal-500 text-white hover:bg-teal-600 ${!isDone && !entry ? 'shadow-lg' : ''}`}>
+                                    <button onClick={() => setEditingItem(item)} className={`w-full py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${(isDone || entry) ? 'bg-gray-100 text-gray-500 hover:bg-gray-200' : 'bg-teal-500 text-white hover:bg-teal-600 shadow-lg'}`}>
                                         {(isDone || entry) ? 'Bearbeiten' : <>Zeit Bestätigen <ChevronRight size={16} /></>}
                                     </button>
                                 )}
@@ -1163,7 +1163,7 @@ export default function TimeTracking() {
                 </div>
             )}
 
-            {!loading && !isLocked && items.length > 0 && (
+            {!loading && !isLocked && items.length > 0 && !editingItem && (
                 <div className="fixed bottom-20 left-0 right-0 p-4 flex justify-center pointer-events-none z-[80]">
                     <button
                         disabled={!allItemsDone}
