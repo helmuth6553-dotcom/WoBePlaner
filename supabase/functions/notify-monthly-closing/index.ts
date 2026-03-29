@@ -17,24 +17,38 @@ serve(async (req) => {
 
         console.log("Monthly Closing Reminder - Starting...")
 
-        // Get current date info
+        // Use Vienna local time for all date/time checks (DST-aware)
+        // Cron runs at 13:00 UTC (=15:00 CEST) and 14:00 UTC (=15:00 CET) on the last day of month
         const now = new Date()
-        const year = now.getFullYear()
-        const month = now.getMonth() + 1 // 1-12
-        const today = now.getDate()
+        const viennaParts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Europe/Vienna',
+            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false
+        }).formatToParts(now)
+        const get = (type: string) => Number.parseInt(viennaParts.find(p => p.type === type)?.value ?? '0')
+        const year = get('year')
+        const month = get('month')
+        const today = get('day')
+        const viennaHour = get('hour')
 
-        // Check if today is actually the last day of the month
-        // (Cron runs on 28-31, but we only want to send on the actual last day)
-        const lastDayOfMonth = new Date(year, now.getMonth() + 1, 0).getDate()
+        // Check if Vienna time is 15:xx (fires correctly in both CET and CEST)
+        if (viennaHour !== 15) {
+            console.log(`Vienna time is ${viennaHour}:xx, not 15:xx. Skipping.`)
+            return new Response(JSON.stringify({ message: 'Not 15:xx Vienna time' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            })
+        }
+
+        // Check if today is actually the last day of the month (Vienna date)
+        const lastDayOfMonth = new Date(year, month, 0).getDate()
 
         if (today !== lastDayOfMonth) {
-            console.log(`Today (${today}) is not the last day of month (${lastDayOfMonth}). Skipping.`)
+            console.log(`Vienna date: ${today}. is not the last day of month (${lastDayOfMonth}). Skipping.`)
             return new Response(JSON.stringify({ message: 'Not last day' }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             })
         }
 
-        console.log(`Today is the last day of ${year}-${month}. Proceeding...`)
+        console.log(`Today is the last day of ${year}-${month} (Vienna time ${viennaHour}:xx). Proceeding...`)
 
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',

@@ -1,4 +1,4 @@
-import { differenceInMinutes, differenceInDays, addDays, isBefore, max, min, addMinutes, isWeekend, getYear, format, parseISO } from 'date-fns'
+import { differenceInMinutes, differenceInDays, addDays, isBefore, max, min, addMinutes, isWeekend, getYear, format, parseISO, eachDayOfInterval } from 'date-fns'
 import { getHolidays, isHoliday } from './holidays'
 
 /**
@@ -249,10 +249,18 @@ export const calculateDailyAbsenceHours = (dateInput, absence, plannedShifts = [
         // Only fall back to planned_hours average if there is NO snapshot at all.
         if (!absence?.planned_shifts_snapshot || absence.planned_shifts_snapshot.length === 0) {
             if (absence?.planned_hours !== undefined && absence?.planned_hours !== null && Number(absence.planned_hours) > 0) {
+                // Non-working days get 0 — sick hours only apply to days work was planned
+                const isNonWork = isWeekend(date) || isHoliday(date, holidays)
+                if (isNonWork) return 0
+                // Distribute over business days (not calendar days) — fixes cross-month absences
+                // where calendar-day averaging would incorrectly assign hours to weekends/holidays
                 const startDate = absence.start_date ? parseISO(absence.start_date) : date
                 const endDate = absence.end_date ? parseISO(absence.end_date) : date
-                const totalDays = Math.max(1, differenceInDays(endDate, startDate) + 1)
-                return Number(absence.planned_hours) / totalDays
+                const allSickDays = eachDayOfInterval({ start: startDate, end: endDate })
+                const totalBusinessDays = Math.max(1, allSickDays.filter(
+                    d => !isWeekend(d) && !isHoliday(d, getHolidays(getYear(d)))
+                ).length)
+                return Number(absence.planned_hours) / totalBusinessDays
             }
         }
 
