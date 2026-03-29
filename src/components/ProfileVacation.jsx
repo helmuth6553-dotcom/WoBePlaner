@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
 import { useHolidays } from '../hooks/useHolidays'
-import { Palmtree, CalendarCheck, CalendarClock, TrendingUp, TrendingDown } from 'lucide-react'
+import { Palmtree, CalendarCheck, CalendarClock, TrendingUp } from 'lucide-react'
 import { eachDayOfInterval, isWeekend, parseISO, startOfYear, endOfYear, isWithinInterval, format } from 'date-fns'
 import { de } from 'date-fns/locale'
 
@@ -113,8 +113,6 @@ export default function ProfileVacation() {
         return <div className="animate-pulse bg-gray-100 rounded-2xl h-48"></div>
     }
 
-    const usedPercent = stats.total > 0 ? (stats.used / stats.total) * 100 : 0
-    const plannedPercent = stats.total > 0 ? (stats.planned / stats.total) * 100 : 0
     const yearDiff = prevYearUsed !== null ? stats.used - prevYearUsed : null
 
     return (
@@ -127,46 +125,30 @@ export default function ProfileVacation() {
                         <h3 className="font-bold text-gray-900">Urlaubskonto {new Date().getFullYear()}</h3>
                     </div>
                     <span className="text-sm font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-full">
-                        {stats.remaining} Tage frei
+                        {new Date().getFullYear()}
                     </span>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="h-4 bg-gray-100 rounded-full overflow-hidden mb-3">
-                    <div className="h-full flex">
-                        <div
-                            className="bg-teal-500 transition-all"
-                            style={{ width: `${usedPercent}%` }}
-                        />
-                        <div
-                            className="bg-amber-300 transition-all"
-                            style={{ width: `${plannedPercent}%` }}
-                        />
-                    </div>
-                </div>
-
-                {/* Legend */}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                        <div className="flex items-center justify-center gap-1.5 mb-1">
-                            <div className="w-2.5 h-2.5 rounded-sm bg-teal-500"></div>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase">Verbraucht</span>
+                {/* Stats */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-teal-500 text-white flex items-center justify-center font-bold text-lg shadow-md">
+                            {stats.remaining}
                         </div>
-                        <p className="text-lg font-black text-gray-900">{stats.used}</p>
-                    </div>
-                    <div>
-                        <div className="flex items-center justify-center gap-1.5 mb-1">
-                            <div className="w-2.5 h-2.5 rounded-sm bg-amber-300"></div>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase">Geplant</span>
+                        <div className="flex flex-col leading-none gap-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Verfügbar</span>
+                            <span className="text-xs font-bold text-gray-600">von {stats.total} Tagen</span>
                         </div>
-                        <p className="text-lg font-black text-gray-900">{stats.planned}</p>
                     </div>
-                    <div>
-                        <div className="flex items-center justify-center gap-1.5 mb-1">
-                            <div className="w-2.5 h-2.5 rounded-sm bg-gray-200"></div>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase">Verfügbar</span>
+                    <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">Genehmigt</span>
+                            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-md">{stats.used}</span>
                         </div>
-                        <p className="text-lg font-black text-teal-700">{stats.remaining}</p>
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">Offen</span>
+                            <span className="text-xs font-bold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-md">{stats.planned}</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -210,12 +192,12 @@ export default function ProfileVacation() {
                     {prevYearUsed !== null ? (
                         <div>
                             <p className="text-sm text-gray-600">
-                                {new Date().getFullYear() - 1}: <span className="font-bold">{prevYearUsed} Tage</span> verbraucht
+                                {new Date().getFullYear() - 1}: <span className="font-bold">{prevYearUsed} von {stats.total} Tagen</span> verbraucht
                             </p>
-                            {yearDiff !== null && yearDiff !== 0 && (
-                                <div className={`flex items-center gap-1 mt-1 text-xs font-bold ${yearDiff > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                    {yearDiff > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                                    {yearDiff > 0 ? '+' : ''}{yearDiff} Tage vs. Vorjahr
+                            {stats.total - prevYearUsed > 0 && (
+                                <div className="flex items-center gap-1 mt-1 text-xs font-bold text-teal-600">
+                                    <TrendingUp size={12} />
+                                    {stats.total - prevYearUsed} Tage in {new Date().getFullYear()} mitgenommen
                                 </div>
                             )}
                         </div>
