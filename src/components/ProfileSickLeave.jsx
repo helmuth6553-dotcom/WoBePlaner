@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { useAuth } from '../AuthContext'
 import { useHolidays } from '../hooks/useHolidays'
-import { Thermometer, AlertTriangle } from 'lucide-react'
+import { Thermometer, AlertTriangle, Trash2, HeartPulse } from 'lucide-react'
 import { eachDayOfInterval, isWeekend, parseISO, differenceInCalendarDays, format } from 'date-fns'
 import { de } from 'date-fns/locale'
+import ConfirmModal from './ConfirmModal'
+import { useToast } from './Toast'
 
 const SHIFT_TYPE_SHORT = {
     TD1: 'TD1',
@@ -37,8 +39,11 @@ const SHIFT_TAG_COLORS = {
 export default function ProfileSickLeave() {
     const { user } = useAuth()
     const { getHoliday } = useHolidays()
+    const toast = useToast()
     const [sickLeaves, setSickLeaves] = useState([])
     const [loading, setLoading] = useState(true)
+    const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null })
+    const [shortenerModal, setShortenerModal] = useState({ isOpen: false, leave: null, newEndDate: '' })
 
     useEffect(() => {
         if (!user) return
@@ -63,6 +68,49 @@ export default function ProfileSickLeave() {
         }
     }
 
+    const handleDeleteConfirmed = async () => {
+        const { error } = await supabase
+            .from('absences')
+            .delete()
+            .eq('id', confirmDelete.id)
+            .eq('user_id', user.id)
+
+        if (error) {
+            toast.showError('Fehler beim Löschen', 'Die Krankmeldung konnte nicht gelöscht werden.')
+            return
+        }
+        toast.showSuccess('Gelöscht', 'Krankmeldung wurde entfernt.')
+        fetchSickLeaves()
+    }
+
+    const handleShortenerOpen = (leave) => {
+        const today = new Date().toISOString().split('T')[0]
+        const clamped = today < leave.start_date ? leave.start_date
+                      : today > leave.end_date   ? leave.end_date : today
+        setShortenerModal({ isOpen: true, leave, newEndDate: clamped })
+    }
+
+    const handleShortenerConfirm = async () => {
+        const { leave, newEndDate } = shortenerModal
+        if (!newEndDate || newEndDate < leave.start_date) {
+            toast.showError('Ungültiges Datum', 'Das neue Enddatum muss nach dem Startdatum liegen.')
+            return
+        }
+        const { error } = await supabase
+            .from('absences')
+            .update({ end_date: newEndDate })
+            .eq('id', leave.id)
+            .eq('user_id', user.id)
+
+        if (error) {
+            toast.showError('Fehler', 'Das Enddatum konnte nicht angepasst werden.')
+            return
+        }
+        toast.showSuccess('Gesund gemeldet', 'Bitte prüfe im Dienstplan ob Dienste neu eingetragen werden müssen.')
+        setShortenerModal({ isOpen: false, leave: null, newEndDate: '' })
+        fetchSickLeaves()
+    }
+
     const countWorkdays = (startDate, endDate) => {
         const days = eachDayOfInterval({ start: startDate, end: endDate })
         return days.filter(d => !isWeekend(d) && !getHoliday(d)).length
@@ -77,6 +125,7 @@ export default function ProfileSickLeave() {
     }
 
     const currentYear = new Date().getFullYear()
+    const today = new Date().toISOString().split('T')[0]
     const thisYearLeaves = sickLeaves.filter(s => parseISO(s.start_date).getFullYear() === currentYear)
     const pastLeaves = sickLeaves.filter(s => parseISO(s.start_date).getFullYear() < currentYear)
 
@@ -103,6 +152,7 @@ export default function ProfileSickLeave() {
         const calDays = getCalendarDays(start, end)
         const workdays = countWorkdays(start, end)
         const needsCertificate = calDays >= 3
+        const isActive = leave.end_date >= today
 
         return (
             <div key={leave.id} className="bg-white p-4 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
@@ -122,13 +172,29 @@ export default function ProfileSickLeave() {
                             {calDays !== workdays && ` (${workdays} Werktage)`}
                         </p>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="flex flex-col items-end gap-2">
                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${leave.status === 'genehmigt'
                                 ? 'bg-emerald-50 text-emerald-700'
                                 : 'bg-amber-50 text-amber-700'
                             }`}>
                             {leave.status === 'genehmigt' ? 'Bestätigt' : 'Offen'}
                         </span>
+                        <div className="flex gap-1.5">
+                            {isActive && (
+                                <button
+                                    onClick={() => handleShortenerOpen(leave)}
+                                    className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-2 py-1 transition-colors"
+                                >
+                                    <HeartPulse size={11} /> Gesund melden
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setConfirmDelete({ isOpen: true, id: leave.id })}
+                                className="flex items-center gap-1 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg px-2 py-1 transition-colors"
+                            >
+                                <Trash2 size={11} /> Löschen
+                            </button>
+                        </div>
                     </div>
                 </div>
                 {leave.planned_shifts_snapshot?.length > 0 && (
@@ -203,6 +269,58 @@ export default function ProfileSickLeave() {
                 <div className="bg-white p-8 rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.04)] text-center">
                     <Thermometer size={32} className="text-gray-300 mx-auto mb-3" />
                     <p className="text-gray-400 font-medium">Keine Krankmeldungen vorhanden</p>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal
+                isOpen={confirmDelete.isOpen}
+                onClose={() => setConfirmDelete({ isOpen: false, id: null })}
+                onConfirm={handleDeleteConfirmed}
+                title="Krankmeldung löschen?"
+                message="Die Krankmeldung wird dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden."
+                confirmText="Löschen"
+                cancelText="Abbrechen"
+                isDestructive={true}
+            />
+
+            {/* Gesund-melden Modal */}
+            {shortenerModal.isOpen && shortenerModal.leave && (
+                <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-3 rounded-full bg-emerald-100 text-emerald-600">
+                                <HeartPulse size={24} />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900">Wieder gesund?</h3>
+                        </div>
+                        <p className="text-gray-500 mb-4">
+                            Krank seit {format(parseISO(shortenerModal.leave.start_date), 'd. MMMM', { locale: de })}.
+                            Bis wann warst du krank?
+                        </p>
+                        <input
+                            type="date"
+                            value={shortenerModal.newEndDate}
+                            min={shortenerModal.leave.start_date}
+                            max={shortenerModal.leave.end_date}
+                            onChange={(e) => setShortenerModal(prev => ({ ...prev, newEndDate: e.target.value }))}
+                            className="w-full border border-gray-200 rounded-xl px-4 py-3 mb-6 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                        />
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShortenerModal({ isOpen: false, leave: null, newEndDate: '' })}
+                                className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                            >
+                                Abbrechen
+                            </button>
+                            <button
+                                onClick={handleShortenerConfirm}
+                                className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-transform active:scale-95"
+                            >
+                                Bestätigen
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
