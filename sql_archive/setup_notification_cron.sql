@@ -28,7 +28,7 @@ SELECT cron.schedule(
 -- The function itself checks if Vienna time is 15:xx and skips otherwise
 SELECT cron.schedule(
     'monthly-closing-cron',
-    '0 13,14 L * *',  -- 13:00 + 14:00 UTC on last day (covers CET and CEST)
+    '0 13,14 28-31 * *',  -- 13:00 + 14:00 UTC on last day (covers CET and CEST)
     $$
     SELECT net.http_post(
         url := 'https://snxhcaruybvfyvcxtnrw.supabase.co/functions/v1/notify-monthly-closing',
