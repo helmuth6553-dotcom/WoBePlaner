@@ -1,5 +1,20 @@
+const ALLOWED_ORIGINS = [
+    'https://wobeapp.pages.dev',
+    'https://wobeplaner.pages.dev',
+]
+
+export function getCorsHeaders(req: Request) {
+    const origin = req.headers.get('Origin') ?? ''
+    const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+    return {
+        'Access-Control-Allow-Origin': allowedOrigin,
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    }
+}
+
+// Static fallback for non-request contexts
 export const corsHeaders = {
-    'Access-Control-Allow-Origin': 'https://wobeplaner.pages.dev',
+    'Access-Control-Allow-Origin': 'https://wobeapp.pages.dev',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 

@@ -14,9 +14,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-import { corsHeaders } from '../_shared/cors.ts'
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 serve(async (req) => {
+    const corsHeaders = getCorsHeaders(req)
+
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -38,12 +40,18 @@ serve(async (req) => {
             {
                 global: {
                     headers: { Authorization: authHeader }
+                },
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
                 }
             }
         )
 
         // 3. Get the calling user and verify they're an admin
-        const { data: { user: callingUser }, error: userError } = await supabaseUserClient.auth.getUser()
+        // Must pass the JWT explicitly — without it, getUser() checks internal session (empty in edge functions)
+        const jwt = authHeader.replace('Bearer ', '')
+        const { data: { user: callingUser }, error: userError } = await supabaseUserClient.auth.getUser(jwt)
 
         if (userError || !callingUser) {
             throw new Error('Nicht autorisiert: Ungültige Session')
@@ -86,8 +94,26 @@ serve(async (req) => {
             throw new Error('Ein Benutzer mit dieser E-Mail existiert bereits')
         }
 
-        // 7. Create user AND send invite email in ONE step
+        // 7. Pre-populate invitations so the DB trigger (handle_new_user) can find the record
+        // The trigger checks invitations by email before allowing a new auth user to be created
+        const { error: inviteInsertError } = await supabaseAdmin.from('invitations').upsert({
+            email: email,
+            full_name: full_name || '',
+            role: role || 'user',
+            weekly_hours: weekly_hours || 40,
+            start_date: start_date || new Date().toISOString().split('T')[0],
+            vacation_days_per_year: vacation_days_per_year || 25,
+            initial_balance: initial_balance || 0
+        }, { onConflict: 'email' })
+
+        if (inviteInsertError) {
+            console.error('Invitation pre-insert error:', inviteInsertError)
+            throw new Error(`Fehler beim Vorbereiten der Einladung: ${inviteInsertError.message}`)
+        }
+
+        // 8. Create user AND send invite email in ONE step
         // inviteUserByEmail creates the user and sends an email with a magic link
+        // The DB trigger will create the profile and clean up the invitation record
         const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
             redirectTo: `${Deno.env.get('SITE_URL') || 'https://wobeplaner.pages.dev'}`,
             data: {
@@ -172,7 +198,7 @@ serve(async (req) => {
             }),
             {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 400
+                status: 200
             }
         )
     }
