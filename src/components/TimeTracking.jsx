@@ -4,7 +4,7 @@ import { useAuth } from '../AuthContext'
 import { format, parseISO, startOfMonth, endOfMonth, addDays, subDays, eachDayOfInterval, areIntervalsOverlapping } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { CheckCircle, Save, Calendar, Download, Sun, Thermometer, ChevronRight, ChevronLeft, Users, XCircle, Pencil, TrendingUp, TrendingDown, Clock } from 'lucide-react'
-import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
+import { calculateWorkHours, calculateDailyAbsenceHours, MANDATORY_SHIFT_TYPES } from '../utils/timeCalculations'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateReportHash } from '../utils/security'
 import { constructIso, constructInterruptionIso, isValidInterruptionTime } from '../utils/timeTrackingHelpers'
@@ -372,15 +372,17 @@ export default function TimeTracking() {
                             let plannedShiftsForDay = []
 
                             if (isSick && abs.planned_shifts_snapshot && abs.planned_shifts_snapshot.length > 0) {
-                                // Use saved snapshot - filter to this specific day
+                                // Use saved snapshot - filter to this specific day (mandatory shifts only)
                                 plannedShiftsForDay = abs.planned_shifts_snapshot.filter(s => {
                                     if (!s.start_time) return false
+                                    if (!MANDATORY_SHIFT_TYPES.has(s.type?.toUpperCase())) return false
                                     return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
                                 })
                             } else {
-                                // Fall back to live data (for old absences without snapshot)
+                                // Fall back to live data (for old absences without snapshot, mandatory shifts only)
                                 plannedShiftsForDay = allPlannedRaw.filter(s => {
                                     if (!s.start_time) return false
+                                    if (!MANDATORY_SHIFT_TYPES.has(s.type?.toUpperCase())) return false
                                     return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
                                 })
                             }
@@ -594,7 +596,7 @@ export default function TimeTracking() {
 
             const { data: allMyAbsences } = await supabase
                 .from('absences')
-                .select('start_date, end_date, user_id, status, type, planned_hours')
+                .select('start_date, end_date, user_id, status, type, planned_hours, planned_shifts_snapshot')
                 .eq('user_id', user.id).eq('status', 'genehmigt')
 
             const { data: allMyEntries } = await supabase

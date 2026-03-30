@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, subDays, addDays } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { CheckCircle, XCircle, Download, FileText, Sun, Thermometer, ChevronLeft, ChevronRight, ShieldCheck, ShieldAlert, Eye, PenTool, Circle, RotateCcw } from 'lucide-react'
-import { calculateWorkHours, calculateDailyAbsenceHours } from '../utils/timeCalculations'
+import { calculateWorkHours, calculateDailyAbsenceHours, MANDATORY_SHIFT_TYPES } from '../utils/timeCalculations'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateReportHash } from '../utils/security'
 import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
@@ -225,12 +225,14 @@ export default function AdminTimeTracking() {
                             if (isSick && abs.planned_shifts_snapshot && abs.planned_shifts_snapshot.length > 0) {
                                 plannedShiftsForDay = abs.planned_shifts_snapshot.filter(s => {
                                     if (!s.start_time) return false
+                                    if (!MANDATORY_SHIFT_TYPES.has(s.type?.toUpperCase())) return false
                                     return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
                                 })
                             } else if (isSick) {
                                 // Fallback to live data
                                 plannedShiftsForDay = allPlannedShifts.filter(s => {
                                     if (!s.start_time) return false
+                                    if (!MANDATORY_SHIFT_TYPES.has(s.type?.toUpperCase())) return false
                                     return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
                                 })
                             }
@@ -478,7 +480,7 @@ export default function AdminTimeTracking() {
             supabase.from('shifts').select('id, start_time, end_time, type, assigned_to').gte('start_time', oneYearAgo.toISOString()),
             supabase.from('shift_interests').select('shift_id, shifts(*)').eq('user_id', selectedUserId),
             supabase.from('shifts').select('id, start_time, end_time, type').eq('type', 'TEAM').gte('start_time', oneYearAgo.toISOString()),
-            supabase.from('absences').select('user_id, start_date, end_date, type, planned_hours, status').eq('user_id', selectedUserId).eq('status', 'genehmigt'),
+            supabase.from('absences').select('user_id, start_date, end_date, type, planned_hours, planned_shifts_snapshot, status').eq('user_id', selectedUserId).eq('status', 'genehmigt'),
             supabase.from('time_entries').select('shift_id, calculated_hours, actual_start, actual_end').eq('user_id', selectedUserId),
             supabase.from('balance_corrections').select('user_id, correction_hours, effective_month').eq('user_id', selectedUserId)
         ])

@@ -465,14 +465,14 @@ describe('calculateDailyAbsenceHours', () => {
     // ----- SICK LEAVE TESTS -----
     describe('Sick Leave (Krankenstand)', () => {
         it('uses planned shift hours for sick day', () => {
-            // Wednesday with 8h shift
+            // Wednesday with 8h shift (mandatory type)
             const date = new Date(2025, 0, 15)
             const absence = { type: 'Krankenstand' }
             const plannedShifts = [{
                 id: 'shift-1',
                 start_time: '2025-01-15T08:00:00',
                 end_time: '2025-01-15T16:00:00', // 8h shift
-                type: 'Tag'
+                type: 'TD1'
             }]
 
             const hours = calculateDailyAbsenceHours(date, absence, plannedShifts, profile40h)
@@ -480,7 +480,7 @@ describe('calculateDailyAbsenceHours', () => {
         })
 
         it('sums multiple planned shifts for sick day', () => {
-            // Day with 2 shifts
+            // Day with 2 mandatory shifts
             const date = new Date(2025, 0, 15)
             const absence = { type: 'Krankenstand' }
             const plannedShifts = [
@@ -488,18 +488,56 @@ describe('calculateDailyAbsenceHours', () => {
                     id: 'shift-1',
                     start_time: '2025-01-15T08:00:00',
                     end_time: '2025-01-15T12:00:00', // 4h
-                    type: 'Tag'
+                    type: 'TD1'
                 },
                 {
                     id: 'shift-2',
                     start_time: '2025-01-15T14:00:00',
                     end_time: '2025-01-15T18:00:00', // 4h
-                    type: 'Tag'
+                    type: 'TD2'
                 }
             ]
 
             const hours = calculateDailyAbsenceHours(date, absence, plannedShifts, profile40h)
             expect(hours).toBe(8) // 4h + 4h
+        })
+
+        it('ignores non-mandatory shifts for sick day', () => {
+            // Non-mandatory shift (FORTBILDUNG) should not be credited
+            const date = new Date(2025, 0, 15)
+            const absence = { type: 'Krankenstand' }
+            const plannedShifts = [{
+                id: 'shift-1',
+                start_time: '2025-01-15T09:00:00',
+                end_time: '2025-01-15T13:00:00', // 4h
+                type: 'FORTBILDUNG'
+            }]
+
+            const hours = calculateDailyAbsenceHours(date, absence, plannedShifts, profile40h)
+            expect(hours).toBe(0)
+        })
+
+        it('only credits mandatory shifts when mixed with non-mandatory on sick day', () => {
+            // TD1 (mandatory) + SUPERVISION (non-mandatory)
+            const date = new Date(2025, 0, 15)
+            const absence = { type: 'Krankenstand' }
+            const plannedShifts = [
+                {
+                    id: 'shift-1',
+                    start_time: '2025-01-15T08:00:00',
+                    end_time: '2025-01-15T16:00:00', // 8h
+                    type: 'TD1'
+                },
+                {
+                    id: 'shift-2',
+                    start_time: '2025-01-15T16:00:00',
+                    end_time: '2025-01-15T18:00:00', // 2h
+                    type: 'SUPERVISION'
+                }
+            ]
+
+            const hours = calculateDailyAbsenceHours(date, absence, plannedShifts, profile40h)
+            expect(hours).toBe(8) // Only TD1 counted
         })
 
         it('returns 0 for sick day without planned shift', () => {

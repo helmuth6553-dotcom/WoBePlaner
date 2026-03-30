@@ -3,7 +3,7 @@ import { supabase } from '../../supabase'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfYear, subYears, addYears, eachDayOfInterval, isWeekend, getDay, differenceInDays, getYear } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, BarChart3, Activity, Users, ChevronDown, ChevronUp, Layers, TrendingUp, TrendingDown, Minus, AlertCircle, Thermometer, Zap } from 'lucide-react'
-import { calculateWorkHours, processInterruptions } from '../../utils/timeCalculations'
+import { calculateWorkHours, processInterruptions, MANDATORY_SHIFT_TYPES } from '../../utils/timeCalculations'
 import { calculateGenericBalance } from '../../utils/balanceHelpers'
 import { getHolidays, isHoliday } from '../../utils/holidays'
 import { calculateAllFairnessIndices } from '../../utils/fairnessIndex'
@@ -374,6 +374,7 @@ export default function AdminOverview() {
             sickCount++
             abs.planned_shifts_snapshot?.forEach(shift => {
                 const type = shift.type?.toUpperCase()
+                if (!MANDATORY_SHIFT_TYPES.has(type)) return
                 if (Object.hasOwn(sickHours, type)) sickHours[type] += calculateWorkHours(shift.start_time, shift.end_time, shift.type)
             })
         })
