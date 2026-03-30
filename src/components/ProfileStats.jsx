@@ -471,19 +471,40 @@ export default function ProfileStats() {
     }, [rawData, selectedMonth])
 
     const fetchFlexHistory = async () => {
-        const { data: myFlex } = await supabase
+        // Manual flex: interests explicitly marked is_flex
+        const { data: myManualFlex } = await supabase
             .from('shift_interests')
-            .select('user_id, shift:shifts(start_time)')
+            .select('shift_id, shift:shifts(start_time)')
             .eq('user_id', user.id)
             .eq('is_flex', true)
 
+        // Auto flex: interests on urgent shifts (same logic as AdminOverview)
+        const { data: myAllInterests } = await supabase
+            .from('shift_interests')
+            .select('shift_id, shift:shifts(start_time, urgent_since)')
+            .eq('user_id', user.id)
+
+        const autoFlexIds = new Set(
+            (myAllInterests || [])
+                .filter(i => i.shift?.urgent_since)
+                .map(i => i.shift_id)
+        )
+        const manualFlexIds = new Set((myManualFlex || []).map(i => i.shift_id))
+
+        // Merge both sources (deduplicated)
+        const allMyFlexInterests = (myAllInterests || []).filter(i =>
+            autoFlexIds.has(i.shift_id) || manualFlexIds.has(i.shift_id)
+        )
+        const seenIds = new Set()
         const byMonth = {}
-            ; (myFlex || []).forEach(f => {
-                const st = f.shift?.start_time
-                if (!st) return
-                const key = format(new Date(st), 'yyyy-MM')
-                byMonth[key] = (byMonth[key] || 0) + 1
-            })
+        allMyFlexInterests.forEach(f => {
+            if (seenIds.has(f.shift_id)) return
+            seenIds.add(f.shift_id)
+            const st = f.shift?.start_time
+            if (!st) return
+            const key = format(new Date(st), 'yyyy-MM')
+            byMonth[key] = (byMonth[key] || 0) + 1
+        })
         setFlexHistory(byMonth)
 
         const { data: profiles } = await supabase
@@ -494,12 +515,24 @@ export default function ProfileStats() {
 
         const nonAdminIds = (profiles || []).map(p => p.id)
 
-        const { data: allFlex } = await supabase
+        // Team average: also count both auto + manual flex
+        const { data: allInterests } = await supabase
             .from('shift_interests')
-            .select('user_id')
-            .eq('is_flex', true)
+            .select('user_id, shift_id, is_flex, shift:shifts(urgent_since)')
 
-        const totalFlex = (allFlex || []).filter(f => nonAdminIds.includes(f.user_id)).length
+        const allFlexUserShifts = (allInterests || []).filter(i =>
+            i.is_flex === true || i.shift?.urgent_since
+        )
+        const userFlexCounts = {}
+        const userSeenShifts = {}
+        allFlexUserShifts.forEach(i => {
+            if (!nonAdminIds.includes(i.user_id)) return
+            if (!userSeenShifts[i.user_id]) userSeenShifts[i.user_id] = new Set()
+            if (userSeenShifts[i.user_id].has(i.shift_id)) return
+            userSeenShifts[i.user_id].add(i.shift_id)
+            userFlexCounts[i.user_id] = (userFlexCounts[i.user_id] || 0) + 1
+        })
+        const totalFlex = Object.values(userFlexCounts).reduce((sum, c) => sum + c, 0)
         setTeamAvgFlex(nonAdminIds.length > 0 ? Math.round((totalFlex / nonAdminIds.length) * 10) / 10 : 0)
     }
 
