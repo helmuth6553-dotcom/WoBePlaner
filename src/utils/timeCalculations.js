@@ -1,6 +1,9 @@
 import { differenceInMinutes, differenceInDays, addDays, isBefore, max, min, addMinutes, isWeekend, getYear, format, parseISO, eachDayOfInterval } from 'date-fns'
 import { getHolidays, isHoliday } from './holidays'
 
+// Shift types that are mandatory — only these get sick-leave hour credits
+export const MANDATORY_SHIFT_TYPES = new Set(['TD', 'TD1', 'TD2', 'ND', 'DBD', 'AST', 'TEAM'])
+
 /**
  * Process interruptions during standby: filter, inflate, merge, and calculate credit.
  *
@@ -234,6 +237,7 @@ export const calculateDailyAbsenceHours = (dateInput, absence, plannedShifts = [
         if (absence?.planned_shifts_snapshot && absence.planned_shifts_snapshot.length > 0) {
             const snapshotShifts = absence.planned_shifts_snapshot.filter(s => {
                 if (!s.start_time) return false
+                if (!MANDATORY_SHIFT_TYPES.has(s.type?.toUpperCase())) return false
                 return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
             })
 
@@ -269,6 +273,7 @@ export const calculateDailyAbsenceHours = (dateInput, absence, plannedShifts = [
         // If no snapshot, check if a shift still exists in the plan for this day.
         const dayShifts = plannedShifts.filter(s => {
             if (!s.start_time) return false
+            if (!MANDATORY_SHIFT_TYPES.has(s.type?.toUpperCase())) return false
             return format(parseISO(s.start_time), 'yyyy-MM-dd') === dateKey
         })
 

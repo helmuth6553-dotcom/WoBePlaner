@@ -52,7 +52,11 @@ const calculateAbsenceMinutes = (absences, rangeStart, rangeEnd, historyShifts, 
         const end = absEnd > rangeEnd ? rangeEnd : absEnd
         if (start > end || absStart > rangeEnd || absEnd < rangeStart) return
 
-        if (abs.planned_hours && Number(abs.planned_hours) > 0) {
+        const isSickWithSnapshot = (abs.type === 'Krank' || abs.type === 'Krankenstand') &&
+            abs.planned_shifts_snapshot && abs.planned_shifts_snapshot.length > 0
+
+        if (abs.planned_hours && Number(abs.planned_hours) > 0 && !isSickWithSnapshot) {
+            // Shortcut: use stored planned_hours directly (vacation or old sick absences without snapshot)
             const absHours = Number(abs.planned_hours)
             minutes += absHours * 60
             if (absenceBreakdown) {

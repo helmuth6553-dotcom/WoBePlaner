@@ -6,7 +6,7 @@ import { format, startOfMonth, endOfMonth, isSameMonth, eachDayOfInterval, isWee
 import { de } from 'date-fns/locale'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { calculateMonthlyHistory } from '../utils/monthlyHistory'
-import { calculateWorkHours, calculateDailyAbsenceHours, processInterruptions } from '../utils/timeCalculations'
+import { calculateWorkHours, calculateDailyAbsenceHours, processInterruptions, MANDATORY_SHIFT_TYPES } from '../utils/timeCalculations'
 import { getHolidays, isHoliday } from '../utils/holidays'
 
 const SHIFT_TYPE_LABELS = {
@@ -166,7 +166,7 @@ export default function ProfileStats() {
 
         const { data: myAbsences } = await supabase
             .from('absences')
-            .select('start_date, end_date, user_id, status, type, planned_hours')
+            .select('start_date, end_date, user_id, status, type, planned_hours, planned_shifts_snapshot')
             .eq('user_id', user.id).eq('status', 'genehmigt')
 
         const { data: myCorrs } = await supabase
@@ -436,7 +436,10 @@ export default function ProfileStats() {
             const absType = abs.type || 'Sonstige'
             if (!absBreak[absType]) absBreak[absType] = { hours: 0, days: 0 }
 
-            if (abs.planned_hours && Number(abs.planned_hours) > 0) {
+            const isSickWithSnapshot = (abs.type === 'Krank' || abs.type === 'Krankenstand') &&
+                abs.planned_shifts_snapshot && abs.planned_shifts_snapshot.length > 0
+
+            if (abs.planned_hours && Number(abs.planned_hours) > 0 && !isSickWithSnapshot) {
                 absBreak[absType].hours += Number(abs.planned_hours)
                 const days = eachDayOfInterval({ start, end })
                 absBreak[absType].days += days.filter(d => !isWeekend(d) && !isHoliday(d, holidays)).length
