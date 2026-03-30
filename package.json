@@ -49,8 +49,8 @@
     "tailwindcss": "^4.1.17",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^4.1.0",
+    "vitest": "^4.1.2",
     "web-push": "^3.6.7",
-    "wrangler": "^4.73.0"
+    "wrangler": "^4.78.0"
   }
 }
