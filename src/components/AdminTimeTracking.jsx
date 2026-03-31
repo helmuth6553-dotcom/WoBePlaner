@@ -767,7 +767,7 @@ export default function AdminTimeTracking() {
                 ...withFlex,
                 shifts: {
                     start_time: withFlex.actual_start,
-                    type: isSick ? 'KRANK' : 'URLAUB'
+                    type: isSick ? (withFlex.plannedShift?.type || 'KRANK') : 'URLAUB'
                 }
             }
         })

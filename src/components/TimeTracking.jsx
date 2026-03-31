@@ -835,13 +835,15 @@ export default function TimeTracking() {
         const entriesList = items.map(item => {
             const entry = entries[item.id]
             const isFlex = pdfFlexShiftIds.has(item.id)
+            const isSick = item.type === 'Krank' || item.type === 'Krankenstand'
+            const sickShiftType = isSick && item.plannedShift?.type ? item.plannedShift.type : null
 
             // Case A: Real DB Entry exists
             if (entry) {
                 return {
                     ...entry,
                     is_flex: isFlex,
-                    shifts: item.itemType === 'shift' ? item : { start_time: item.sortDate.toISOString(), type: item.type || 'Urlaub' },
+                    shifts: item.itemType === 'shift' ? item : { start_time: item.sortDate.toISOString(), type: sickShiftType || item.type || 'Urlaub' },
                     absences: item.itemType === 'absence' ? { type: item.type || 'Abwesend' } : null
                 }
             }
@@ -857,7 +859,7 @@ export default function TimeTracking() {
                     actual_end: null,
                     calculated_hours: item.planned_hours || 0, // Use pre-calculated hours from SSOT
                     absence_id: item.absence_id,
-                    shifts: { start_time: item.sortDate.toISOString(), type: item.type || 'Abwesend' },
+                    shifts: { start_time: item.sortDate.toISOString(), type: sickShiftType || item.type || 'Abwesend' },
                     absences: { type: item.type || 'Abwesend' }
                 }
             }

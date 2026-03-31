@@ -119,7 +119,7 @@ const buildLines = (segments) => {
 }
 
 /** Build a single PDF row for a night-shift segment line, with optional correction comparison */
-const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction, dayStr) => {
+const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction, dayStr, isSickEntry = false) => {
     const intNote = line.note || ''
     let intCorrection = null
 
@@ -145,7 +145,7 @@ const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction
 
     const isFirst = lineIdx === 0
     const anm = isFirst
-        ? [isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' ')
+        ? [isSickEntry ? 'KRANK' : '', isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' ')
         : ''
 
     return {
@@ -203,11 +203,13 @@ const buildPdfRows = (entries, correctionMap) => {
                 origLines = buildLines(origSegments)
             }
 
+            const isSickND = entry.absences?.type === 'Krank' || entry.absences?.type === 'Krankenstand'
             lines.forEach((line, lineIdx) => {
-                rows.push(buildSegmentRow(line, lineIdx, origLines, shiftType, isFlex, correction, dayStr))
+                rows.push(buildSegmentRow(line, lineIdx, origLines, shiftType, isFlex, correction, dayStr, isSickND))
             })
         } else {
             // Regular entry (TD1, TD2, TEAM, Krank, Urlaub, etc.)
+            const isSickEntry = entry.absences?.type === 'Krank' || entry.absences?.type === 'Krankenstand'
             rows.push({
                 datum:     getDayNumber(dayStr),
                 tag:       getDayAbbr(dayStr),
@@ -217,7 +219,7 @@ const buildPdfRows = (entries, correctionMap) => {
                 bzVon:     '',
                 bzBis:     '',
                 correction: correction || null,
-                anm:       [isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' '),
+                anm:       [isSickEntry ? 'KRANK' : '', isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' '),
             })
         }
     })
