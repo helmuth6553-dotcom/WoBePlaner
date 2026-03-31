@@ -238,13 +238,23 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
                     lastDateStr = dateStr
                 }
 
-                const type = entry.absences?.type || 'Abwesend'
+                const absType = entry.absences?.type || 'Abwesend'
+                const isSickAbs = absType === 'Krank' || absType === 'Krankenstand'
+                const displayType = isSickAbs ? (shift?.type || absType) : absType
                 // Dienst at margin + 26 + 30 + 30 = margin + 86
-                doc.text(type, margin + 86, y)
+                doc.text(displayType, margin + 86, y)
                 // Stunden at margin + 86 + 22 = margin + 108
                 doc.setFont("helvetica", "bold")
                 doc.text(`${Number(entry.calculated_hours).toFixed(2)}h`, margin + 108, y)
                 doc.setFont("helvetica", "normal")
+                // KRANK in Anmerkungen
+                if (isSickAbs) {
+                    doc.setFontSize(7)
+                    doc.setTextColor(150, 100, 0)
+                    doc.text('KRANK', margin + 124, y)
+                    doc.setFontSize(9)
+                    doc.setTextColor(...primaryColor)
+                }
 
                 // Inline correction display for absences
                 if (correction) {
