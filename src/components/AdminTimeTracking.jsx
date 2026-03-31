@@ -133,7 +133,7 @@ export default function AdminTimeTracking() {
         // Fetch all interests without date filter on joins, filter locally instead
         const { data: myInterests } = await supabase
             .from('shift_interests')
-            .select('shift_id, shifts(*)')
+            .select('shift_id, is_flex, created_at, shifts(*)')
             .eq('user_id', selectedUserId)
 
         // Filter to shifts within the selected month
@@ -142,6 +142,22 @@ export default function AdminTimeTracking() {
             const shiftDate = new Date(i.shifts.start_time)
             return shiftDate >= start && shiftDate <= end
         }) || []
+
+        // Build flex shift IDs set from interests (manual + automatic)
+        const flexShiftIds = new Set(
+            (myInterests || []).filter(i => {
+                // Manual FLEX
+                if (i.is_flex === true) return true
+                // Automatic FLEX: interest created within 3 days after urgent_since
+                if (i.shifts?.urgent_since && i.created_at) {
+                    const urgentDate = new Date(i.shifts.urgent_since)
+                    const interestDate = new Date(i.created_at)
+                    const daysDiff = Math.floor((interestDate - urgentDate) / (24 * 60 * 60 * 1000))
+                    return interestDate > urgentDate && daysDiff <= 3
+                }
+                return false
+            }).map(i => i.shift_id)
+        )
 
         const shiftIds = monthInterests.map(i => i.shift_id)
 
@@ -321,7 +337,7 @@ export default function AdminTimeTracking() {
             } else {
                 sortDate = new Date()
             }
-            return { ...e, sortDate }
+            return { ...e, sortDate, is_flex: flexShiftIds.has(e.shift_id) }
         })
 
         // Add virtual absence entries that don't have DB entries yet
@@ -381,6 +397,7 @@ export default function AdminTimeTracking() {
                         actual_end: td2.actual_end || td2.shifts?.end_time,
                         calculated_hours: combinedHours,
                         isMerged: true,
+                        is_flex: entry.is_flex || td2.is_flex,
                         mergedIds: [entry.id, td2.id],
                         originalEntries: [entry, td2]
                     })
@@ -722,17 +739,27 @@ export default function AdminTimeTracking() {
             }
         }
 
-        // Fetch flex shift IDs for this user
-        const { data: flexInterests } = await supabase
+        // Fetch flex shift IDs for this user (manual + automatic)
+        const { data: pdfFlexInterests } = await supabase
             .from('shift_interests')
-            .select('shift_id')
+            .select('shift_id, is_flex, created_at, shifts:shift_id(urgent_since)')
             .eq('user_id', selectedUserId)
-            .eq('is_flex', true)
-        const flexShiftIds = new Set((flexInterests || []).map(f => f.shift_id))
+        const pdfFlexShiftIds = new Set(
+            (pdfFlexInterests || []).filter(i => {
+                if (i.is_flex === true) return true
+                if (i.shifts?.urgent_since && i.created_at) {
+                    const urgentDate = new Date(i.shifts.urgent_since)
+                    const interestDate = new Date(i.created_at)
+                    const daysDiff = Math.floor((interestDate - urgentDate) / (24 * 60 * 60 * 1000))
+                    return interestDate > urgentDate && daysDiff <= 3
+                }
+                return false
+            }).map(f => f.shift_id)
+        )
 
         // PDF Gen needs 'shifts' object usually, we simulate it for Absences to prevent crash
         const pdfEntries = entries.map(e => {
-            const withFlex = { ...e, is_flex: flexShiftIds.has(e.shift_id) }
+            const withFlex = { ...e, is_flex: pdfFlexShiftIds.has(e.shift_id) }
             if (withFlex.shifts) return withFlex
             // Create virtual shift object for absence entries (required by PDF generator)
             const isSick = withFlex.absences?.type === 'Krank' || withFlex.absences?.type === 'Krankenstand'
@@ -1024,6 +1051,11 @@ export default function AdminTimeTracking() {
                                 <div className="font-bold flex items-center gap-2 flex-wrap">
                                     {safeFormatDay(itemDate)} {safeFormatDate(itemDate)}
                                     {!isAbsence && itemType && <span className="text-[10px] uppercase px-1.5 py-0.5 rounded font-bold bg-gray-100 text-gray-600">{itemType}</span>}
+                                    {!isAbsence && e.is_flex && (
+                                        <span className="text-[10px] uppercase px-1.5 py-0.5 rounded font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                                            FLEX
+                                        </span>
+                                    )}
                                     {isAbsence && <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-bold ${isSick ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>{itemType}</span>}
                                     {/* Show original shift type for sick leave */}
                                     {isSick && originalShiftType && (

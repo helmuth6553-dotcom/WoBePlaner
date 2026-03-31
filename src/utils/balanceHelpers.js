@@ -292,20 +292,33 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
                 const td1Entry = entryMap[td1.id]
                 const td2Entry = entryMap[td2.id]
 
-                const td1Hours = td1Entry?.calculated_hours !== undefined
-                    ? td1Entry.calculated_hours
-                    : calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
+                // Detect merged entries: TimeTracking saves combined hours to BOTH entries
+                // with identical actual_start/actual_end when editing as merged "TD"
+                const isMerged = td1Entry && td2Entry
+                    && td1Entry.actual_start && td2Entry.actual_start
+                    && td1Entry.actual_start === td2Entry.actual_start
+                    && td1Entry.actual_end === td2Entry.actual_end
 
-                const td2Hours = td2Entry?.calculated_hours !== undefined
-                    ? td2Entry.calculated_hours
-                    : calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
+                if (isMerged) {
+                    // Both entries have the same combined calculated_hours — use once
+                    const mergedHours = td1Entry.calculated_hours || 0
+                    pastActual += mergedHours * 60
+                } else {
+                    const td1Hours = td1Entry?.calculated_hours !== undefined
+                        ? td1Entry.calculated_hours
+                        : calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
 
-                pastActual += (td1Hours + td2Hours) * 60
-                // Eliminate handover overlap when same person works both TD1+TD2
-                const td1End = new Date(td1.end_time)
-                const td2Start = new Date(td2.start_time)
-                const overlapMs = Math.max(0, td1End - td2Start)
-                pastActual -= overlapMs / (1000 * 60)
+                    const td2Hours = td2Entry?.calculated_hours !== undefined
+                        ? td2Entry.calculated_hours
+                        : calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
+
+                    pastActual += (td1Hours + td2Hours) * 60
+                    // Eliminate handover overlap when same person works both TD1+TD2
+                    const td1End = new Date(td1.end_time)
+                    const td2Start = new Date(td2.start_time)
+                    const overlapMs = Math.max(0, td1End - td2Start)
+                    pastActual -= overlapMs / (1000 * 60)
+                }
                 processedPastIds.add(td1.id)
                 processedPastIds.add(td2.id)
             }

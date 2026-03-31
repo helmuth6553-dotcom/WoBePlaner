@@ -242,7 +242,7 @@ export default function TimeTracking() {
         // Fetch without date filter on joins, filter locally instead
         const { data: myInterests } = await supabase
             .from('shift_interests')
-            .select('shift_id, shifts(*)')
+            .select('shift_id, is_flex, created_at, shifts(*)')
             .eq('user_id', user.id)
 
         // Filter to shifts within the selected month
@@ -251,6 +251,22 @@ export default function TimeTracking() {
             const shiftDate = new Date(i.shifts.start_time)
             return shiftDate >= start && shiftDate <= end
         }) || []
+
+        // Build flex shift IDs set from interests (manual + automatic)
+        const flexShiftIds = new Set(
+            (myInterests || []).filter(i => {
+                // Manual FLEX
+                if (i.is_flex === true) return true
+                // Automatic FLEX: interest created within 3 days after urgent_since
+                if (i.shifts?.urgent_since && i.created_at) {
+                    const urgentDate = new Date(i.shifts.urgent_since)
+                    const interestDate = new Date(i.created_at)
+                    const daysDiff = Math.floor((interestDate - urgentDate) / (24 * 60 * 60 * 1000))
+                    return interestDate > urgentDate && daysDiff <= 3
+                }
+                return false
+            }).map(i => i.shift_id)
+        )
 
         // Get all shifts with their interest counts to filter
         const shiftIds = monthInterests.map(i => i.shift_id)
@@ -309,7 +325,8 @@ export default function TimeTracking() {
         const shiftItems = filteredPersonalShifts.map(s => ({
             ...s,
             itemType: 'shift',
-            sortDate: new Date(s.start_time)
+            sortDate: new Date(s.start_time),
+            isFlex: flexShiftIds.has(s.id)
         }))
 
         // Store planned shifts for absence calculation - MERGED LATER after Team Shifts
@@ -476,6 +493,7 @@ export default function TimeTracking() {
                         type: 'TD',
                         end_time: td2.end_time,
                         isMerged: true,
+                        isFlex: item.isFlex || td2.isFlex,
                         mergedIds: [item.id, td2.id],
                         mergedOriginals: [item, td2]
                     })
@@ -796,17 +814,27 @@ export default function TimeTracking() {
     }
 
     const handleDownloadPDF = async () => {
-        // Fetch flex shift IDs for this user
+        // Fetch flex shift IDs for this user (manual + automatic)
         const { data: flexInterests } = await supabase
             .from('shift_interests')
-            .select('shift_id')
+            .select('shift_id, is_flex, created_at, shifts:shift_id(urgent_since)')
             .eq('user_id', user.id)
-            .eq('is_flex', true)
-        const flexShiftIds = new Set((flexInterests || []).map(f => f.shift_id))
+        const pdfFlexShiftIds = new Set(
+            (flexInterests || []).filter(i => {
+                if (i.is_flex === true) return true
+                if (i.shifts?.urgent_since && i.created_at) {
+                    const urgentDate = new Date(i.shifts.urgent_since)
+                    const interestDate = new Date(i.created_at)
+                    const daysDiff = Math.floor((interestDate - urgentDate) / (24 * 60 * 60 * 1000))
+                    return interestDate > urgentDate && daysDiff <= 3
+                }
+                return false
+            }).map(f => f.shift_id)
+        )
 
         const entriesList = items.map(item => {
             const entry = entries[item.id]
-            const isFlex = flexShiftIds.has(item.id)
+            const isFlex = pdfFlexShiftIds.has(item.id)
             const isSick = item.type === 'Krank' || item.type === 'Krankenstand'
             const sickShiftType = isSick && item.plannedShift?.type ? item.plannedShift.type : null
 
@@ -1036,6 +1064,11 @@ export default function TimeTracking() {
                                                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${isTeam ? 'bg-purple-100 text-purple-700' : 'bg-gray-100'}`}>
                                                         {displayType}
                                                     </span>
+                                                    {item.isFlex && (
+                                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                                                            FLEX
+                                                        </span>
+                                                    )}
                                                     {format(parseISO(item.start_time), 'HH:mm')} - {format(parseISO(item.end_time), 'HH:mm')}
                                                 </>
                                             )}
