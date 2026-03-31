@@ -23,29 +23,34 @@ import { getShiftSegments } from './timeCalculations'
  * 09:30 → "09,50" | 13:45 → "13,75"
  * Robust: handles ISO strings, HH:MM, HH.MM, HHMM, already-formatted 09,50
  */
-const timeToDecimal = (timeStr) => {
+const timeToDecimal = (timeStr, isEndTime = false) => {
     if (!timeStr) return ''
     const cleaned = String(timeStr).trim()
 
     // Already formatted as HH,MM
     if (cleaned.includes(',')) {
         const parts = cleaned.split(',')
-        return `${parts[0].padStart(2, '0')},${parts[1]}`
+        const result = `${parts[0].padStart(2, '0')},${parts[1]}`
+        if (isEndTime && result === '00,00') return '24,00'
+        return result
     }
 
     // ISO string or timestamp
     if (cleaned.includes('T') || (cleaned.includes('-') && cleaned.includes(':'))) {
         try {
             const date = parseISO(cleaned)
-            const hours = String(date.getHours()).padStart(2, '0')
-            const decMinutes = Math.round((date.getMinutes() / 60) * 100).toString().padStart(2, '0')
-            return `${hours},${decMinutes}`
+            const hours = date.getHours()
+            const minutes = date.getMinutes()
+            if (isEndTime && hours === 0 && minutes === 0) return '24,00'
+            const decMinutes = Math.round((minutes / 60) * 100).toString().padStart(2, '0')
+            return `${String(hours).padStart(2, '0')},${decMinutes}`
         } catch { /* fall through */ }
     }
 
     // HH:MM or HH.MM or HHMM format
     const matches = cleaned.match(/(\d{1,2})[:.]?(\d{2})/)
     if (matches) {
+        if (isEndTime && parseInt(matches[1], 10) === 0 && parseInt(matches[2], 10) === 0) return '24,00'
         const decMinutes = Math.round((parseInt(matches[2], 10) / 60) * 100).toString().padStart(2, '0')
         return `${matches[1].padStart(2, '0')},${decMinutes}`
     }
@@ -122,9 +127,9 @@ const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction
         const origWorkLine = origLines[lineIdx]
         if (origWorkLine?.work) {
             const origAzVon = timeToDecimal(origWorkLine.work.start.toISOString())
-            const origAzBis = timeToDecimal(origWorkLine.work.end.toISOString())
+            const origAzBis = timeToDecimal(origWorkLine.work.end.toISOString(), true)
             const curAzVon = timeToDecimal(line.work.start.toISOString())
-            const curAzBis = timeToDecimal(line.work.end.toISOString())
+            const curAzBis = timeToDecimal(line.work.end.toISOString(), true)
             if (origAzVon !== curAzVon || origAzBis !== curAzBis) {
                 intCorrection = {
                     originalStart: origWorkLine.work.start.toISOString(),
@@ -148,9 +153,9 @@ const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction
         tag:        isFirst ? getDayAbbr(dayStr) : '',
         diensttyp:  isFirst ? shiftType : '',
         azVon:      line.work    ? timeToDecimal(line.work.start.toISOString()) : '',
-        azBis:      line.work    ? timeToDecimal(line.work.end.toISOString()) : '',
+        azBis:      line.work    ? timeToDecimal(line.work.end.toISOString(), true) : '',
         bzVon:      line.standby ? timeToDecimal(line.standby.start.toISOString()) : '',
-        bzBis:      line.standby ? timeToDecimal(line.standby.end.toISOString()) : '',
+        bzBis:      line.standby ? timeToDecimal(line.standby.end.toISOString(), true) : '',
         correction: isFirst ? correction : null,
         anm,
         intNote,
@@ -208,7 +213,7 @@ const buildPdfRows = (entries, correctionMap) => {
                 tag:       getDayAbbr(dayStr),
                 diensttyp: shiftType,
                 azVon:     timeToDecimal(entry.actual_start),
-                azBis:     timeToDecimal(entry.actual_end),
+                azBis:     timeToDecimal(entry.actual_end, true),
                 bzVon:     '',
                 bzBis:     '',
                 correction: correction || null,
@@ -364,9 +369,9 @@ export const generateTimeReportPDF = ({
     yPos = drawTableHeader()
 
     // Helper: Draw corrected time inline
-    const drawCorrectedTime = (x, y, originalISO, currentISO) => {
-        const original = timeToDecimal(originalISO)
-        const corrected = timeToDecimal(currentISO)
+    const drawCorrectedTime = (x, y, originalISO, currentISO, isEndTime = false) => {
+        const original = timeToDecimal(originalISO, isEndTime)
+        const corrected = timeToDecimal(currentISO, isEndTime)
 
         doc.setFontSize(9)
         doc.setFont('helvetica', 'normal')
@@ -461,9 +466,9 @@ export const generateTimeReportPDF = ({
 
         // AZ Bis (Arbeitszeit) — check entry-level correction OR interruption-level correction
         if (endChanged && row.azBis) {
-            drawCorrectedTime(colX.azBis, textY, row.correction.originalEnd, row.correction.currentEnd)
+            drawCorrectedTime(colX.azBis, textY, row.correction.originalEnd, row.correction.currentEnd, true)
         } else if (row.intCorrection && !row.intCorrection.isNew && row.azBis) {
-            drawCorrectedTime(colX.azBis, textY, row.intCorrection.originalEnd, row.intCorrection.currentEnd)
+            drawCorrectedTime(colX.azBis, textY, row.intCorrection.originalEnd, row.intCorrection.currentEnd, true)
         } else {
             doc.text(row.azBis, colX.azBis, textY)
         }
