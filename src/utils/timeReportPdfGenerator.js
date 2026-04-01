@@ -119,7 +119,7 @@ const buildLines = (segments) => {
 }
 
 /** Build a single PDF row for a night-shift segment line, with optional correction comparison */
-const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction, dayStr, isSickEntry = false) => {
+const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction, dayStr, isSickEntry = false, employeeNote = '') => {
     const intNote = line.note || ''
     let intCorrection = null
 
@@ -144,8 +144,11 @@ const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction
     }
 
     const isFirst = lineIdx === 0
-    const anm = isFirst
-        ? [isSickEntry ? 'KRANK' : '', isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' ')
+    const anmMA = isFirst
+        ? [isSickEntry ? 'KRANK' : '', isFlex ? 'FLEX' : '', employeeNote?.substring(0, 20) || ''].filter(Boolean).join(' ')
+        : ''
+    const anmAdmin = isFirst
+        ? (correction?.adminNote?.substring(0, 22) || '')
         : ''
 
     return {
@@ -157,7 +160,8 @@ const buildSegmentRow = (line, lineIdx, origLines, shiftType, isFlex, correction
         bzVon:      line.standby ? timeToDecimal(line.standby.start.toISOString()) : '',
         bzBis:      line.standby ? timeToDecimal(line.standby.end.toISOString(), true) : '',
         correction: isFirst ? correction : null,
-        anm,
+        anmMA,
+        anmAdmin,
         intNote,
         intCorrection,
     }
@@ -205,7 +209,7 @@ const buildPdfRows = (entries, correctionMap) => {
 
             const isSickND = entry.absences?.type === 'Krank' || entry.absences?.type === 'Krankenstand'
             lines.forEach((line, lineIdx) => {
-                rows.push(buildSegmentRow(line, lineIdx, origLines, shiftType, isFlex, correction, dayStr, isSickND))
+                rows.push(buildSegmentRow(line, lineIdx, origLines, shiftType, isFlex, correction, dayStr, isSickND, entry.employee_note))
             })
         } else {
             // Regular entry (TD1, TD2, TEAM, Krank, Urlaub, etc.)
@@ -219,7 +223,8 @@ const buildPdfRows = (entries, correctionMap) => {
                 bzVon:     '',
                 bzBis:     '',
                 correction: correction || null,
-                anm:       [isSickEntry ? 'KRANK' : '', isFlex ? 'FLEX' : '', correction?.adminNote?.substring(0, 24) || ''].filter(Boolean).join(' '),
+                anmMA:     [isSickEntry ? 'KRANK' : '', isFlex ? 'FLEX' : '', entry.employee_note?.substring(0, 20) || ''].filter(Boolean).join(' '),
+                anmAdmin:  correction?.adminNote?.substring(0, 22) || '',
             })
         }
     })
@@ -319,13 +324,14 @@ export const generateTimeReportPDF = ({
     // =========================================================================
     const colX = {
         datum: margin,
-        tag: margin + 18,
-        dienst: margin + 32,
-        azVon: margin + 57,
-        azBis: margin + 77,
-        bzVon: margin + 97,
-        bzBis: margin + 117,
-        anm: margin + 137
+        tag: margin + 14,
+        dienst: margin + 26,
+        azVon: margin + 48,
+        azBis: margin + 68,
+        bzVon: margin + 88,
+        bzBis: margin + 108,
+        anmMA: margin + 128,
+        anmAdmin: margin + 156,
     }
 
     const rowHeight = 7
@@ -337,6 +343,9 @@ export const generateTimeReportPDF = ({
         dienst: (colX.dienst + colX.azVon) / 2,
     }
 
+    // Anmerkungen group header center
+    const anmGroupCenter = (colX.anmMA + pageWidth - margin) / 2
+
     const drawTableHeader = () => {
         // Header row 1: Group titles
         doc.setFont('helvetica', 'bold')
@@ -345,6 +354,7 @@ export const generateTimeReportPDF = ({
 
         doc.text('Arbeitszeit', colX.azVon + 10, yPos, { align: 'center' })
         doc.text('Bereitschaftszeit', colX.bzVon + 10, yPos, { align: 'center' })
+        doc.text('Anmerkungen', anmGroupCenter, yPos, { align: 'center' })
 
         yPos += 4
 
@@ -357,7 +367,8 @@ export const generateTimeReportPDF = ({
         doc.text('Bis', colX.azBis, yPos)
         doc.text('Von', colX.bzVon, yPos)
         doc.text('Bis', colX.bzBis, yPos)
-        doc.text('Anm.', colX.anm, yPos)
+        doc.text('MA', colX.anmMA, yPos)
+        doc.text('Admin', colX.anmAdmin, yPos)
 
         yPos += 3
         doc.setDrawColor(226, 232, 240)
@@ -479,17 +490,26 @@ export const generateTimeReportPDF = ({
         doc.text(row.bzVon, colX.bzVon, textY)
         doc.text(row.bzBis, colX.bzBis, textY)
 
-        // Admin note (only on first row of entry) or interruption note
-        if (row.anm) {
-            doc.setFontSize(8)
-            doc.setTextColor(150, 100, 0)
-            doc.text(row.anm, colX.anm, textY)
+        // MA-Anmerkung (KRANK/FLEX flags, employee note, interruption notes)
+        if (row.anmMA) {
+            doc.setFontSize(7)
+            doc.setTextColor(60, 60, 60)
+            doc.text(row.anmMA.substring(0, 20), colX.anmMA, textY)
             doc.setTextColor(0, 0, 0)
             doc.setFontSize(9)
         } else if (row.intNote) {
             doc.setFontSize(7)
             doc.setTextColor(80, 80, 80)
-            doc.text(row.intNote.substring(0, 24), colX.anm, textY)
+            doc.text(row.intNote.substring(0, 20), colX.anmMA, textY)
+            doc.setTextColor(0, 0, 0)
+            doc.setFontSize(9)
+        }
+
+        // Admin-Anmerkung
+        if (row.anmAdmin) {
+            doc.setFontSize(7)
+            doc.setTextColor(150, 100, 0)
+            doc.text(row.anmAdmin.substring(0, 22), colX.anmAdmin, textY)
             doc.setTextColor(0, 0, 0)
             doc.setFontSize(9)
         }

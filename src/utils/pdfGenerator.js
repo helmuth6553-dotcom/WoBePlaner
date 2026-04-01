@@ -202,7 +202,9 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
         x += 22
         doc.text("Stunden", x, y)
         x += 16
-        doc.text("Anm.", x, y)
+        doc.text("MA", x, y)
+        x += 28
+        doc.text("Admin", x, y)
 
         y += 6
 
@@ -247,11 +249,20 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
                 doc.setFont("helvetica", "bold")
                 doc.text(`${Number(entry.calculated_hours).toFixed(2)}h`, margin + 108, y)
                 doc.setFont("helvetica", "normal")
-                // KRANK in Anmerkungen
-                if (isSickAbs) {
+                // MA-Anmerkung (KRANK flag + employee note)
+                if (isSickAbs || entry.employee_note) {
+                    doc.setFontSize(7)
+                    doc.setTextColor(60, 60, 60)
+                    const maParts = [isSickAbs ? 'KRANK' : '', entry.employee_note?.substring(0, 18) || ''].filter(Boolean).join(' ')
+                    doc.text(maParts, margin + 124, y)
+                    doc.setFontSize(9)
+                    doc.setTextColor(...primaryColor)
+                }
+                // Admin-Anmerkung
+                if (entry.admin_note) {
                     doc.setFontSize(7)
                     doc.setTextColor(150, 100, 0)
-                    doc.text('KRANK', margin + 124, y)
+                    doc.text(entry.admin_note.substring(0, 22), margin + 152, y)
                     doc.setFontSize(9)
                     doc.setTextColor(...primaryColor)
                 }
@@ -355,24 +366,32 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
                     doc.text(`${entry.calculated_hours.toFixed(2)}h`, margin + 108, y)
                     doc.setFont("helvetica", "normal")
 
-                    // Admin Note column at margin + 124
+                    // MA-Anmerkung (FLEX flag, employee note)
+                    const isFlex = entry.is_flex === true
+                    const maShiftParts = [isFlex ? 'FLEX' : '', entry.employee_note?.substring(0, 18) || ''].filter(Boolean).join(' ')
+                    if (maShiftParts) {
+                        doc.setFontSize(7)
+                        doc.setTextColor(60, 60, 60)
+                        doc.text(maShiftParts, margin + 124, y)
+                        doc.setFontSize(9)
+                        doc.setTextColor(...primaryColor)
+                    }
+
+                    // Admin-Anmerkung at margin + 152
                     if (isCorrection) {
                         doc.setFontSize(7)
                         doc.setTextColor(...correctionColor)
-                        // Show admin_note if available, otherwise just "Korr."
                         let noteText = 'Korr.'
                         if (entry.admin_note) {
-                            // Admin made a correction with note
-                            noteText = 'Admin: ' + entry.admin_note.substring(0, 25)
+                            noteText = entry.admin_note.substring(0, 22)
                         }
-                        doc.text(noteText, margin + 124, y)
+                        doc.text(noteText, margin + 152, y)
                         doc.setFontSize(9)
                         doc.setTextColor(...primaryColor)
                     } else if (entry.admin_note) {
-                        // Admin note without time correction (e.g. interruption edit)
                         doc.setFontSize(7)
-                        doc.setTextColor(150, 100, 0) // Orange for admin notes
-                        doc.text('Admin: ' + entry.admin_note.substring(0, 25), margin + 124, y)
+                        doc.setTextColor(150, 100, 0)
+                        doc.text(entry.admin_note.substring(0, 22), margin + 152, y)
                         doc.setFontSize(9)
                         doc.setTextColor(...primaryColor)
                     }
