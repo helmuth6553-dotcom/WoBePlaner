@@ -855,8 +855,8 @@ export default function TimeTracking() {
                     id: item.id,
                     user_id: user.id,
                     entry_date: item.date,
-                    actual_start: item.sortDate.toISOString(),
-                    actual_end: null,
+                    actual_start: item.plannedShift?.start_time || item.sortDate.toISOString(),
+                    actual_end: item.plannedShift?.end_time || null,
                     calculated_hours: item.planned_hours || 0, // Use pre-calculated hours from SSOT
                     absence_id: item.absence_id,
                     shifts: { start_time: item.sortDate.toISOString(), type: sickShiftType || item.type || 'Abwesend' },
