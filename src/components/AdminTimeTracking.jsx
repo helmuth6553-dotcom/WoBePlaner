@@ -1112,6 +1112,12 @@ export default function AdminTimeTracking() {
                                     </div>
                                 </div>
                             )}
+                            {/* Show employee note */}
+                            {e.employee_note && (
+                                <div className="mt-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                                    <div className="text-xs text-gray-600"><span className="font-bold">MA-Anmerkung:</span> {e.employee_note}</div>
+                                </div>
+                            )}
                         </div>
                     )
                 })}
@@ -1505,6 +1511,13 @@ export default function AdminTimeTracking() {
                                     <span>{calculatedHours.toFixed(2)}h</span>
                                 </div>
                             </div>
+
+                            {editingEntry.employee_note && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Mitarbeiter Notiz</label>
+                                    <div className="w-full bg-gray-100 border border-gray-200 p-3 rounded-lg text-sm text-gray-600">{editingEntry.employee_note}</div>
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Admin Notiz</label>

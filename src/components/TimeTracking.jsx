@@ -92,7 +92,8 @@ export default function TimeTracking() {
         interruptions: [],
         newIntStart: '',
         newIntEnd: '',
-        newIntNote: ''
+        newIntNote: '',
+        employeeNote: ''
     })
     const [calculatedHours, setCalculatedHours] = useState(0)
 
@@ -121,7 +122,8 @@ export default function TimeTracking() {
                     })),
                     newIntStart: '',
                     newIntEnd: '',
-                    newIntNote: ''
+                    newIntNote: '',
+                    employeeNote: entry.employee_note || ''
                 })
             } else {
                 if (editingItem.itemType === 'shift') {
@@ -131,7 +133,8 @@ export default function TimeTracking() {
                         interruptions: [],
                         newIntStart: '',
                         newIntEnd: '',
-                        newIntNote: ''
+                        newIntNote: '',
+                        employeeNote: ''
                     })
                 } else {
                     // Absence Default: Use weekly_hours / 5 for daily hours
@@ -146,7 +149,8 @@ export default function TimeTracking() {
                         interruptions: [],
                         newIntStart: '',
                         newIntEnd: '',
-                        newIntNote: ''
+                        newIntNote: '',
+                        employeeNote: ''
                     })
                 }
             }
@@ -682,7 +686,8 @@ export default function TimeTracking() {
             interruptions: finalInterruptions,
             calculated_hours: calculatedHours,
             status: 'submitted',
-            original_data: { start: startIso, end: endIso, interruptions: finalInterruptions }
+            original_data: { start: startIso, end: endIso, interruptions: finalInterruptions },
+            employee_note: formData.employeeNote || null
         }
 
         let query = supabase.from('time_entries')
@@ -706,7 +711,7 @@ export default function TimeTracking() {
                 }
                 // Skip the normal query flow
                 setEditingItem(null)
-                setFormData({ actualStart: '', actualEnd: '', interruptions: [] })
+                setFormData({ actualStart: '', actualEnd: '', interruptions: [], employeeNote: '' })
                 setCalculatedHours(null)
                 fetchData(true)
                 return
@@ -1132,6 +1137,11 @@ export default function TimeTracking() {
                                                     </div>
                                                 </div>
                                             )}
+                                            {entry?.employee_note && (
+                                                <div className="mt-2 bg-gray-50 p-2 rounded border border-gray-200">
+                                                    <div className="text-xs text-gray-600"><span className="font-bold">Anmerkung:</span> {entry.employee_note}</div>
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 })()}
@@ -1385,6 +1395,18 @@ export default function TimeTracking() {
                                         )}
                                     </div>
                                 )}
+                                <div className="mt-4">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Anmerkung</label>
+                                    <textarea
+                                        value={formData.employeeNote}
+                                        onChange={e => setFormData({ ...formData, employeeNote: e.target.value })}
+                                        readOnly={isApproved}
+                                        placeholder="Optionale Notiz zum Eintrag…"
+                                        maxLength={200}
+                                        rows={2}
+                                        className={`w-full border p-3 rounded-xl text-sm transition-all outline-none resize-none ${isApproved ? 'bg-gray-100 border-gray-200 text-gray-500' : 'bg-gray-50 border-gray-200 focus:border-black focus:ring-1 focus:ring-black'}`}
+                                    />
+                                </div>
                                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm mt-4">
                                     <div className="flex justify-between items-center text-blue-900 font-bold">
                                         <span className="text-sm uppercase tracking-wider">Berechnet</span>
