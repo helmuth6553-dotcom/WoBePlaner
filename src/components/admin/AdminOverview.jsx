@@ -340,7 +340,7 @@ export default function AdminOverview() {
             if (absStart <= absEnd) {
                 if (!empAbsenceDays[abs.user_id]) empAbsenceDays[abs.user_id] = new Set()
                 eachDayOfInterval({ start: absStart, end: absEnd }).forEach(d => {
-                    if (!isWeekend(d)) empAbsenceDays[abs.user_id].add(d.toISOString().split('T')[0])
+                    if (!isWeekend(d)) empAbsenceDays[abs.user_id].add(format(d, 'yyyy-MM-dd'))
                 })
             }
         })
@@ -355,7 +355,7 @@ export default function AdminOverview() {
             }
         })
         shifts?.filter(s => s.type === 'TEAM').forEach(s => {
-            const dateKey = new Date(s.start_time).toISOString().split('T')[0]
+            const dateKey = format(new Date(s.start_time), 'yyyy-MM-dd')
             const availableCount = employees.filter(emp => !allAbsenceDaysByUser[emp.id]?.has(dateKey)).length
             totalPlannedHours += calculateWorkHours(s.start_time, s.end_time, s.type) * availableCount
         })
@@ -475,7 +475,7 @@ export default function AdminOverview() {
             })
 
             // Max consecutive days without shift (TEAM doesn't count, weekends count, only holidays skipped)
-            const shiftDates = new Set(empShifts.filter(s => s.type?.toUpperCase() !== 'TEAM').map(s => new Date(s.start_time).toISOString().split('T')[0]))
+            const shiftDates = new Set(empShifts.filter(s => s.type?.toUpperCase() !== 'TEAM').map(s => format(new Date(s.start_time), 'yyyy-MM-dd')))
             const absenceDates = new Set()
             empAbsences.forEach(a => {
                 if (a.status !== 'genehmigt' && a.type !== 'Krank') return

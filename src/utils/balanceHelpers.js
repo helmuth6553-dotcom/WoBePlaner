@@ -2,6 +2,16 @@ import { startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, subDays, isSame
 import { calculateWorkHours, calculateDailyAbsenceHours, processInterruptions } from './timeCalculations'
 import { getHolidays, isHoliday } from './holidays'
 
+/** Extract 'YYYY-MM-DD' from a Date using LOCAL timezone (not UTC).
+ *  Avoids the classic bug where toISOString().split('T')[0] shifts dates
+ *  back by one day in timezones east of UTC (e.g. CEST). */
+const toLocaleDateKey = (d) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+}
+
 const SHIFT_TYPE_KEYS = ['TD', 'TD1', 'TD2', 'ND', 'DBD', 'AST', 'TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
 
 const normalizeShiftType = (type) => {
@@ -33,7 +43,7 @@ const collectAbsenceDays = (absences, rangeStart, rangeEnd) => {
         const end = absEnd > rangeEnd ? rangeEnd : absEnd
         if (start <= end) {
             eachDayOfInterval({ start, end }).forEach(d => {
-                if (!isWeekend(d)) days.add(d.toISOString().split('T')[0])
+                if (!isWeekend(d)) days.add(toLocaleDateKey(d))
             })
         }
     })
@@ -139,7 +149,7 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         if (Number.isNaN(d.getTime()) || !isSameMonth(d, currentDate) || d < startDate) return false
         // Exclude TEAM shifts on days with absences (vacation/sick) to avoid double counting
         if (s.type?.toUpperCase() === 'TEAM') {
-            const dateKey = d.toISOString().split('T')[0]
+            const dateKey = toLocaleDateKey(d)
             if (absenceDays.has(dateKey)) return false
         }
         return true
@@ -170,7 +180,7 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
     // Group shifts by date to detect TD1+TD2 combinations
     const shiftsByDate = {}
     currentMonthShifts.forEach(shift => {
-        const dateKey = new Date(shift.start_time).toISOString().split('T')[0]
+        const dateKey = toLocaleDateKey(new Date(shift.start_time))
         if (!shiftsByDate[dateKey]) shiftsByDate[dateKey] = []
         shiftsByDate[dateKey].push(shift)
     })
@@ -266,7 +276,7 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
             if (start >= startDate && start <= pastEnd) {
                 // Exclude TEAM shifts on days with absences
                 if (s.type?.toUpperCase() === 'TEAM') {
-                    const dateKey = start.toISOString().split('T')[0]
+                    const dateKey = toLocaleDateKey(start)
                     if (pastAbsenceDays.has(dateKey)) return
                 }
                 pastShifts.push(s)
@@ -276,7 +286,7 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
         // Group past shifts by date to detect TD1+TD2 combinations
         const pastShiftsByDate = {}
         pastShifts.forEach(shift => {
-            const dateKey = new Date(shift.start_time).toISOString().split('T')[0]
+            const dateKey = toLocaleDateKey(new Date(shift.start_time))
             if (!pastShiftsByDate[dateKey]) pastShiftsByDate[dateKey] = []
             pastShiftsByDate[dateKey].push(shift)
         })
