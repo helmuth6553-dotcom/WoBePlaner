@@ -9,6 +9,14 @@ import { calculateMonthlyHistory } from '../utils/monthlyHistory'
 import { calculateWorkHours, calculateDailyAbsenceHours, processInterruptions, MANDATORY_SHIFT_TYPES } from '../utils/timeCalculations'
 import { getHolidays, isHoliday } from '../utils/holidays'
 
+/** Extract 'YYYY-MM-DD' using LOCAL timezone (avoids UTC date shift) */
+const toLocaleDateKey = (d) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+}
+
 const SHIFT_TYPE_LABELS = {
     TD: 'Tagdienst',
     TD1: 'Tagdienst 1',
@@ -227,7 +235,7 @@ export default function ProfileStats() {
             const absEnd = new Date(Math.min(mEnd, new Date(abs.end_date)))
             if (absStart <= absEnd) {
                 eachDayOfInterval({ start: absStart, end: absEnd }).forEach(d => {
-                    if (!isWeekend(d)) myAbsenceDays.add(d.toISOString().split('T')[0])
+                    if (!isWeekend(d)) myAbsenceDays.add(toLocaleDateKey(d))
                 })
             }
         })
@@ -238,7 +246,7 @@ export default function ProfileStats() {
             if (!isSameMonth(d, targetDate)) return false
             // Exclude TEAM shifts on days with absences
             if (s.type?.toUpperCase() === 'TEAM') {
-                const dateKey = d.toISOString().split('T')[0]
+                const dateKey = toLocaleDateKey(d)
                 if (myAbsenceDays.has(dateKey)) return false
             }
             return true
@@ -251,7 +259,7 @@ export default function ProfileStats() {
         // Group shifts by date to detect TD1+TD2 pairs
         const shiftsByDate = {}
         currentShifts.forEach(shift => {
-            const dateKey = new Date(shift.start_time).toISOString().split('T')[0]
+            const dateKey = toLocaleDateKey(new Date(shift.start_time))
             if (!shiftsByDate[dateKey]) shiftsByDate[dateKey] = []
             shiftsByDate[dateKey].push(shift)
         })
