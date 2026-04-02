@@ -216,7 +216,7 @@ export default function TimeTracking() {
         if (!currentProfile) {
             const { data: profile } = await supabase
                 .from('profiles')
-                .select('weekly_hours, start_date')
+                .select('weekly_hours, start_date, initial_balance')
                 .eq('id', user.id)
                 .single()
             if (profile) {
