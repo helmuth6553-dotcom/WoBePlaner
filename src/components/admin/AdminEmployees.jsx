@@ -215,7 +215,7 @@ export default function AdminEmployees() {
             start_date: formData.start_date,
             vacation_days_per_year: formData.vacation_days_per_year,
             role: formData.role,
-            initial_balance: formData.initial_balance
+            initial_balance: parseFloat(String(formData.initial_balance).replace(',', '.')) || 0
         }
 
         const { error } = await supabase.from('profiles').update(updatePayload).eq('id', editingUser.id)
@@ -511,25 +511,26 @@ export default function AdminEmployees() {
                                 <input
                                     type="text"
                                     inputMode="decimal"
-                                    pattern="-?[0-9]*\.?[0-9]*"
+                                    pattern="-?[0-9]*[.,]?[0-9]*"
                                     value={formData.initial_balance}
                                     onChange={e => {
                                         const val = e.target.value
-                                        // Allow empty, minus sign, or valid numbers
-                                        if (val === '' || val === '-' || !isNaN(parseFloat(val))) {
-                                            setFormData({ ...formData, initial_balance: val === '' || val === '-' ? val : parseFloat(val) })
+                                        // Allow empty, minus sign, or numbers with comma/dot as decimal separator
+                                        if (val === '' || val === '-' || /^-?\d*[.,]?\d*$/.test(val)) {
+                                            setFormData({ ...formData, initial_balance: val })
                                         }
                                     }}
                                     onBlur={e => {
-                                        // On blur, ensure it's a valid number
-                                        const val = parseFloat(e.target.value) || 0
+                                        // On blur, normalize comma to dot and parse to number
+                                        const normalized = e.target.value.replace(',', '.')
+                                        const val = parseFloat(normalized) || 0
                                         setFormData({ ...formData, initial_balance: val })
                                     }}
                                     className="w-full border p-2 rounded-lg text-center text-lg font-bold"
                                     disabled={isCreatingUser}
                                     placeholder="0"
                                 />
-                                <p className="text-xs text-gray-500 mt-1">z.B. -10 für Minusstunden, +15 für Überstunden</p>
+                                <p className="text-xs text-gray-500 mt-1">z.B. -10,5 für Minusstunden, +15,25 für Überstunden</p>
                             </div>
 
                             <div>
