@@ -60,6 +60,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     const [isLogModalOpen, setIsLogModalOpen] = useState(false)
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { } })
     const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' })
+    const [calendarExportConfirmOpen, setCalendarExportConfirmOpen] = useState(false)
 
     const [myProfile, setMyProfile] = useState(null)
     const [allMyShifts, setAllMyShifts] = useState([])
@@ -903,6 +904,8 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     }
 
     // Handler for calendar export
+    const handleCalendarExportClick = () => setCalendarExportConfirmOpen(true)
+
     const handleCalendarExport = () => {
         // Get all shifts where user is assigned or has interest (for current month view)
         const myShiftsForMonth = shifts.filter(shift => {
@@ -1040,7 +1043,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                 <div className="flex gap-1.5 items-center">
                                     {!isAdmin && (
                                         <button
-                                            onClick={handleCalendarExport}
+                                            onClick={handleCalendarExportClick}
                                             className="p-1.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-100"
                                             title="Dienste in Kalender exportieren"
                                         >
@@ -1289,6 +1292,17 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                 message={confirmConfig.message}
                 isDestructive={confirmConfig.isDestructive}
                 confirmText={confirmConfig.confirmText}
+            />
+
+            <ConfirmModal
+                isOpen={calendarExportConfirmOpen}
+                onClose={() => setCalendarExportConfirmOpen(false)}
+                onConfirm={() => { setCalendarExportConfirmOpen(false); handleCalendarExport() }}
+                title="Dienste exportieren"
+                message="Deine Dienste für diesen Monat werden als Kalenderdatei (.ics) heruntergeladen. Diese Datei kannst du in Google Calendar, Apple Kalender oder Outlook importieren."
+                confirmText="Exportieren"
+                cancelText="Abbrechen"
+                icon={Calendar}
             />
 
             <AlertModal
