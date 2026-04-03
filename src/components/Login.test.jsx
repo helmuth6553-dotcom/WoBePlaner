@@ -22,9 +22,18 @@ vi.mock('../supabase', () => ({
     }
 }))
 
-// Now import the component and the mocked module
+// Mock AuthContext to provide loginError/clearLoginError without a real AuthProvider
+vi.mock('../AuthContext', () => ({
+    useAuth: vi.fn(() => ({
+        loginError: null,
+        clearLoginError: vi.fn()
+    }))
+}))
+
+// Now import the component and the mocked modules
 import Login from './Login'
 import { supabase } from '../supabase'
+import { useAuth } from '../AuthContext'
 
 // Helper to render Login with Router (required for Link components)
 const renderLogin = () => {
@@ -45,6 +54,8 @@ describe('Login Component', () => {
     beforeEach(() => {
         // Reset all mocks before each test
         vi.clearAllMocks()
+        // Restore default useAuth mock (individual tests may override with mockReturnValue)
+        useAuth.mockReturnValue({ loginError: null, clearLoginError: vi.fn() })
     })
 
     // =========================================================================
@@ -285,6 +296,58 @@ describe('Login Component', () => {
     })
 
     // =========================================================================
+    // DEACTIVATION ERROR TESTS
+    // =========================================================================
+
+    describe('Deactivation Error', () => {
+        it('displays loginError from AuthContext', () => {
+            useAuth.mockReturnValue({
+                loginError: 'Dein Account wurde deaktiviert. Wende dich an den Administrator.',
+                clearLoginError: vi.fn()
+            })
+
+            renderLogin()
+
+            expect(screen.getByText('Dein Account wurde deaktiviert. Wende dich an den Administrator.')).toBeInTheDocument()
+        })
+
+        it('loginError box has red styling', () => {
+            useAuth.mockReturnValue({
+                loginError: 'Dein Account wurde deaktiviert. Wende dich an den Administrator.',
+                clearLoginError: vi.fn()
+            })
+
+            renderLogin()
+
+            const errorDiv = screen.getByText(/deaktiviert/i).closest('div')
+            expect(errorDiv).toHaveClass('bg-red-50')
+        })
+
+        it('loginError takes priority over message in display', async () => {
+            useAuth.mockReturnValue({
+                loginError: 'Dein Account wurde deaktiviert. Wende dich an den Administrator.',
+                clearLoginError: vi.fn()
+            })
+            supabase.auth.signInWithPassword.mockResolvedValue({
+                data: null,
+                error: { message: 'Invalid login credentials' }
+            })
+
+            const user = userEvent.setup()
+            renderLogin()
+
+            await user.type(getEmailInput(), 'test@example.com')
+            await user.type(getPasswordInput(), 'wrong')
+            await user.click(getSubmitButton())
+
+            await waitFor(() => {
+                // loginError takes priority via `loginError || message`
+                expect(screen.getByText(/deaktiviert/i)).toBeInTheDocument()
+            })
+        })
+    })
+
+    // =========================================================================
     // SECURITY TESTS
     // =========================================================================
 
@@ -310,6 +373,21 @@ describe('Login Component', () => {
             await user.click(screen.getByText(/passwort vergessen/i))
 
             expect(screen.queryByText('Some error')).not.toBeInTheDocument()
+        })
+
+        it('calls clearLoginError at the start of handleLogin', async () => {
+            const clearLoginError = vi.fn()
+            useAuth.mockReturnValue({ loginError: null, clearLoginError })
+            supabase.auth.signInWithPassword.mockResolvedValue({ data: {}, error: null })
+
+            const user = userEvent.setup()
+            renderLogin()
+
+            await user.type(getEmailInput(), 'test@example.com')
+            await user.type(getPasswordInput(), 'password')
+            await user.click(getSubmitButton())
+
+            expect(clearLoginError).toHaveBeenCalledTimes(1)
         })
 
         it('does not expose password in visible text', () => {

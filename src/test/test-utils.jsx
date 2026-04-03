@@ -163,7 +163,9 @@ export function createMockAuthContext(userType = 'employee') {
         isAdmin: user?.role === 'admin',
         passwordSet: user?.password_set ?? true,
         loading: false,
-        session: user ? { access_token: 'mock-token' } : null
+        session: user ? { access_token: 'mock-token' } : null,
+        loginError: null,
+        clearLoginError: vi.fn()
     }
 }
 

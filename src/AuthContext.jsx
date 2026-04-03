@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { setUserContext, clearUserContext, addBreadcrumb } from './lib/sentry.js'
 
-const AuthContext = createContext()
+export const AuthContext = createContext()
 
 export const AuthProvider = ({ children }) => {
 
@@ -11,13 +11,15 @@ export const AuthProvider = ({ children }) => {
     const [role, setRole] = useState(null)
     const [passwordSet, setPasswordSet] = useState(true) // Default true for existing users
     const [loading, setLoading] = useState(true)
+    const [loginError, setLoginError] = useState(null)
+    const clearLoginError = () => setLoginError(null)
 
     const fetchRole = async (userId) => {
         try {
             if (!userId) {
                 setRole(null)
                 setPasswordSet(true)
-                return
+                return true
             }
             // Timeout for fetchRole specifically
             const timeoutPromise = new Promise((_, reject) =>
@@ -26,7 +28,7 @@ export const AuthProvider = ({ children }) => {
 
             const fetchPromise = supabase
                 .from('profiles')
-                .select('role, password_set')
+                .select('role, password_set, is_active')
                 .eq('id', userId)
                 .single()
 
@@ -36,15 +38,24 @@ export const AuthProvider = ({ children }) => {
                 console.error('Error fetching role:', error)
                 setRole('user')
                 setPasswordSet(true) // Assume set if we can't check
-            } else {
-                setRole(data?.role || 'user')
-                // password_set might be null for old users, treat as true
-                setPasswordSet(data?.password_set !== false)
+                return true // fail open
             }
+
+            // is_active === false (strict) blocks login; null/undefined treated as active
+            if (data?.is_active === false) {
+                setLoginError('Dein Account wurde deaktiviert. Wende dich an den Administrator.')
+                return false
+            }
+
+            setRole(data?.role || 'user')
+            // password_set might be null for old users, treat as true
+            setPasswordSet(data?.password_set !== false)
+            return true
         } catch (e) {
             console.error('Exception/Timeout fetching role:', e)
             setRole('user')
             setPasswordSet(true)
+            return true // fail open
         }
     }
 
@@ -66,13 +77,19 @@ export const AuthProvider = ({ children }) => {
                 if (error) throw error
 
                 if (mounted) {
-                    setUser(session?.user ?? null)
                     if (session?.user) {
-                        await fetchRole(session.user.id)
-                        // Set Sentry user context for error tracking
-                        setUserContext(session.user)
-                        addBreadcrumb('auth', 'User logged in')
+                        const isActive = await fetchRole(session.user.id)
+                        if (!mounted) return
+                        if (isActive) {
+                            setUser(session.user)
+                            // Set Sentry user context for error tracking
+                            setUserContext(session.user)
+                            addBreadcrumb('auth', 'User logged in')
+                        } else {
+                            supabase.auth.signOut() // fire-and-forget
+                        }
                     } else {
+                        setUser(null)
                         clearUserContext()
                     }
                 }
@@ -88,20 +105,28 @@ export const AuthProvider = ({ children }) => {
 
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            if (mounted) {
-                setUser(session?.user ?? null)
-                if (session?.user) {
-                    fetchRole(session.user.id)
+            if (!mounted) return
+
+            if (session?.user) {
+                const isActive = await fetchRole(session.user.id)
+                if (!mounted) return
+                if (isActive) {
+                    setUser(session.user)
                     // Update Sentry user context
                     setUserContext(session.user)
                     addBreadcrumb('auth', `Auth state changed: ${_event}`)
                 } else {
-                    setRole(null)
-                    clearUserContext()
-                    addBreadcrumb('auth', 'User logged out')
+                    // fire-and-forget — kein await um Deadlock im Auth-Callback zu vermeiden
+                    supabase.auth.signOut()
                 }
-                setLoading(false)
+            } else {
+                // SIGNED_OUT — loginError NICHT löschen (muss für deaktivierte User erhalten bleiben)
+                setUser(null)
+                setRole(null)
+                clearUserContext()
+                addBreadcrumb('auth', 'User logged out')
             }
+            setLoading(false)
         })
 
         return () => {
@@ -131,7 +156,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ user, role, isAdmin, isViewer, loading, passwordSet, refreshPasswordSet }}>
+        <AuthContext.Provider value={{ user, role, isAdmin, isViewer, loading, passwordSet, refreshPasswordSet, loginError, clearLoginError }}>
             {children}
         </AuthContext.Provider>
     )
