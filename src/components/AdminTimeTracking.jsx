@@ -386,15 +386,24 @@ export default function AdminTimeTracking() {
                     return eDate === entryDate
                 })
                 if (td2) {
-                    // Calculate combined hours from shift times (not DB values which may be stale)
+                    // Sum individual entry hours, deducting any overlap (Übergabezeit)
                     const combinedStart = entry.actual_start || entry.shifts?.start_time
                     const combinedEnd = td2.actual_end || td2.shifts?.end_time
-                    const combinedHours = calculateWorkHours(combinedStart, combinedEnd, 'TD')
+                    let combinedHours = (Number(entry.calculated_hours) || 0) + (Number(td2.calculated_hours) || 0)
+
+                    // Deduct any overlap between entries (for legacy data; new saves have no overlap)
+                    if (entry.actual_end && td2.actual_start) {
+                        const e1End = new Date(entry.actual_end)
+                        const e2Start = new Date(td2.actual_start)
+                        const overlapMs = Math.max(0, e1End - e2Start)
+                        combinedHours -= overlapMs / (1000 * 60 * 60)
+                    }
+
                     merged.push({
                         ...entry,
                         shifts: { ...entry.shifts, type: 'TD', start_time: entry.shifts?.start_time, end_time: td2.shifts?.end_time },
-                        actual_start: entry.actual_start || entry.shifts?.start_time,
-                        actual_end: td2.actual_end || td2.shifts?.end_time,
+                        actual_start: combinedStart,
+                        actual_end: combinedEnd,
                         calculated_hours: combinedHours,
                         isMerged: true,
                         is_flex: entry.is_flex || td2.is_flex,

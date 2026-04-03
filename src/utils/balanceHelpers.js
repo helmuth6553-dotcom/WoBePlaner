@@ -211,21 +211,43 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
                 trackInterruptions(td1Entry)
                 trackInterruptions(td2Entry)
             } else {
-                // Individual entries — add both minus handover overlap
-                const td1Hours = td1Entry?.calculated_hours !== undefined
-                    ? td1Entry.calculated_hours
-                    : calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
+                // Individual entries — add both
+                // Safety: validate entry hours against planned shift duration
+                // If entry hours > 150% of planned hours, likely stale merged data → recalculate
+                const td1PlannedHours = calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
+                const td2PlannedHours = calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
 
-                const td2Hours = td2Entry?.calculated_hours !== undefined
+                let td1Hours = td1Entry?.calculated_hours !== undefined
+                    ? td1Entry.calculated_hours
+                    : td1PlannedHours
+
+                let td2Hours = td2Entry?.calculated_hours !== undefined
                     ? td2Entry.calculated_hours
-                    : calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
+                    : td2PlannedHours
+
+                // Guard: if entry hours are suspiciously high (>150% of planned), use planned hours
+                if (td1Entry?.calculated_hours > td1PlannedHours * 1.5) {
+                    td1Hours = td1PlannedHours
+                }
+                if (td2Entry?.calculated_hours > td2PlannedHours * 1.5) {
+                    td2Hours = td2PlannedHours
+                }
 
                 actualMinutes += (td1Hours + td2Hours) * 60
-                // Eliminate handover overlap when same person works both TD1+TD2
-                const td1End = new Date(td1.end_time)
-                const td2Start = new Date(td2.start_time)
-                const overlapMs = Math.max(0, td1End - td2Start)
-                const overlapMinutes = overlapMs / (1000 * 60)
+
+                // Smart handover deduction: only deduct if entries actually overlap in time.
+                // New entries (saved with fix) have TD2 starting at TD1's end → no overlap.
+                // Legacy entries may still have the old overlap → deduct correctly.
+                const td1ActualEnd = td1Entry?.actual_end ? new Date(td1Entry.actual_end) : new Date(td1.end_time)
+                const td2ActualStart = td2Entry?.actual_start ? new Date(td2Entry.actual_start) : new Date(td2.start_time)
+                const entryOverlapMs = Math.max(0, td1ActualEnd - td2ActualStart)
+                const entryOverlapMinutes = entryOverlapMs / (1000 * 60)
+
+                // If no entries exist, use planned shift overlap (backwards compat)
+                const overlapMinutes = (!td1Entry && !td2Entry)
+                    ? Math.max(0, new Date(td1.end_time) - new Date(td2.start_time)) / (1000 * 60)
+                    : entryOverlapMinutes
+
                 actualMinutes -= overlapMinutes
                 trackShiftType('TD1', td1Hours, 1)
                 trackShiftType('TD2', td2Hours - (overlapMinutes / 60), 1)
@@ -314,20 +336,38 @@ export const calculateGenericBalance = (profile, historyShifts, historyAbsences,
                     const mergedHours = td1Entry.calculated_hours || 0
                     pastActual += mergedHours * 60
                 } else {
-                    const td1Hours = td1Entry?.calculated_hours !== undefined
-                        ? td1Entry.calculated_hours
-                        : calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
+                    // Safety: validate entry hours against planned shift duration
+                    const td1PlannedHours = calculateWorkHours(td1.start_time, td1.end_time, 'TD1')
+                    const td2PlannedHours = calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
 
-                    const td2Hours = td2Entry?.calculated_hours !== undefined
+                    let td1Hours = td1Entry?.calculated_hours !== undefined
+                        ? td1Entry.calculated_hours
+                        : td1PlannedHours
+
+                    let td2Hours = td2Entry?.calculated_hours !== undefined
                         ? td2Entry.calculated_hours
-                        : calculateWorkHours(td2.start_time, td2.end_time, 'TD2')
+                        : td2PlannedHours
+
+                    // Guard: if entry hours are suspiciously high (>150% of planned), use planned hours
+                    if (td1Entry?.calculated_hours > td1PlannedHours * 1.5) {
+                        td1Hours = td1PlannedHours
+                    }
+                    if (td2Entry?.calculated_hours > td2PlannedHours * 1.5) {
+                        td2Hours = td2PlannedHours
+                    }
 
                     pastActual += (td1Hours + td2Hours) * 60
-                    // Eliminate handover overlap when same person works both TD1+TD2
-                    const td1End = new Date(td1.end_time)
-                    const td2Start = new Date(td2.start_time)
-                    const overlapMs = Math.max(0, td1End - td2Start)
-                    pastActual -= overlapMs / (1000 * 60)
+
+                    // Smart handover deduction: check actual entry overlap
+                    const td1ActualEnd = td1Entry?.actual_end ? new Date(td1Entry.actual_end) : new Date(td1.end_time)
+                    const td2ActualStart = td2Entry?.actual_start ? new Date(td2Entry.actual_start) : new Date(td2.start_time)
+                    const entryOverlapMs = Math.max(0, td1ActualEnd - td2ActualStart)
+
+                    const overlapMinutes = (!td1Entry && !td2Entry)
+                        ? Math.max(0, new Date(td1.end_time) - new Date(td2.start_time)) / (1000 * 60)
+                        : entryOverlapMs / (1000 * 60)
+
+                    pastActual -= overlapMinutes
                 }
                 processedPastIds.add(td1.id)
                 processedPastIds.add(td2.id)

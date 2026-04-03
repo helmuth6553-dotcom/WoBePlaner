@@ -552,14 +552,23 @@ export default function TimeTracking() {
                 if (entry) entriesMap[shift.id] = entry
             })
 
-            // Map merged TD items: combine hours from both original entries
+            // Map merged TD items: sum hours from individual entries
             mergedItems.filter(i => i.isMerged).forEach(merged => {
                 const entries = merged.mergedIds.map(id => allTimeEntries.find(e => e.shift_id === id)).filter(Boolean)
                 if (entries.length > 0) {
-                    // Calculate from combined shift times (not DB values which may be stale)
+                    // Sum individual entry hours, deducting any overlap (Übergabezeit)
                     const combinedStart = entries[0].actual_start || merged.mergedOriginals[0].start_time
-                    const combinedEnd = entries[entries.length - 1].actual_end || merged.mergedOriginals[1].end_time
-                    const combinedHours = calculateWorkHours(combinedStart, combinedEnd, 'TD')
+                    const combinedEnd = entries[entries.length - 1].actual_end || merged.mergedOriginals[Math.min(entries.length - 1, merged.mergedOriginals.length - 1)].end_time
+                    let combinedHours = entries.reduce((sum, e) => sum + (Number(e.calculated_hours) || 0), 0)
+
+                    // Deduct any overlap between entries (for legacy data; new saves have no overlap)
+                    if (entries.length === 2) {
+                        const e1End = new Date(entries[0].actual_end)
+                        const e2Start = new Date(entries[1].actual_start)
+                        const overlapMs = Math.max(0, e1End - e2Start)
+                        combinedHours -= overlapMs / (1000 * 60 * 60)
+                    }
+
                     entriesMap[merged.id] = {
                         ...entries[0],
                         calculated_hours: combinedHours,
@@ -694,14 +703,51 @@ export default function TimeTracking() {
 
         if (editingItem.itemType === 'shift') {
             if (editingItem.isMerged) {
-                // Merged TD1+TD2: save entry for each original shift
-                for (const origId of editingItem.mergedIds) {
-                    const origPayload = { ...payload, shift_id: origId }
+                // Merged TD1+TD2: save SEPARATE hours for each original shift
+                // Split the continuous work period at TD1's planned end to eliminate
+                // the handover overlap (Übergabezeit). TD1 gets start→splitPoint, TD2 gets splitPoint→end.
+                const [td1Orig, td2Orig] = editingItem.mergedOriginals
+                const td1PlannedEnd = new Date(td1Orig.end_time)
+
+                for (const orig of [td1Orig, td2Orig]) {
+                    const isTd1 = orig.type === 'TD1' || orig.type === 'TAGDIENST'
+                    
+                    let effectiveStart, effectiveEnd
+
+                    if (isTd1) {
+                        // TD1: from actual start to the earlier of (actual end, TD1 planned end)
+                        effectiveStart = startIso
+                        const userEnd = new Date(endIso)
+                        effectiveEnd = userEnd <= td1PlannedEnd 
+                            ? endIso 
+                            : constructIso(td1Orig.end_time, format(parseISO(td1Orig.end_time), 'HH:mm'))
+                    } else {
+                        // TD2: from TD1's planned end to actual end (eliminates handover overlap)
+                        const userStart = new Date(startIso)
+                        effectiveStart = userStart >= td1PlannedEnd 
+                            ? startIso 
+                            : constructIso(td1Orig.end_time, format(parseISO(td1Orig.end_time), 'HH:mm'))
+                        effectiveEnd = endIso
+                    }
+
+                    // Guard: skip if effective range is invalid (end <= start)
+                    const shiftHours = new Date(effectiveEnd) > new Date(effectiveStart)
+                        ? calculateWorkHours(effectiveStart, effectiveEnd, orig.type)
+                        : 0
+
+                    const origPayload = {
+                        ...payload,
+                        shift_id: orig.id,
+                        actual_start: effectiveStart,
+                        actual_end: effectiveEnd,
+                        calculated_hours: shiftHours
+                    }
+
                     const { data: existing } = await supabase
                         .from('time_entries')
                         .select('id')
                         .eq('user_id', user.id)
-                        .eq('shift_id', origId)
+                        .eq('shift_id', orig.id)
                         .maybeSingle()
                     if (existing) {
                         await supabase.from('time_entries').update(origPayload).eq('id', existing.id)
