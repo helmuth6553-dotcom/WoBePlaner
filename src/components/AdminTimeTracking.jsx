@@ -40,7 +40,7 @@ export default function AdminTimeTracking() {
 
     // Fetch Users with their status for current month
     const fetchUsers = async () => {
-        const { data } = await supabase.from('profiles').select('*').or('is_active.eq.true,is_active.is.null').neq('role', 'admin').order('full_name')
+        const { data } = await supabase.from('profiles').select('*').or('is_active.eq.true,is_active.is.null').neq('role', 'admin').neq('role', 'viewer').order('full_name')
 
         // Fetch status for selected month
         const [year, month] = selectedMonth.split('-').map(Number)

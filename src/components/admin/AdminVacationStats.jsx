@@ -21,6 +21,7 @@ export default function AdminVacationStats() {
             .select('id, full_name, display_name, email, vacation_days_per_year, start_date')
             .or('is_active.eq.true,is_active.is.null')
             .neq('role', 'admin')
+            .neq('role', 'viewer')
             .order('full_name')
 
         if (!profiles) {

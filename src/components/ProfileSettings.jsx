@@ -42,7 +42,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
         window.location.reload()
     }
 
-    const roleLabel = profile?.role === 'admin' ? 'Administrator' : 'Mitarbeiter'
+    const roleLabel = profile?.role === 'admin' ? 'Administrator' : profile?.role === 'viewer' ? 'Zuschauer' : 'Mitarbeiter'
     const startDate = profile?.start_date ? format(new Date(profile.start_date), 'd. MMMM yyyy', { locale: de }) : '—'
 
     return (
@@ -68,6 +68,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
                         </div>
                         <p className="text-sm font-bold text-gray-700">{roleLabel}</p>
                     </div>
+                    {profile?.role !== 'viewer' && (
                     <div className="bg-gray-50 rounded-xl p-3">
                         <div className="flex items-center gap-1.5 text-gray-400 mb-1">
                             <Calendar size={12} />
@@ -75,6 +76,8 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
                         </div>
                         <p className="text-sm font-bold text-gray-700">{startDate}</p>
                     </div>
+                    )}
+                    {profile?.role !== 'viewer' && (
                     <div className="bg-gray-50 rounded-xl p-3">
                         <div className="flex items-center gap-1.5 text-gray-400 mb-1">
                             <Clock size={12} />
@@ -82,6 +85,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
                         </div>
                         <p className="text-sm font-bold text-gray-700">{profile?.weekly_hours || 40}h</p>
                     </div>
+                    )}
                     <div className="bg-gray-50 rounded-xl p-3">
                         <div className="flex items-center gap-1.5 text-gray-400 mb-1">
                             <User size={12} />
