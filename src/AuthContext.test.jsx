@@ -21,12 +21,14 @@ vi.mock('./lib/sentry.js', () => ({
 let mockGetSession = vi.fn()
 let mockOnAuthStateChange = vi.fn()
 let mockProfileSelect = vi.fn()
+let mockSignOut = vi.fn()
 
 vi.mock('./supabase', () => ({
     supabase: {
         auth: {
             getSession: (...args) => mockGetSession(...args),
             onAuthStateChange: (...args) => mockOnAuthStateChange(...args),
+            signOut: (...args) => mockSignOut(...args),
         },
         from: vi.fn(() => ({
             select: vi.fn(() => ({
@@ -39,7 +41,7 @@ vi.mock('./supabase', () => ({
 }))
 
 function AuthConsumer() {
-    const { user, role, isAdmin, loading, passwordSet } = useAuth()
+    const { user, role, isAdmin, loading, passwordSet, loginError } = useAuth()
     return (
         <div>
             <span data-testid="loading">{String(loading)}</span>
@@ -47,6 +49,7 @@ function AuthConsumer() {
             <span data-testid="role">{role || 'null'}</span>
             <span data-testid="isAdmin">{String(isAdmin)}</span>
             <span data-testid="passwordSet">{String(passwordSet)}</span>
+            <span data-testid="loginError">{loginError || 'null'}</span>
         </div>
     )
 }
@@ -67,8 +70,10 @@ beforeEach(() => {
         data: { subscription: { unsubscribe: vi.fn() } },
     })
 
+    mockSignOut.mockResolvedValue({ error: null })
+
     mockProfileSelect.mockResolvedValue({
-        data: { role: 'user', password_set: true },
+        data: { role: 'user', password_set: true, is_active: true },
         error: null,
     })
 })
@@ -398,6 +403,149 @@ describe('AuthProvider', () => {
         expect(contextValue).toHaveProperty('loading')
         expect(contextValue).toHaveProperty('passwordSet')
         expect(contextValue).toHaveProperty('refreshPasswordSet')
+        expect(contextValue).toHaveProperty('loginError')
+        expect(contextValue).toHaveProperty('clearLoginError')
+    })
+
+    // =========================================================================
+    // DEACTIVATION TESTS
+    // =========================================================================
+
+    it('blocks deactivated user on session restore', async () => {
+        mockGetSession.mockResolvedValue({
+            data: {
+                session: {
+                    user: { id: 'deact-1', email: 'deact@example.com' },
+                },
+            },
+            error: null,
+        })
+        mockProfileSelect.mockResolvedValue({
+            data: { role: 'user', password_set: true, is_active: false },
+            error: null,
+        })
+
+        render(
+            <AuthProvider>
+                <AuthConsumer />
+            </AuthProvider>
+        )
+
+        await waitFor(() => {
+            expect(screen.getByTestId('loading').textContent).toBe('false')
+        })
+
+        expect(screen.getByTestId('user').textContent).toBe('null')
+        expect(screen.getByTestId('loginError').textContent).toBe(
+            'Dein Account wurde deaktiviert. Wende dich an den Administrator.'
+        )
+        expect(mockSignOut).toHaveBeenCalled()
+    })
+
+    it('treats null is_active as active (backward compatibility)', async () => {
+        mockGetSession.mockResolvedValue({
+            data: {
+                session: {
+                    user: { id: 'old-2', email: 'old2@example.com' },
+                },
+            },
+            error: null,
+        })
+        mockProfileSelect.mockResolvedValue({
+            data: { role: 'user', password_set: true, is_active: null },
+            error: null,
+        })
+
+        render(
+            <AuthProvider>
+                <AuthConsumer />
+            </AuthProvider>
+        )
+
+        await waitFor(() => {
+            expect(screen.getByTestId('user').textContent).toBe('old2@example.com')
+        })
+
+        expect(screen.getByTestId('loginError').textContent).toBe('null')
+        expect(mockSignOut).not.toHaveBeenCalled()
+    })
+
+    it('blocks deactivated user on SIGNED_IN auth event', async () => {
+        let authCallback = null
+        mockOnAuthStateChange.mockImplementation((cb) => {
+            authCallback = cb
+            return { data: { subscription: { unsubscribe: vi.fn() } } }
+        })
+        mockProfileSelect.mockResolvedValue({
+            data: { role: 'user', password_set: true, is_active: false },
+            error: null,
+        })
+
+        render(
+            <AuthProvider>
+                <AuthConsumer />
+            </AuthProvider>
+        )
+
+        await waitFor(() => {
+            expect(screen.getByTestId('loading').textContent).toBe('false')
+        })
+
+        await act(async () => {
+            await authCallback('SIGNED_IN', {
+                user: { id: 'deact-2', email: 'deact2@example.com' },
+            })
+        })
+
+        await waitFor(() => {
+            expect(screen.getByTestId('loginError').textContent).toBe(
+                'Dein Account wurde deaktiviert. Wende dich an den Administrator.'
+            )
+        })
+
+        expect(screen.getByTestId('user').textContent).toBe('null')
+        expect(mockSignOut).toHaveBeenCalled()
+    })
+
+    it('preserves loginError through subsequent SIGNED_OUT event', async () => {
+        let authCallback = null
+        mockOnAuthStateChange.mockImplementation((cb) => {
+            authCallback = cb
+            return { data: { subscription: { unsubscribe: vi.fn() } } }
+        })
+        mockProfileSelect.mockResolvedValue({
+            data: { role: 'user', password_set: true, is_active: false },
+            error: null,
+        })
+
+        render(
+            <AuthProvider>
+                <AuthConsumer />
+            </AuthProvider>
+        )
+
+        await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
+
+        // Trigger deactivated login
+        await act(async () => {
+            await authCallback('SIGNED_IN', {
+                user: { id: 'deact-3', email: 'deact3@example.com' },
+            })
+        })
+
+        await waitFor(() => {
+            expect(screen.getByTestId('loginError').textContent).not.toBe('null')
+        })
+
+        // Simulate the subsequent SIGNED_OUT (fired by our signOut() call)
+        await act(async () => {
+            await authCallback('SIGNED_OUT', null)
+        })
+
+        // loginError must still be present
+        expect(screen.getByTestId('loginError').textContent).toBe(
+            'Dein Account wurde deaktiviert. Wende dich an den Administrator.'
+        )
     })
 
     it('handles profile fetch timeout gracefully', async () => {

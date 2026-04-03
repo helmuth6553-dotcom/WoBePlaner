@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { useAuth } from '../AuthContext'
 
 export default function Login() {
+    const { loginError, clearLoginError } = useAuth()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
@@ -13,6 +15,7 @@ export default function Login() {
         e.preventDefault()
         setLoading(true)
         setMessage('')
+        clearLoginError()
 
         let error
         if (useMagicLink) {
@@ -46,9 +49,9 @@ export default function Login() {
                     {useMagicLink ? 'Login per Link' : 'WoBePlaner'}
                 </h1>
 
-                {message && (
+                {(message || loginError) && (
                     <div className={`p-3 rounded-lg text-sm mb-6 border ${message.includes('Checke') ? 'bg-green-50 text-green-800 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-                        {message}
+                        {loginError || message}
                     </div>
                 )}
 
