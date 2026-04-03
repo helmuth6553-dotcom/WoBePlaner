@@ -192,8 +192,8 @@ export default function AdminVacationCalendar() {
                                                     {abs.profiles?.display_name || abs.profiles?.full_name?.split(' ')[0]}
                                                 </div>
                                             ))}
-                                            {dayAbsences.length > 3 && (
-                                                <div className="text-[8px] text-gray-400">+{dayAbsences.length - 3}</div>
+                                            {dayAbsences.length > 5 && (
+                                                <div className="text-[8px] text-gray-400">+{dayAbsences.length - 5}</div>
                                             )}
                                         </div>
                                     </div>
