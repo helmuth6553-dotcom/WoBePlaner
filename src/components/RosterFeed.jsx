@@ -989,7 +989,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     const teamBalances = useMemo(() => {
         if (!isAdmin) return []
 
-        return allProfiles.filter(p => p.role !== 'admin').reduce((results, profile) => {
+        return allProfiles.filter(p => p.role !== 'admin' && p.role !== 'viewer').reduce((results, profile) => {
             const b = calcProfileBalance(profile)
             if (b) {
                 results.push({
@@ -1019,7 +1019,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                     <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1 hover:bg-white rounded-md transition-colors"><ChevronRight size={18} /></button>
                                 </div>
 
-                                {balance && !isAdmin && (
+                                {balance && !isAdmin && !isViewer && (
                                     <button
                                         onClick={toggleBalanceExpand}
                                         className={`px-3 py-1.5 rounded-full text-sm font-bold border transition-colors ${balance.total >= 0
@@ -1041,7 +1041,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                 </div>
 
                                 <div className="flex gap-1.5 items-center">
-                                    {!isAdmin && (
+                                    {!isAdmin && !isViewer && (
                                         <button
                                             onClick={handleCalendarExportClick}
                                             className="p-1.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-100"

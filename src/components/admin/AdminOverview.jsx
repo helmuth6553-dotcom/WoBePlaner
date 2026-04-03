@@ -329,7 +329,7 @@ export default function AdminOverview() {
         let flexCount = 0
         let sickCount = 0
         const swapCount = monthSwaps.length
-        const employees = profiles?.filter(p => p.role !== 'admin') || []
+        const employees = profiles?.filter(p => p.role !== 'admin' && p.role !== 'viewer') || []
 
         // Build per-employee absence day sets to exclude TEAM shifts on vacation/sick days
         const empAbsenceDays = {}

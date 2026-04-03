@@ -46,6 +46,7 @@ export default function AdminVacationCalendar() {
             .select('id, full_name, display_name, role')
             .or('is_active.eq.true,is_active.is.null')
             .neq('role', 'admin')
+            .neq('role', 'viewer')
 
         setAbsences(absData || [])
         setProfiles(profileData || [])

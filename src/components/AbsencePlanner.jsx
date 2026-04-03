@@ -576,7 +576,7 @@ export default function AbsencePlanner({ initialDate }) {
             </div>
 
             {/* Compact Stats Card - Only for Non-Admins */}
-            {!isAdmin && myStats && (
+            {!isAdmin && !isViewer && myStats && (
                 <div className="px-4 mb-3 shrink-0">
                     <div className="bg-white p-3 rounded-xl shadow-sm flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -703,7 +703,7 @@ export default function AbsencePlanner({ initialDate }) {
             )}
 
             {/* My Requests List */}
-            {!isAdmin && (
+            {!isAdmin && !isViewer && (
                 <div className="px-4 mt-8 shrink-0">
                     <h3 className="font-bold text-lg mb-4 text-gray-900">Meine Anträge</h3>
                     <div className="space-y-3">
