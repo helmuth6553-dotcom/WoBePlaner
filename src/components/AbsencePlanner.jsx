@@ -150,8 +150,9 @@ export default function AbsencePlanner({ initialDate }) {
         const start = selectionStart
         const end = selectionEnd || selectionStart
 
-        // Check vacation limit (max 3 employees per day)
-        const MAX_VACATION_PER_DAY = 3
+        // Check vacation limit (hard block at 5, warning at 3-4)
+        const MAX_VACATION_PER_DAY = 5
+        const VACATION_WARNING_THRESHOLD = 3
         const days = eachDayOfInterval({ start, end })
         const workDays = days.filter(d => !isWeekend(d) && !getHoliday(d))
 
@@ -167,9 +168,28 @@ export default function AbsencePlanner({ initialDate }) {
             if (count >= MAX_VACATION_PER_DAY) {
                 setAlertConfig({
                     isOpen: true,
-                    title: 'Urlaubslimit erreicht',
-                    message: `Am ${format(day, 'dd.MM.yyyy')} haben bereits ${count} Mitarbeiter Urlaub. Maximal ${MAX_VACATION_PER_DAY} gleichzeitig erlaubt.`,
+                    title: 'Urlaubsantrag nicht möglich',
+                    message: `Am ${format(day, 'dd.MM.yyyy')} haben bereits ${count} Mitarbeiter Urlaub beantragt oder genehmigt. Ein weiterer Antrag ist für diesen Zeitraum nicht möglich.`,
                     type: 'error'
+                })
+                return
+            }
+
+            if (count >= VACATION_WARNING_THRESHOLD) {
+                const payload = {
+                    user_id: user.id,
+                    start_date: format(start, 'yyyy-MM-dd'),
+                    end_date: format(end, 'yyyy-MM-dd'),
+                    type: 'Urlaub',
+                    status: 'beantragt'
+                }
+                setConfirmConfig({
+                    isOpen: true,
+                    title: 'Hohe Urlaubsüberschneidung',
+                    message: `Am ${format(day, 'dd.MM.yyyy')} haben bereits ${count} Mitarbeiter Urlaub beantragt oder genehmigt. Laut interner Vereinbarung sollten maximal 3 Mitarbeiter gleichzeitig abwesend sein. Du kannst den Antrag trotzdem einreichen — die Genehmigung liegt im Ermessen der Teamleitung.`,
+                    confirmText: 'Trotzdem beantragen',
+                    isDestructive: false,
+                    onConfirm: () => setSignatureConfig({ isOpen: true, payload })
                 })
                 return
             }
