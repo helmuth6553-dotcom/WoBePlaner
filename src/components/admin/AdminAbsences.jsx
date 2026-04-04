@@ -202,9 +202,12 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
                             <span className="font-bold text-lg">{req.profiles?.full_name || req.profiles?.email}</span>
                             <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-0.5 rounded uppercase">{req.type}</span>
                         </div>
-                        <p className="text-gray-600 flex items-center gap-2 mb-2">
+                        <p className="text-gray-600 flex items-center gap-2 mb-1">
                             <Calendar size={14} />{format(new Date(req.start_date), 'dd.MM.yyyy')} - {format(new Date(req.end_date), 'dd.MM.yyyy')}
                         </p>
+                        {req.created_at && (
+                            <p className="text-xs text-gray-400 mb-2">Eingereicht am {format(new Date(req.created_at), 'dd.MM.yyyy')}</p>
+                        )}
                         {/* VIEW IN CALENDAR BUTTON */}
                         <button
                             onClick={() => onNavigateToCalendar && onNavigateToCalendar(req.start_date)}
@@ -231,6 +234,9 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
                         <p className="text-gray-500 flex items-center gap-2 text-xs sm:text-sm">
                             <Calendar size={12} />{format(new Date(req.start_date), 'dd.MM.yyyy')} - {format(new Date(req.end_date), 'dd.MM.yyyy')}
                         </p>
+                        {req.created_at && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">Eingereicht am {format(new Date(req.created_at), 'dd.MM.yyyy')}</p>
+                        )}
                     </div>
                     <div className="flex gap-2 items-center w-full sm:w-auto justify-end mt-2 sm:mt-0">
                         <span className={`px-2 py-1 rounded text-[10px] sms:text-xs font-bold uppercase whitespace-nowrap ${req.status === 'genehmigt' ? 'bg-green-100 text-green-800' : req.status === 'storniert' ? 'bg-gray-200 text-gray-600 line-through' : 'bg-red-100 text-red-800'}`}>{req.status}</span>
