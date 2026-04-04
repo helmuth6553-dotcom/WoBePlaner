@@ -285,17 +285,21 @@ export function ShiftTemplateProvider({ children }) {
 
     // Dienstzeit in DB speichern und lokalen State aktualisieren
     const updateShiftTimeConfig = useCallback(async (shiftType, updates) => {
+        // Optimistisches Update — Wochenplan und Kontext reagieren sofort
+        setDbConfigs(prev => ({
+            ...prev,
+            [shiftType]: { ...(prev[shiftType] || { shift_type: shiftType }), ...updates },
+        }))
+
         const { error } = await supabase
             .from('shift_time_configs')
             .upsert(
                 { shift_type: shiftType, ...updates, updated_at: new Date().toISOString() },
                 { onConflict: 'shift_type' }
             )
-        if (!error) {
-            setDbConfigs(prev => ({
-                ...prev,
-                [shiftType]: { ...(prev[shiftType] || { shift_type: shiftType }), ...updates },
-            }))
+
+        if (error) {
+            console.error('Fehler beim Speichern der Dienstzeit:', error)
         }
         return !error
     }, [])

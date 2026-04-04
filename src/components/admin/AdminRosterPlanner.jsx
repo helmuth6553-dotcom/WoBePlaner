@@ -30,13 +30,12 @@ function formatTimeRange(start, end) {
 
 // ─── Dienstzeiten-Konfiguration ──────────────────────────────────────────────
 
-function TimeInput({ value, onChange, onBlur }) {
+function TimeInput({ value, onChange }) {
     return (
         <input
             type="time"
             value={value}
             onChange={e => onChange(e.target.value)}
-            onBlur={onBlur}
             className="border border-gray-200 rounded-lg px-2 py-1 text-sm font-mono text-gray-800 focus:outline-none focus:ring-2 focus:ring-black w-[90px]"
         />
     )
@@ -45,27 +44,54 @@ function TimeInput({ value, onChange, onBlur }) {
 function DienstzeitenRow({ template, dbConfig, onUpdate }) {
     const db = dbConfig || {}
 
-    // Lokaler State für sofortiges UI-Feedback
-    const [start, setStart] = useState(db.start_time?.slice(0, 5) ?? template.start_time)
-    const [end, setEnd] = useState(db.end_time?.slice(0, 5) ?? template.end_time)
-    const [wStart, setWStart] = useState(db.weekend_start?.slice(0, 5) ?? '')
-    const [wEnd, setWEnd] = useState(db.weekend_end?.slice(0, 5) ?? '')
-    const [hStart, setHStart] = useState(db.holiday_start?.slice(0, 5) ?? '')
-    const [hEnd, setHEnd] = useState(db.holiday_end?.slice(0, 5) ?? '')
-    const [fse, setFse] = useState(db.fri_sat_end?.slice(0, 5) ?? '')
-    const [saving, setSaving] = useState(false)
+    // Gespeicherte Werte (aus DB/Context) — Referenzwerte für dirty-check
+    const savedStart = db.start_time?.slice(0, 5) ?? template.start_time
+    const savedEnd = db.end_time?.slice(0, 5) ?? template.end_time
+    const savedWStart = db.weekend_start?.slice(0, 5) ?? ''
+    const savedWEnd = db.weekend_end?.slice(0, 5) ?? ''
+    const savedHStart = db.holiday_start?.slice(0, 5) ?? ''
+    const savedHEnd = db.holiday_end?.slice(0, 5) ?? ''
+    const savedFse = db.fri_sat_end?.slice(0, 5) ?? ''
 
-    const save = useCallback(async (updates) => {
-        setSaving(true)
-        await onUpdate(template.code, updates)
-        setSaving(false)
-    }, [onUpdate, template.code])
+    // Lokaler Bearbeitungs-State
+    const [start, setStart] = useState(savedStart)
+    const [end, setEnd] = useState(savedEnd)
+    const [wStart, setWStart] = useState(savedWStart)
+    const [wEnd, setWEnd] = useState(savedWEnd)
+    const [hStart, setHStart] = useState(savedHStart)
+    const [hEnd, setHEnd] = useState(savedHEnd)
+    const [fse, setFse] = useState(savedFse)
+    const [saving, setSaving] = useState(false)
+    const [justSaved, setJustSaved] = useState(false)
 
     const hasOverrides = wStart || wEnd || hStart || hEnd || fse
     const [showOverrides, setShowOverrides] = useState(!!hasOverrides)
 
-    // spans_midnight auto-detect für Anzeige
-    const spansMidnight = end === '00:00' || (end < start && end !== '')
+    // Erkennt ob etwas geändert wurde (Vergleich mit gespeicherten Werten)
+    const isDirty = start !== savedStart || end !== savedEnd ||
+        wStart !== savedWStart || wEnd !== savedWEnd ||
+        hStart !== savedHStart || hEnd !== savedHEnd ||
+        fse !== savedFse
+
+    const spansMidnight = end !== '' && end !== '00:00' && end < start
+
+    const handleSave = async () => {
+        setSaving(true)
+        const success = await onUpdate(template.code, {
+            start_time: start,
+            end_time: end,
+            weekend_start: wStart || null,
+            weekend_end: wEnd || null,
+            holiday_start: hStart || null,
+            holiday_end: hEnd || null,
+            fri_sat_end: fse || null,
+        })
+        setSaving(false)
+        if (success) {
+            setJustSaved(true)
+            setTimeout(() => setJustSaved(false), 2000)
+        }
+    }
 
     return (
         <div className="py-3 border-b border-gray-50 last:border-0">
@@ -77,29 +103,33 @@ function DienstzeitenRow({ template, dbConfig, onUpdate }) {
                 >
                     {template.code}
                 </div>
-                <TimeInput
-                    value={start}
-                    onChange={setStart}
-                    onBlur={() => save({ start_time: start })}
-                />
+                <TimeInput value={start} onChange={setStart} />
                 <span className="text-gray-400 text-sm">–</span>
-                <TimeInput
-                    value={end}
-                    onChange={setEnd}
-                    onBlur={() => save({ end_time: end })}
-                />
+                <TimeInput value={end} onChange={setEnd} />
                 {spansMidnight && (
                     <span className="text-[10px] text-gray-400 font-medium">↺ übernacht</span>
                 )}
-                {saving && <span className="text-[10px] text-gray-400 animate-pulse">…</span>}
-                {(template.weekday_rules && Object.keys(template.weekday_rules).length > 0) && (
-                    <button
-                        onClick={() => setShowOverrides(o => !o)}
-                        className="ml-auto text-xs text-gray-400 hover:text-gray-600 font-medium"
-                    >
-                        {showOverrides ? 'Sonderzeiten ▲' : 'Sonderzeiten ▼'}
-                    </button>
-                )}
+
+                <div className="ml-auto flex items-center gap-2">
+                    {isDirty && !saving && (
+                        <button
+                            onClick={handleSave}
+                            className="px-3 py-1 bg-teal-500 text-white text-xs font-bold rounded-lg active:scale-95 transition-all hover:bg-teal-600"
+                        >
+                            Speichern
+                        </button>
+                    )}
+                    {saving && <span className="text-[10px] text-gray-400 animate-pulse">Wird gespeichert…</span>}
+                    {justSaved && !isDirty && <span className="text-[10px] text-teal-500 font-medium">✓ Gespeichert</span>}
+                    {(template.weekday_rules && Object.keys(template.weekday_rules).length > 0) && (
+                        <button
+                            onClick={() => setShowOverrides(o => !o)}
+                            className="text-xs text-gray-400 hover:text-gray-600 font-medium"
+                        >
+                            {showOverrides ? 'Sonderzeiten ▲' : 'Sonderzeiten ▼'}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Sonderzeiten-Override */}
@@ -109,25 +139,25 @@ function DienstzeitenRow({ template, dbConfig, onUpdate }) {
                     {(template.weekday_rules?.saturday || wStart || wEnd) && (
                         <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                             <span className="w-20 shrink-0">Sa/So:</span>
-                            <TimeInput value={wStart} onChange={setWStart} onBlur={() => save({ weekend_start: wStart || null })} />
+                            <TimeInput value={wStart} onChange={setWStart} />
                             <span className="text-gray-400">–</span>
-                            <TimeInput value={wEnd} onChange={setWEnd} onBlur={() => save({ weekend_end: wEnd || null })} />
+                            <TimeInput value={wEnd} onChange={setWEnd} />
                         </div>
                     )}
                     {/* Feiertag */}
                     {(template.weekday_rules?.holiday || hStart || hEnd) && (
                         <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                             <span className="w-20 shrink-0">Feiertag:</span>
-                            <TimeInput value={hStart} onChange={setHStart} onBlur={() => save({ holiday_start: hStart || null })} />
+                            <TimeInput value={hStart} onChange={setHStart} />
                             <span className="text-gray-400">–</span>
-                            <TimeInput value={hEnd} onChange={setHEnd} onBlur={() => save({ holiday_end: hEnd || null })} />
+                            <TimeInput value={hEnd} onChange={setHEnd} />
                         </div>
                     )}
                     {/* Fr/Sa-Ende (hauptsächlich ND) */}
                     {(template.weekday_rules?.friday || fse) && (
                         <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                             <span className="w-20 shrink-0">Fr/Sa Ende:</span>
-                            <TimeInput value={fse} onChange={setFse} onBlur={() => save({ fri_sat_end: fse || null })} />
+                            <TimeInput value={fse} onChange={setFse} />
                         </div>
                     )}
                 </div>
