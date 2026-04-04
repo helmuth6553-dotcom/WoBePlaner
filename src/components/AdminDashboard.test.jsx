@@ -28,6 +28,9 @@ vi.mock('./admin/AdminVacationStats', () => ({
 vi.mock('./admin/AdminVacationCalendar', () => ({
     default: () => <div data-testid="admin-calendar">AdminVacationCalendar</div>
 }))
+vi.mock('./admin/AdminRosterPlanner', () => ({
+    default: () => <div data-testid="admin-planner">AdminRosterPlanner</div>
+}))
 
 describe('AdminDashboard', () => {
     it('renders dashboard title', () => {
@@ -40,8 +43,9 @@ describe('AdminDashboard', () => {
         expect(screen.getByTestId('admin-overview')).toBeInTheDocument()
     })
 
-    it('renders all 7 tab buttons', () => {
+    it('renders all 8 tab buttons', () => {
         render(<AdminDashboard />)
+        expect(screen.getByText('Dienstplan')).toBeInTheDocument()
         expect(screen.getByText('Audit')).toBeInTheDocument()
         expect(screen.getByText('Mitarbeiter')).toBeInTheDocument()
         expect(screen.getByText('Anträge')).toBeInTheDocument()
@@ -108,7 +112,7 @@ describe('AdminDashboard', () => {
     it('only shows one panel at a time', () => {
         render(<AdminDashboard />)
         // Default is overview
-        const panels = ['admin-overview', 'admin-audit', 'admin-employees', 'admin-absences', 'admin-sick', 'admin-vacation', 'admin-calendar']
+        const panels = ['admin-overview', 'admin-audit', 'admin-employees', 'admin-absences', 'admin-sick', 'admin-vacation', 'admin-calendar', 'admin-planner']
         const visible = panels.filter(id => screen.queryByTestId(id))
         expect(visible).toHaveLength(1)
         expect(visible[0]).toBe('admin-overview')

@@ -2,8 +2,17 @@
  * Tests for shiftDefaults utility
  * Verifies default start/end times for all shift types including weekday rules.
  */
-import { describe, it, expect } from 'vitest'
-import { getDefaultTimes } from './shiftDefaults'
+import { describe, it, expect, vi } from 'vitest'
+import { getDefaultTimes } from '../contexts/ShiftTemplateContext'
+
+// Mock Supabase — getDefaultTimes verwendet Hardcode-Defaults, kein DB-Zugriff
+vi.mock('../supabase', () => ({
+    supabase: {
+        from: vi.fn(() => ({
+            select: vi.fn(() => Promise.resolve({ data: null, error: null }))
+        }))
+    }
+}))
 
 describe('getDefaultTimes', () => {
     // =============================================================================

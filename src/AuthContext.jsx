@@ -36,8 +36,8 @@ export const AuthProvider = ({ children }) => {
 
             if (error) {
                 console.error('Error fetching role:', error)
-                setRole('user')
-                setPasswordSet(true) // Assume set if we can't check
+                // Don't downgrade role on error — keep existing role intact
+                // (prevents admin losing access during network glitches / Realtime reconnects)
                 return true // fail open
             }
 
@@ -53,8 +53,7 @@ export const AuthProvider = ({ children }) => {
             return true
         } catch (e) {
             console.error('Exception/Timeout fetching role:', e)
-            setRole('user')
-            setPasswordSet(true)
+            // Don't downgrade role on error — keep existing role intact
             return true // fail open
         }
     }
@@ -107,7 +106,17 @@ export const AuthProvider = ({ children }) => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (!mounted) return
 
+            // INITIAL_SESSION is already handled by initAuth above — skip to avoid duplicate fetchRole calls
+            if (_event === 'INITIAL_SESSION') return
+
             if (session?.user) {
+                // TOKEN_REFRESHED: only update user object (new JWT), role hasn't changed
+                // Avoids re-fetching role on every Realtime reconnect (which would risk role degradation on error)
+                if (_event === 'TOKEN_REFRESHED') {
+                    setUser(session.user)
+                    return
+                }
+
                 const isActive = await fetchRole(session.user.id)
                 if (!mounted) return
                 if (isActive) {

@@ -4,9 +4,18 @@
  * Verifies shift templates, default times, weekday rules,
  * and private shift type detection.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { ShiftTemplateProvider, useShiftTemplates, PRIVATE_SHIFT_TYPES } from './ShiftTemplateContext'
+
+// Mock Supabase — DB-Konfigurationen werden in diesen Tests nicht benötigt
+vi.mock('../supabase', () => ({
+    supabase: {
+        from: vi.fn(() => ({
+            select: vi.fn(() => Promise.resolve({ data: null, error: null }))
+        }))
+    }
+}))
 
 const wrapper = ({ children }) => (
     <ShiftTemplateProvider>{children}</ShiftTemplateProvider>

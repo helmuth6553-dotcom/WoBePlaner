@@ -19,7 +19,8 @@ import { useHolidays } from '../hooks/useHolidays'
 import { validateShiftRules as importedValidateShiftRules } from '../utils/rosterRules'
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { calculateWorkHours } from '../utils/timeCalculations'
-import { getDefaultTimes } from '../utils/shiftDefaults'
+import { useShiftTemplates } from '../contexts/ShiftTemplateContext'
+import { getHolidays } from '../utils/holidays'
 import PullToRefresh from './PullToRefresh'
 import { downloadICalFile } from '../utils/calendarExport'
 import { calculateAllFairnessIndices } from '../utils/fairnessIndex'
@@ -87,6 +88,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     const [allCoverageVoteHistory, setAllCoverageVoteHistory] = useState([])
 
     const { getHoliday } = useHolidays()
+    const { getDefaultTimes } = useShiftTemplates()
 
     // === Admin-only: Fetch all team data for TeamPanel ===
     const fetchAdminTeamData = async () => {
@@ -1180,10 +1182,11 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                         onCreateShift={async (dateStr, type) => {
                                                             if (!isAdmin) return
 
-                                                            // Use the robust utility to get Local Date Objects for start/end
-                                                            // This handles rules for ND/TD1/TD2 etc.
-                                                            // We pass specific holidays if we had them, otherwise default check.
-                                                            const { start, end } = getDefaultTimes(dateStr, type)
+                                                            const { start, end } = getDefaultTimes(
+                                                                dateStr,
+                                                                type,
+                                                                getHolidays(new Date(dateStr).getFullYear())
+                                                            )
 
                                                             if (!start || !end) {
                                                                 setAlertConfig({ isOpen: true, title: 'Fehler', message: 'Konnte Zeiten nicht berechnen.', type: 'error' })

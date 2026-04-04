@@ -199,7 +199,7 @@ describe('AuthProvider', () => {
         })
     })
 
-    it('defaults to role=user when profile fetch fails', async () => {
+    it('keeps existing role (null on initial) when profile fetch fails — does not downgrade to user', async () => {
         mockGetSession.mockResolvedValue({
             data: {
                 session: {
@@ -220,9 +220,11 @@ describe('AuthProvider', () => {
         )
 
         await waitFor(() => {
-            expect(screen.getByTestId('role').textContent).toBe('user')
+            expect(screen.getByTestId('loading').textContent).toBe('false')
         })
 
+        // Role stays null (initial state) — NOT downgraded to 'user'
+        expect(screen.getByTestId('role').textContent).toBe('null')
         expect(screen.getByTestId('passwordSet').textContent).toBe('true')
     })
 
@@ -572,8 +574,8 @@ describe('AuthProvider', () => {
             expect(screen.getByTestId('loading').textContent).toBe('false')
         }, { timeout: 10000 })
 
-        // Should default to 'user' role on timeout
-        expect(screen.getByTestId('role').textContent).toBe('user')
+        // Role stays null (initial state) — NOT downgraded to 'user' on timeout
+        expect(screen.getByTestId('role').textContent).toBe('null')
         expect(screen.getByTestId('passwordSet').textContent).toBe('true')
     }, 15000)
 })
