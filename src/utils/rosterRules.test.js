@@ -54,7 +54,7 @@ describe('validateShiftRules', () => {
             { start_time: '2025-01-15T19:00:00', type: 'ND' },
             [],
             user,
-            [{ start_time: '2025-01-15T12:00:00', type: 'TD2', assigned_to: 'user-1' }]
+            [{ start_time: '2025-01-15T12:00:00', type: 'TD2', interests: [{ user_id: 'user-1' }] }]
         )
         expect(result).toContain('nicht kombinierbar')
     })
@@ -64,7 +64,7 @@ describe('validateShiftRules', () => {
             { start_time: '2025-01-15T19:00:00', type: 'ND' },
             [],
             user,
-            [{ start_time: '2025-01-15T07:00:00', type: 'DBD', assigned_to: 'user-1' }]
+            [{ start_time: '2025-01-15T07:00:00', type: 'DBD', interests: [{ user_id: 'user-1' }] }]
         )
         expect(result).toContain('nicht kombinierbar')
     })
@@ -74,7 +74,7 @@ describe('validateShiftRules', () => {
             { start_time: '2025-01-16T08:00:00', type: 'TD1' },
             [],
             user,
-            [{ start_time: '2025-01-15T19:00:00', type: 'ND', assigned_to: 'user-1' }]
+            [{ start_time: '2025-01-15T19:00:00', type: 'ND', interests: [{ user_id: 'user-1' }] }]
         )
         expect(result).toContain('Ruhezeit')
     })
@@ -84,7 +84,7 @@ describe('validateShiftRules', () => {
             { start_time: '2025-01-15T19:00:00', type: 'ND' },
             [],
             user,
-            [{ start_time: '2025-01-16T08:00:00', type: 'TD1', assigned_to: 'user-1' }]
+            [{ start_time: '2025-01-16T08:00:00', type: 'TD1', interests: [{ user_id: 'user-1' }] }]
         )
         expect(result).toContain('Ruhezeit')
     })
@@ -94,7 +94,7 @@ describe('validateShiftRules', () => {
             { start_time: '2025-01-15T12:00:00', type: 'TD2' },
             [],
             user,
-            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', assigned_to: 'user-1' }]
+            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', interests: [{ user_id: 'user-1' }] }]
         )
         expect(result).toBeNull()
     })
@@ -104,7 +104,7 @@ describe('validateShiftRules', () => {
             { start_time: '2025-01-15T19:00:00', type: 'ND' },
             [],
             user,
-            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', assigned_to: 'user-1' }]
+            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', interests: [{ user_id: 'user-1' }] }]
         )
         expect(result).toBeNull()
     })
@@ -115,7 +115,7 @@ describe('validateShiftRules', () => {
             { start_time: '2025-01-16T08:00:00', type: 'Tagdienst' },
             [],
             user,
-            [{ start_time: '2025-01-15T19:00:00', type: 'Nachtdienst', assigned_to: 'user-1' }]
+            [{ start_time: '2025-01-15T19:00:00', type: 'Nachtdienst', interests: [{ user_id: 'user-1' }] }]
         )
         expect(result).toContain('Ruhezeit')
     })

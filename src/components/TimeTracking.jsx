@@ -303,21 +303,7 @@ export default function TimeTracking() {
 
         }
 
-        // Also get shifts directly assigned (for backwards compatibility)
-        const { data: assignments } = await supabase
-            .from('shifts')
-            .select('id, start_time, end_time, type, assigned_to')
-            .eq('assigned_to', user.id)
-            .gte('start_time', startIso)
-            .lte('start_time', endIso)
-
-        // Merge both sources, avoiding duplicates
         const allPersonalShifts = [...confirmedShifts]
-        assignments?.forEach(a => {
-            if (!allPersonalShifts.some(s => s.id === a.id)) {
-                allPersonalShifts.push(a)
-            }
-        })
 
         // FILTER: Remove shifts before start_date
         const effectiveStartDate = currentProfile?.start_date ? new Date(currentProfile.start_date) : null
@@ -603,13 +589,8 @@ export default function TimeTracking() {
         try {
             const { data: allMyInterests } = await supabase
                 .from('shift_interests')
-                .select('shift:shifts(id, start_time, end_time, assigned_to, type)')
+                .select('shift:shifts(id, start_time, end_time, type)')
                 .eq('user_id', user.id)
-
-            const { data: allMyDirectShifts } = await supabase
-                .from('shifts')
-                .select('id, start_time, end_time, assigned_to, type')
-                .eq('assigned_to', user.id)
 
             const { data: allTeamShifts } = await supabase
                 .from('shifts')
@@ -618,9 +599,6 @@ export default function TimeTracking() {
 
             const rawShiftsFromInterests = allMyInterests?.map(i => i.shift).filter(Boolean) || []
             const globalShifts = [...rawShiftsFromInterests]
-            ;(allMyDirectShifts || []).forEach(s => {
-                if (!globalShifts.some(h => h.id === s.id)) globalShifts.push(s)
-            })
             ;(allTeamShifts || []).forEach(s => {
                 if (!globalShifts.some(h => h.id === s.id)) globalShifts.push(s)
             })

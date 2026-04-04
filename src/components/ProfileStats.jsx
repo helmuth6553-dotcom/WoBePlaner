@@ -147,13 +147,8 @@ export default function ProfileStats() {
 
         const { data: myInterests } = await supabase
             .from('shift_interests')
-            .select('shift:shifts(id, start_time, end_time, assigned_to, type)')
+            .select('shift:shifts(id, start_time, end_time, type)')
             .eq('user_id', user.id)
-
-        const { data: myDirectShifts } = await supabase
-            .from('shifts')
-            .select('id, start_time, end_time, assigned_to, type')
-            .eq('assigned_to', user.id)
 
         const { data: teamShifts } = await supabase
             .from('shifts')
@@ -162,9 +157,6 @@ export default function ProfileStats() {
 
         const shiftsFromInterests = myInterests?.map(i => i.shift).filter(s => s) || []
         const allMyShifts = [...shiftsFromInterests]
-            ; (myDirectShifts || []).forEach(s => {
-                if (!allMyShifts.some(h => h.id === s.id)) allMyShifts.push(s)
-            })
             ; (teamShifts || []).forEach(s => {
                 if (!allMyShifts.some(h => h.id === s.id)) allMyShifts.push(s)
             })
@@ -552,14 +544,6 @@ export default function ProfileStats() {
             .select('shift:shifts(id, start_time, end_time, type, title)')
             .eq('user_id', user.id)
 
-        const { data: directShifts } = await supabase
-            .from('shifts')
-            .select('id, start_time, end_time, type, title')
-            .eq('assigned_to', user.id)
-            .gte('start_time', now)
-            .order('start_time', { ascending: true })
-            .limit(5)
-
         const { data: teamShifts } = await supabase
             .from('shifts')
             .select('id, start_time, end_time, type, title')
@@ -570,7 +554,6 @@ export default function ProfileStats() {
 
         const allUpcoming = [
             ...(interestShifts?.map(i => i.shift).filter(s => s && s.start_time >= now) || []),
-            ...(directShifts || []),
             ...(teamShifts || []),
         ]
 

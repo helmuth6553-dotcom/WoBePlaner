@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { getDaysInMonth, getDate, isSameMonth, isValid, format } from 'date-fns'
 
 function getShiftDotColor(dayShifts, userId) {
-    if (dayShifts.some(s => s.assigned_to === userId)) return 'bg-teal-500'
     if (dayShifts.some(s => s.interests?.some(i => i.user_id !== userId))) return 'bg-yellow-400'
     return 'bg-green-500'
 }
@@ -77,7 +76,7 @@ export default function MonthMinimap({ shifts, currentDate, userId, absences = [
         if (!s.start_time) return false
         const d = new Date(s.start_time)
         return isValid(d) && isSameMonth(d, currentDate) && (
-            s.interests?.some(i => i.user_id === userId) || s.assigned_to === userId
+            s.interests?.some(i => i.user_id === userId)
         )
     })
 

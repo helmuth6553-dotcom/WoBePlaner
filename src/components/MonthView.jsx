@@ -1,6 +1,6 @@
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { User, Check } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { useHolidays } from '../hooks/useHolidays'
 
 const getUserColor = (name) => {
@@ -57,15 +57,11 @@ export default function MonthView({ shiftsByDate, userId, isAdmin, onToggleInter
         }
 
         const myInterest = shift.interests?.find(i => i.user_id === userId)
-        const isAssigned = shift.assigned_to === userId
-        const isMine = myInterest || isAssigned
+        const isMine = !!myInterest
         const isUrgent = shift.is_freigabe || shift.urgent_since
 
-        // Get all interested/assigned users
+        // Get all interested users
         const assignedUsers = []
-        if (shift.assigned_profile) {
-            assignedUsers.push(shift.assigned_profile)
-        }
         shift.interests?.forEach(i => {
             if (i.profiles && !assignedUsers.find(u => u.email === i.profiles.email)) {
                 assignedUsers.push(i.profiles)
@@ -83,8 +79,7 @@ export default function MonthView({ shiftsByDate, userId, isAdmin, onToggleInter
             // Use first name only for color hash (consistent with DayCard)
             const firstName = getDisplayName(profile) // This returns first name only
             const colorClass = getUserColor(firstName)
-            const isMe = profile.email === myInterest?.profiles?.email ||
-                (shift.assigned_to === userId && shift.assigned_profile?.email === profile.email)
+            const isMe = profile.email === myInterest?.profiles?.email
 
             return (
                 <div
@@ -119,8 +114,7 @@ export default function MonthView({ shiftsByDate, userId, isAdmin, onToggleInter
                     assignedUsers.slice(0, 2).map((profile, idx) => {
                         const firstName = getDisplayName(profile)
                         const colorClass = getUserColor(firstName)
-                        const isMe = profile.email === myInterest?.profiles?.email ||
-                            (shift.assigned_to === userId && shift.assigned_profile?.email === profile.email)
+                        const isMe = profile.email === myInterest?.profiles?.email
 
                         return (
                             <div
