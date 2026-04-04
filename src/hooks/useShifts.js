@@ -86,23 +86,9 @@ export function useShifts(userId, selectedMonth, options = {}) {
                     .filter(Boolean)
             }
 
-            // 2. Get directly assigned shifts (backwards compatibility)
-            const { data: assignments } = await supabase
-                .from('shifts')
-                .select('*')
-                .eq('assigned_to', userId)
-                .gte('start_time', startIso)
-                .lte('start_time', endIso)
-
-            // Merge, avoiding duplicates
             const allPersonalShifts = [...confirmedShifts]
-            assignments?.forEach(a => {
-                if (!allPersonalShifts.some(s => s.id === a.id)) {
-                    allPersonalShifts.push(a)
-                }
-            })
 
-            // 3. Get TEAM shifts (mandatory for everyone)
+            // 2. Get TEAM shifts (mandatory for everyone)
             const { data: teamShifts } = await supabase
                 .from('shifts')
                 .select('*')

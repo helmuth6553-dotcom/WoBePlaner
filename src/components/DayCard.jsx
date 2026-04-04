@@ -255,7 +255,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         let iconBg = "bg-gray-100 text-gray-500"
 
         // Urgency Logic - only show as urgent if no one has shown interest yet
-        const isUrgent = !!shift.urgent_since && !shift.assigned_to && interestNames.length === 0
+        const isUrgent = !!shift.urgent_since && interestNames.length === 0
 
         if (interestNames.length === 1) {
             // Single User - Special Display
@@ -658,7 +658,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                     {USE_COVERAGE_VOTING && !isViewer && ['TD1', 'TD2', 'ND', 'DBD', 'AST'].map(slotCode => {
                         const shift = shifts.find(s => s.type === slotCode)
                         if (!shift) return null
-                        const isUrgentShift = !!shift.urgent_since && !shift.assigned_to && (!shift.interests || shift.interests.length === 0)
+                        const isUrgentShift = !!shift.urgent_since && (!shift.interests || shift.interests.length === 0)
                         const coverageReq = coverageRequests.find(cr => cr.shift_id === shift.id)
                         if (!isUrgentShift || !coverageReq) return null
 

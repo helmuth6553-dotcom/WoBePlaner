@@ -414,8 +414,8 @@ export default function AdminOverview() {
             totalInterruptionNetGain += (res.creditedMinutes - res.deductedReadinessMinutes * 0.5) / 60
         })
 
-        const nightShiftCount = shifts?.filter(s => s.type === 'ND' && (s.assigned_to || monthInterests.some(i => i.shift_id === s.id))).length || 0
-        const weekendShiftCount = shifts?.filter(s => { const d = new Date(s.start_time); return (d.getDay() === 0 || d.getDay() === 6) && (s.assigned_to || monthInterests.some(i => i.shift_id === s.id)) }).length || 0
+        const nightShiftCount = shifts?.filter(s => s.type === 'ND' && monthInterests.some(i => i.shift_id === s.id)).length || 0
+        const weekendShiftCount = shifts?.filter(s => { const d = new Date(s.start_time); return (d.getDay() === 0 || d.getDay() === 6) && monthInterests.some(i => i.shift_id === s.id) }).length || 0
         const sickByDayOfWeek = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }
         absences?.forEach(abs => { if (abs.type === 'Krank' || abs.type === 'Krankenstand') sickByDayOfWeek[new Date(abs.start_date).getDay()]++ })
 
@@ -432,8 +432,7 @@ export default function AdminOverview() {
                 if (SPECIAL_TYPES.has(type)) {
                     return monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
                 }
-                return s.assigned_to === emp.id
-                    || monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
+                return monthInterests.some(i => i.shift_id === s.id && i.user_id === emp.id)
             }) || []
 
             const empAbsences = absences?.filter(a => a.user_id === emp.id) || []

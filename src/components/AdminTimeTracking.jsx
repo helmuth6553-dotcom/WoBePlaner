@@ -180,21 +180,7 @@ export default function AdminTimeTracking() {
                 .filter(s => s)
         }
 
-        // Also get direct assignments (backwards compatibility)
-        const { data: personalShifts } = await supabase
-            .from('shifts')
-            .select('id, start_time, end_time, type, assigned_to')
-            .eq('assigned_to', selectedUserId)
-            .gte('start_time', startIso)
-            .lte('start_time', endIso)
-
-        // Merge sources
         const allPersonalShifts = [...confirmedShifts]
-        personalShifts?.forEach(a => {
-            if (!allPersonalShifts.some(s => s.id === a.id)) {
-                allPersonalShifts.push(a)
-            }
-        })
 
         // FILTER: Remove shifts before start_date
         const filteredPersonalShifts = effectiveStartDate ? allPersonalShifts.filter(s => {
@@ -503,7 +489,7 @@ export default function AdminTimeTracking() {
 
         // Fetch all data needed for balance: shifts, interests, TEAM shifts, absences, entries, corrections
         const [shiftsRes, interestsRes, teamShiftsRes, absencesRes, entriesRes, corrsRes] = await Promise.all([
-            supabase.from('shifts').select('id, start_time, end_time, type, assigned_to').gte('start_time', oneYearAgo.toISOString()),
+            supabase.from('shifts').select('id, start_time, end_time, type').gte('start_time', oneYearAgo.toISOString()),
             supabase.from('shift_interests').select('shift_id, shifts(*)').eq('user_id', selectedUserId),
             supabase.from('shifts').select('id, start_time, end_time, type').eq('type', 'TEAM').gte('start_time', oneYearAgo.toISOString()),
             supabase.from('absences').select('user_id, start_date, end_date, type, planned_hours, planned_shifts_snapshot, status').eq('user_id', selectedUserId).eq('status', 'genehmigt'),
@@ -538,16 +524,12 @@ export default function AdminTimeTracking() {
                 .filter(Boolean)
         }
 
-        // 2. Shifts via assigned_to (backwards compatibility)
-        const assignedShifts = (shiftsRes.data || []).filter(s => s.assigned_to === selectedUserId)
-
-        // 3. TEAM shifts (mandatory for all)
+        // 2. TEAM shifts (mandatory for all)
         const teamShifts = teamShiftsRes.data || []
 
         // Merge all, deduplicate by ID
         const shiftMap = new Map()
         confirmedFromInterests.forEach(s => shiftMap.set(s.id, s))
-        assignedShifts.forEach(s => { if (!shiftMap.has(s.id)) shiftMap.set(s.id, s) })
         teamShifts.forEach(s => { if (!shiftMap.has(s.id)) shiftMap.set(s.id, s) })
 
         const userShifts = Array.from(shiftMap.values()).map(s => ({

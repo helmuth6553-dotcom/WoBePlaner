@@ -1,14 +1,13 @@
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { User, Check, AlertCircle } from 'lucide-react'
+import { User, Check } from 'lucide-react'
 
 export default function ShiftCard({ shift, userId, onToggleInterest, onAssign, isAdmin }) {
     // Checks
-    const isAssigned = !!shift.assigned_to
-    const amIAssigned = shift.assigned_to === userId
     const interests = shift.interests || []
     const amIInterested = interests.some(i => i.user_id === userId)
     const interestCount = interests.length
+    const isAssigned = interestCount === 1
 
     // Styles basierend auf Status
     let borderColor = "border-gray-200"
@@ -87,7 +86,7 @@ export default function ShiftCard({ shift, userId, onToggleInterest, onAssign, i
 
                 {isAssigned && (
                     <div className="bg-green-50 text-green-800 p-2 rounded text-sm text-center">
-                        Dienst vergeben an: {amIAssigned ? <strong>DICH</strong> : 'Kollege'}
+                        Dienst vergeben an: {amIInterested ? <strong>DICH</strong> : 'Kollege'}
                     </div>
                 )}
             </div>

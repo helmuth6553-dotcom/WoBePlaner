@@ -107,7 +107,6 @@ export function getEligibleUsers(targetShift, sickUserId, allProfiles, allShifts
     return employees.map(emp => {
         // Get this user's shifts (assigned or interested)
         const userShifts = allShifts.filter(s =>
-            s.assigned_to === emp.id ||
             s.interests?.some(i => i.user_id === emp.id)
         )
 

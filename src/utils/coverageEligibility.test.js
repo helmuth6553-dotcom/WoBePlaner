@@ -51,7 +51,7 @@ describe('checkEligibility', () => {
             { start_time: '2025-01-15T08:00:00', type: 'TD1' },
             'user-2',
             'user-1',
-            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', assigned_to: 'user-2' }],
+            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', interests: [{ user_id: 'user-2' }] }],
             []
         )
         expect(result.eligible).toBe(false)
@@ -63,7 +63,7 @@ describe('checkEligibility', () => {
             { start_time: '2025-01-15T19:00:00', type: 'ND' },
             'user-2',
             'user-1',
-            [{ start_time: '2025-01-15T12:00:00', type: 'TD2', assigned_to: 'user-2' }],
+            [{ start_time: '2025-01-15T12:00:00', type: 'TD2', interests: [{ user_id: 'user-2' }] }],
             []
         )
         expect(result.eligible).toBe(false)
@@ -75,7 +75,7 @@ describe('checkEligibility', () => {
             { start_time: '2025-01-15T19:00:00', type: 'ND' },
             'user-2',
             'user-1',
-            [{ start_time: '2025-01-15T07:00:00', type: 'DBD', assigned_to: 'user-2' }],
+            [{ start_time: '2025-01-15T07:00:00', type: 'DBD', interests: [{ user_id: 'user-2' }] }],
             []
         )
         expect(result.eligible).toBe(false)
@@ -86,7 +86,7 @@ describe('checkEligibility', () => {
             { start_time: '2025-01-16T08:00:00', type: 'TD1' },
             'user-2',
             'user-1',
-            [{ start_time: '2025-01-15T19:00:00', type: 'ND', assigned_to: 'user-2' }],
+            [{ start_time: '2025-01-15T19:00:00', type: 'ND', interests: [{ user_id: 'user-2' }] }],
             []
         )
         expect(result.eligible).toBe(false)
@@ -98,7 +98,7 @@ describe('checkEligibility', () => {
             { start_time: '2025-01-15T19:00:00', type: 'ND' },
             'user-2',
             'user-1',
-            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', assigned_to: 'user-2' }],
+            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', interests: [{ user_id: 'user-2' }] }],
             []
         )
         expect(result.eligible).toBe(true)
@@ -109,7 +109,7 @@ describe('checkEligibility', () => {
             { start_time: '2025-01-15T12:00:00', type: 'TD2' },
             'user-2',
             'user-1',
-            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', assigned_to: 'user-2' }],
+            [{ start_time: '2025-01-15T08:00:00', type: 'TD1', interests: [{ user_id: 'user-2' }] }],
             []
         )
         expect(result.eligible).toBe(true)

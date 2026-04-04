@@ -46,7 +46,6 @@ export const validateShiftRules = (targetShift, allAbsences, user, shifts) => {
 
     // Helper to find existing shifts for the user
     const myRelevantShifts = shifts.filter(s =>
-        s.assigned_to === user.id ||
         s.interests?.some(i => i.user_id === user.id)
     )
 

@@ -102,20 +102,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
             type: i.shift?.type
         })).filter(s => s.id) || []
 
-        const { data: directShifts } = await supabase
-            .from('shifts')
-            .select('id, start_time, end_time, type, assigned_to')
-            .not('assigned_to', 'is', null)
-
-        const directMapped = directShifts?.map(s => ({
-            user_id: s.assigned_to,
-            id: s.id,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            type: s.type
-        })) || []
-
-        setAllShiftsHistory(mergeById(interestShifts, directMapped, ['id', 'user_id']))
+        setAllShiftsHistory(interestShifts)
 
         const { data: teamShiftsData } = await supabase
             .from('shifts')
@@ -155,13 +142,8 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
 
         const { data: myInterests } = await supabase
             .from('shift_interests')
-            .select('shift:shifts(id, start_time, end_time, assigned_to, type)')
+            .select('shift:shifts(id, start_time, end_time, type)')
             .eq('user_id', user?.id)
-
-        const { data: myDirectShifts } = await supabase
-            .from('shifts')
-            .select('id, start_time, end_time, assigned_to, type')
-            .eq('assigned_to', user?.id)
 
         const { data: teamShifts } = await supabase
             .from('shifts')
@@ -169,7 +151,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
             .eq('type', 'TEAM')
 
         const shiftsFromInterests = myInterests?.map(i => i.shift).filter(s => s) || []
-        setAllMyShifts(mergeById(mergeById(shiftsFromInterests, myDirectShifts || []), teamShifts || []))
+        setAllMyShifts(mergeById(shiftsFromInterests, teamShifts || []))
 
         const { data: myEntries } = await supabase.from('time_entries').select('shift_id, calculated_hours, actual_start, actual_end').eq('user_id', user?.id)
         if (myEntries) setAllMyTimeEntries(myEntries)
@@ -184,8 +166,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
             .from('shifts')
             .select(`
                 *,
-                interests:shift_interests(*, profiles(email, full_name, display_name)),
-                assigned_profile:profiles!shifts_assigned_to_fkey(email, full_name, display_name)
+                interests:shift_interests(*, profiles(email, full_name, display_name))
             `)
             .gte('start_time', queryStart)
             .lte('start_time', queryEnd)
@@ -290,14 +271,8 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     const handleRealtimeShift = (payload, debouncedFetch) => {
         console.log('[Realtime] shifts:', payload.eventType, payload.new || payload.old)
         if (payload.eventType === 'INSERT' && payload.new) {
-            const newShift = { ...payload.new, interests: [], assigned_profile: null }
+            const newShift = { ...payload.new, interests: [] }
             setShifts(prev => [...prev, newShift].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')))
-            if (payload.new.assigned_to) {
-                setAllShiftsHistory(prev => [...prev, {
-                    user_id: payload.new.assigned_to, id: payload.new.id,
-                    start_time: payload.new.start_time, end_time: payload.new.end_time, type: payload.new.type
-                }])
-            }
             if (payload.new.type === 'TEAM') {
                 setAllTeamShiftsHistory(prev => [...prev, {
                     id: payload.new.id, start_time: payload.new.start_time,
@@ -305,7 +280,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                 }])
             }
         } else if (payload.eventType === 'UPDATE' && payload.new) {
-            const { interests, assigned_profile, ...tableColumns } = payload.new
+            const { interests, ...tableColumns } = payload.new
             setShifts(prev => prev.map(s => s.id === payload.new.id ? { ...s, ...tableColumns } : s))
             setAllShiftsHistory(prev => prev.map(s => s.id === payload.new.id
                 ? { ...s, start_time: payload.new.start_time, end_time: payload.new.end_time, type: payload.new.type }
@@ -459,7 +434,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                 return
             }
             if (!currentlyInterested && actingUserId === user.id) {
-                const isTaken = shift.assigned_to || (shift.interests && shift.interests.length > 0)
+                const isTaken = shift.interests && shift.interests.length > 0
                 if (isTaken) {
                     setAlertConfig({ isOpen: true, title: 'Gesperrt', message: 'Dieser Monat ist geschlossen. Dieser Dienst ist bereits besetzt.', type: 'info' })
                     return
@@ -696,7 +671,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
 
         // Check eligibility using existing conflict rules
         const userShifts = shiftsRef.current.filter(s =>
-            s.assigned_to === user.id || s.interests?.some(i => i.user_id === user.id)
+            s.interests?.some(i => i.user_id === user.id)
         )
         const { eligible, reason } = checkEligibility(shift, user.id, null, userShifts, allAbsences)
         if (!eligible) {
@@ -764,7 +739,6 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         // 2. Calculate total planned hours for shifts the user was assigned to
         let totalPlannedHours = 0
         const myShifts = shiftsInRange?.filter(shift =>
-            shift.assigned_to === user.id ||
             shift.interests?.some(i => i.user_id === user.id) ||
             shift.type === 'TEAM' || // TEAM is mandatory for all employees
             shift.type === 'FORTBILDUNG' // Include FORTBILDUNG if user was participating
@@ -811,7 +785,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
 
             for (const shift of shiftsInRange) {
                 const myInterest = (shift.interests || []).find(i => i.user_id === user.id)
-                if (myInterest || shift.assigned_to === user.id) {
+                if (myInterest) {
                     // Delete interest first
                     if (myInterest) await supabase.from('shift_interests').delete().eq('id', myInterest.id)
 
@@ -866,18 +840,11 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
             const { data: interests, error: intError } = await supabase.from('shift_interests').select('user_id, shift:shifts(id, start_time, end_time, type)')
             if (intError) throw new Error('Interests Error: ' + intError.message)
 
-            const { data: directAssignments, error: dirError } = await supabase.from('shifts').select('id, start_time, end_time, type, assigned_to')
-            if (dirError) throw new Error('Direct Error: ' + dirError.message)
-
             const historyFromInterests = interests?.map(i => ({
                 user_id: i.user_id, id: i.shift?.id, start_time: i.shift?.start_time, end_time: i.shift?.end_time, type: i.shift?.type
             })).filter(s => s.start_time) || []
 
-            const historyFromDirect = directAssignments?.filter(s => s.assigned_to).map(s => ({
-                user_id: s.assigned_to, id: s.id, start_time: s.start_time, end_time: s.end_time, type: s.type
-            })) || []
-
-            setAllShiftsHistory(mergeById(historyFromInterests, historyFromDirect, ['id', 'user_id']))
+            setAllShiftsHistory(historyFromInterests)
 
             const { data: teamShifts } = await supabase.from('shifts').select('id, start_time, end_time, type').eq('type', 'TEAM')
             setAllTeamShiftsHistory(teamShifts || [])
@@ -910,9 +877,8 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         // Get all shifts where user is assigned or has interest (for current month view)
         const myShiftsForMonth = shifts.filter(shift => {
             const isMyInterest = shift.interests?.some(i => i.user_id === user.id)
-            const isMyAssignment = shift.assigned_to === user.id
             const isTeamShift = shift.type === 'TEAM'
-            return isMyInterest || isMyAssignment || isTeamShift
+            return isMyInterest || isTeamShift
         })
 
         if (myShiftsForMonth.length === 0) {
@@ -1153,7 +1119,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                             if (!isAdmin) return
 
                                                             const before = await fetchBeforeState('shifts', shiftId,
-                                                                'id, start_time, end_time, type, title, assigned_to')
+                                                                'id, start_time, end_time, type, title')
 
                                                             const updatePayload = {
                                                                 start_time: newStart,
@@ -1168,7 +1134,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                             if (error) {
                                                                 setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
                                                             } else {
-                                                                await logAdminAction('shift_updated', before?.assigned_to || null, 'shift', shiftId, {
+                                                                await logAdminAction('shift_updated', null, 'shift', shiftId, {
                                                                     before: { start_time: before?.start_time, end_time: before?.end_time, type: before?.type, title: before?.title },
                                                                     after: updatePayload
                                                                 })
