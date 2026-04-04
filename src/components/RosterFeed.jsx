@@ -522,6 +522,24 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         }
     }
 
+    // Toggle BEIDIENST status for a shift interest (admin only)
+    const toggleTraining = async (shiftId, userId, isTrainingValue) => {
+        if (!isAdmin) return
+
+        const { error } = await supabase
+            .from('shift_interests')
+            .update({ is_training: isTrainingValue })
+            .eq('shift_id', shiftId)
+            .eq('user_id', userId)
+
+        if (error) {
+            console.error('Error toggling BEIDIENST:', error)
+            setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
+        } else {
+            fetchData()
+        }
+    }
+
     // Coverage System: Submit a vote (available/reluctant/emergency_only)
     // NOTE: We only write to coverage_votes here. shift_interests is NOT touched until resolve,
     // so the shift does NOT appear "assigned" while voting is in progress.
@@ -1115,6 +1133,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                         isViewer={isViewer}
                                                         onToggleInterest={toggleInterest}
                                                         onToggleFlex={toggleFlex}
+                                                        onToggleTraining={toggleTraining}
                                                         onUpdateShift={async (shiftId, newStart, newEnd, newTitle) => {
                                                             if (!isAdmin) return
 

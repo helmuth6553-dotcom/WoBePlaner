@@ -490,7 +490,7 @@ export default function AdminTimeTracking() {
         // Fetch all data needed for balance: shifts, interests, TEAM shifts, absences, entries, corrections
         const [shiftsRes, interestsRes, teamShiftsRes, absencesRes, entriesRes, corrsRes] = await Promise.all([
             supabase.from('shifts').select('id, start_time, end_time, type').gte('start_time', oneYearAgo.toISOString()),
-            supabase.from('shift_interests').select('shift_id, shifts(*)').eq('user_id', selectedUserId),
+            supabase.from('shift_interests').select('shift_id, is_training, shifts(*)').eq('user_id', selectedUserId),
             supabase.from('shifts').select('id, start_time, end_time, type').eq('type', 'TEAM').gte('start_time', oneYearAgo.toISOString()),
             supabase.from('absences').select('user_id, start_date, end_date, type, planned_hours, planned_shifts_snapshot, status').eq('user_id', selectedUserId).eq('status', 'genehmigt'),
             supabase.from('time_entries').select('shift_id, calculated_hours, actual_start, actual_end').eq('user_id', selectedUserId),
@@ -505,20 +505,25 @@ export default function AdminTimeTracking() {
         if (interestShiftIds.length > 0) {
             const { data: allInterests } = await supabase
                 .from('shift_interests')
-                .select('shift_id')
+                .select('shift_id, is_training')
                 .in('shift_id', interestShiftIds)
 
-            const interestCounts = {}
+            // Count only primary (non-training) interests per shift
+            const primaryCounts = {}
             allInterests?.forEach(int => {
-                interestCounts[int.shift_id] = (interestCounts[int.shift_id] || 0) + 1
+                if (!int.is_training) {
+                    primaryCounts[int.shift_id] = (primaryCounts[int.shift_id] || 0) + 1
+                }
             })
 
+            // Confirmed if: group shift type (always) OR exactly 1 primary (non-training) person
+            // Beidienst participants are also confirmed when primaryCounts === 1
             confirmedFromInterests = (interestsRes.data || [])
                 .filter(i => {
                     const type = i.shifts?.type?.toUpperCase()
                     if (!type) return false
                     if (GROUP_SHIFT_TYPES.has(type)) return true
-                    return interestCounts[i.shift_id] === 1
+                    return primaryCounts[i.shift_id] === 1
                 })
                 .map(i => i.shifts)
                 .filter(Boolean)
