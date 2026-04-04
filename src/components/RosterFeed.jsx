@@ -12,7 +12,8 @@ import AlertModal from './AlertModal'
 import SickReportModal from './SickReportModal'
 import ActionSheet from './ActionSheet'
 import MonthSettingsModal from './MonthSettingsModal'
-import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Settings, Calendar } from 'lucide-react'
+import MyShiftsView from './MyShiftsView'
+import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Settings, Calendar, User } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, getYear, getMonth, subDays, isSameMonth, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { useHolidays } from '../hooks/useHolidays'
@@ -358,6 +359,18 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         })
         return filtered
     }, [shiftsByDate, currentDate, isAdmin, isMonthVisible])
+
+    const myShifts = useMemo(() => {
+        if (isAdmin || isViewer) return []
+        return shifts
+            .filter(s => {
+                if (!s.start_time) return false
+                const d = new Date(s.start_time)
+                if (!isSameMonth(d, currentDate)) return false
+                return s.interests?.some(i => i.user_id === user.id)
+            })
+            .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+    }, [shifts, currentDate, user, isAdmin, isViewer])
 
     // Scroll to today's DayCard only on initial load (app open)
     useEffect(() => {
@@ -1025,6 +1038,9 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                 <div className="flex bg-gray-100 rounded-lg p-0.5">
                                     <button onClick={() => setViewMode('cards')} className={`p-1.5 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={15} /></button>
                                     <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={15} /></button>
+                                    {!isAdmin && !isViewer && (
+                                        <button onClick={() => setViewMode('mine')} className={`p-1.5 rounded-md transition-all ${viewMode === 'mine' ? 'bg-white shadow text-black' : 'text-gray-400'}`} title="Meine Dienste"><User size={15} /></button>
+                                    )}
                                 </div>
 
                                 <div className="flex gap-1.5 items-center">
@@ -1104,7 +1120,9 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                 </div>
                             ) : (
                                 <>
-                                    {viewMode === 'table' ? (
+                                    {viewMode === 'mine' ? (
+                                        <MyShiftsView shifts={myShifts} currentDate={currentDate} userId={user.id} />
+                                    ) : viewMode === 'table' ? (
                                         <MonthView
                                             shiftsByDate={visibleShiftsByDate}
                                             userId={user.id}
