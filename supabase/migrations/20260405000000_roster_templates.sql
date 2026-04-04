@@ -5,7 +5,7 @@
 
 CREATE TABLE roster_templates (
     id BIGSERIAL PRIMARY KEY,
-    weekday SMALLINT NOT NULL CHECK (weekday BETWEEN 1 AND 7), -- 1=Montag, 7=Sonntag (ISO)
+    weekday SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 7), -- 0=Feiertag, 1=Montag, 7=Sonntag (ISO)
     shift_type TEXT NOT NULL,
     sort_order SMALLINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

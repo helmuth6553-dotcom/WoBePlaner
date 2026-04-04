@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { CalendarDays, Plus, X, ChevronLeft, ChevronRight, Eye, Zap, AlertCircle } from 'lucide-react'
+import { CalendarDays, Plus, X, ChevronLeft, ChevronRight, Eye, Zap, AlertCircle, Clock } from 'lucide-react'
 import { format, getDaysInMonth, startOfMonth, getISODay, addMonths, subMonths } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { supabase } from '../../supabase'
@@ -16,6 +16,7 @@ const WEEKDAYS = [
     { iso: 5, label: 'Freitag', short: 'Fr' },
     { iso: 6, label: 'Samstag', short: 'Sa' },
     { iso: 7, label: 'Sonntag', short: 'So' },
+    { iso: 0, label: 'Feiertag', short: 'FT', isHoliday: true },
 ]
 
 // Reguläre Dienst-Typen die im Wochenplan sinnvoll sind
@@ -25,6 +26,150 @@ function formatTimeRange(start, end) {
     if (!start || !end) return ''
     const fmt = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     return `${fmt(start)}–${fmt(end)}`
+}
+
+// ─── Dienstzeiten-Konfiguration ──────────────────────────────────────────────
+
+function TimeInput({ value, onChange, onBlur }) {
+    return (
+        <input
+            type="time"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            onBlur={onBlur}
+            className="border border-gray-200 rounded-lg px-2 py-1 text-sm font-mono text-gray-800 focus:outline-none focus:ring-2 focus:ring-black w-[90px]"
+        />
+    )
+}
+
+function DienstzeitenRow({ template, dbConfig, onUpdate }) {
+    const db = dbConfig || {}
+
+    // Lokaler State für sofortiges UI-Feedback
+    const [start, setStart] = useState(db.start_time?.slice(0, 5) ?? template.start_time)
+    const [end, setEnd] = useState(db.end_time?.slice(0, 5) ?? template.end_time)
+    const [wStart, setWStart] = useState(db.weekend_start?.slice(0, 5) ?? '')
+    const [wEnd, setWEnd] = useState(db.weekend_end?.slice(0, 5) ?? '')
+    const [hStart, setHStart] = useState(db.holiday_start?.slice(0, 5) ?? '')
+    const [hEnd, setHEnd] = useState(db.holiday_end?.slice(0, 5) ?? '')
+    const [fse, setFse] = useState(db.fri_sat_end?.slice(0, 5) ?? '')
+    const [saving, setSaving] = useState(false)
+
+    const save = useCallback(async (updates) => {
+        setSaving(true)
+        await onUpdate(template.code, updates)
+        setSaving(false)
+    }, [onUpdate, template.code])
+
+    const hasOverrides = wStart || wEnd || hStart || hEnd || fse
+    const [showOverrides, setShowOverrides] = useState(!!hasOverrides)
+
+    // spans_midnight auto-detect für Anzeige
+    const spansMidnight = end === '00:00' || (end < start && end !== '')
+
+    return (
+        <div className="py-3 border-b border-gray-50 last:border-0">
+            {/* Basiszeiten */}
+            <div className="flex items-center gap-2 flex-wrap">
+                <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white shrink-0"
+                    style={{ backgroundColor: template.color }}
+                >
+                    {template.code}
+                </div>
+                <TimeInput
+                    value={start}
+                    onChange={setStart}
+                    onBlur={() => save({ start_time: start })}
+                />
+                <span className="text-gray-400 text-sm">–</span>
+                <TimeInput
+                    value={end}
+                    onChange={setEnd}
+                    onBlur={() => save({ end_time: end })}
+                />
+                {spansMidnight && (
+                    <span className="text-[10px] text-gray-400 font-medium">↺ übernacht</span>
+                )}
+                {saving && <span className="text-[10px] text-gray-400 animate-pulse">…</span>}
+                {(template.weekday_rules && Object.keys(template.weekday_rules).length > 0) && (
+                    <button
+                        onClick={() => setShowOverrides(o => !o)}
+                        className="ml-auto text-xs text-gray-400 hover:text-gray-600 font-medium"
+                    >
+                        {showOverrides ? 'Sonderzeiten ▲' : 'Sonderzeiten ▼'}
+                    </button>
+                )}
+            </div>
+
+            {/* Sonderzeiten-Override */}
+            {showOverrides && (
+                <div className="mt-2 ml-[88px] space-y-1.5">
+                    {/* Wochenende */}
+                    {(template.weekday_rules?.saturday || wStart || wEnd) && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                            <span className="w-20 shrink-0">Sa/So:</span>
+                            <TimeInput value={wStart} onChange={setWStart} onBlur={() => save({ weekend_start: wStart || null })} />
+                            <span className="text-gray-400">–</span>
+                            <TimeInput value={wEnd} onChange={setWEnd} onBlur={() => save({ weekend_end: wEnd || null })} />
+                        </div>
+                    )}
+                    {/* Feiertag */}
+                    {(template.weekday_rules?.holiday || hStart || hEnd) && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                            <span className="w-20 shrink-0">Feiertag:</span>
+                            <TimeInput value={hStart} onChange={setHStart} onBlur={() => save({ holiday_start: hStart || null })} />
+                            <span className="text-gray-400">–</span>
+                            <TimeInput value={hEnd} onChange={setHEnd} onBlur={() => save({ holiday_end: hEnd || null })} />
+                        </div>
+                    )}
+                    {/* Fr/Sa-Ende (hauptsächlich ND) */}
+                    {(template.weekday_rules?.friday || fse) && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                            <span className="w-20 shrink-0">Fr/Sa Ende:</span>
+                            <TimeInput value={fse} onChange={setFse} onBlur={() => save({ fri_sat_end: fse || null })} />
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    )
+}
+
+function DienstzeitenSection({ templates, dbConfigs, updateShiftTimeConfig }) {
+    const [open, setOpen] = useState(false)
+    const plannable = templates.filter(t => PLANNABLE_TYPES.includes(t.code))
+
+    return (
+        <div>
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:bg-gray-50 active:scale-[0.99] transition-all"
+            >
+                <div className="flex items-center gap-2">
+                    <Clock size={16} className="text-gray-500" />
+                    <h2 className="text-lg font-black text-gray-900">Dienstzeiten</h2>
+                </div>
+                <ChevronRight
+                    size={18}
+                    className={`text-gray-400 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+                />
+            </button>
+
+            {open && (
+                <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-1">
+                    {plannable.map(tmpl => (
+                        <DienstzeitenRow
+                            key={tmpl.code}
+                            template={tmpl}
+                            dbConfig={dbConfigs[tmpl.code]}
+                            onUpdate={updateShiftTimeConfig}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    )
 }
 
 // ─── Wochenplan-Karte für einen Wochentag ────────────────────────────────────
@@ -37,9 +182,15 @@ function WeekdayCard({ weekday, entries, allTemplates, getDefaultTimes, onAdd, o
 
     const sortedEntries = [...entries].sort((a, b) => a.sort_order - b.sort_order)
 
-    // Beispielzeiten für heute anzeigen (Werktag, kein Feiertag)
+    // Beispielzeiten anzeigen — für Feiertag: nächsten Feiertag nehmen, sonst nächsten passenden Wochentag
     const exampleDate = (() => {
-        // Nächsten passenden Wochentag finden
+        if (weekday.isHoliday) {
+            // Nächsten österreichischen Feiertag verwenden
+            const year = new Date().getFullYear()
+            const holidays = getHolidays(year)
+            const upcoming = holidays.find(h => h.date >= new Date())
+            return upcoming ? format(upcoming.date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+        }
         const d = new Date()
         const diff = (weekday.iso - getISODay(d) + 7) % 7
         const target = new Date(d)
@@ -47,14 +198,22 @@ function WeekdayCard({ weekday, entries, allTemplates, getDefaultTimes, onAdd, o
         return format(target, 'yyyy-MM-dd')
     })()
 
+    // Für Feiertage: Zeiten mit Holiday-Kontext berechnen
+    const exampleHolidays = weekday.isHoliday ? getHolidays(new Date().getFullYear()) : []
+
     return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className={`rounded-2xl border shadow-sm p-4 ${weekday.isHoliday ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'}`}>
             <div className="flex items-center justify-between mb-3">
-                <span className="font-bold text-gray-800">{weekday.label}</span>
+                <span className={`font-bold ${weekday.isHoliday ? 'text-amber-700' : 'text-gray-800'}`}>
+                    {weekday.label}
+                    {weekday.isHoliday && (
+                        <span className="ml-2 text-[10px] font-medium text-amber-500 uppercase tracking-wide">ersetzt Wochentag</span>
+                    )}
+                </span>
                 {availableTypes.length > 0 && (
                     <button
                         onClick={() => setShowPicker(v => !v)}
-                        className="flex items-center gap-1 text-xs text-teal-600 font-bold px-2 py-1 rounded-lg hover:bg-teal-50 active:scale-95 transition-all"
+                        className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg active:scale-95 transition-all ${weekday.isHoliday ? 'text-amber-600 hover:bg-amber-100' : 'text-teal-600 hover:bg-teal-50'}`}
                     >
                         <Plus size={14} />
                         Dienst
@@ -69,7 +228,7 @@ function WeekdayCard({ weekday, entries, allTemplates, getDefaultTimes, onAdd, o
             <div className="flex flex-wrap gap-2">
                 {sortedEntries.map(entry => {
                     const tmpl = allTemplates.find(t => t.code === entry.shift_type)
-                    const { start, end } = getDefaultTimes(exampleDate, entry.shift_type)
+                    const { start, end } = getDefaultTimes(exampleDate, entry.shift_type, exampleHolidays)
                     const timeStr = formatTimeRange(start, end)
                     return (
                         <div
@@ -173,20 +332,23 @@ function PreviewTable({ previewData, holidays }) {
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
 export default function AdminRosterPlanner() {
-    const { templates, getDefaultTimes } = useShiftTemplates()
+    const { templates, getDefaultTimes, dbConfigs, updateShiftTimeConfig } = useShiftTemplates()
 
     // Wochenplan-State
     const [rosterEntries, setRosterEntries] = useState([]) // { weekday, shift_type, sort_order }
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [wochenplanOpen, setWochenplanOpen] = useState(false)
 
     // Monats-Generator-State
     const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()))
+    const [monthShiftCount, setMonthShiftCount] = useState(null) // null=lädt, 0=leer, >0=vorhanden
     const [previewData, setPreviewData] = useState(null)
     const [previewLoading, setPreviewLoading] = useState(false)
     const [generating, setGenerating] = useState(false)
     const [confirmOpen, setConfirmOpen] = useState(false)
-    const [lastResult, setLastResult] = useState(null) // { created, skipped }
+    const [confirmReplaceOpen, setConfirmReplaceOpen] = useState(false)
+    const [lastResult, setLastResult] = useState(null) // { created, skipped, deleted }
 
     // Wochenplan laden
     useEffect(() => {
@@ -202,6 +364,25 @@ export default function AdminRosterPlanner() {
         }
         load()
     }, [])
+
+    // Shift-Count für den gewählten Monat laden
+    const loadMonthShiftCount = useCallback(async (month) => {
+        setMonthShiftCount(null)
+        const year = month.getFullYear()
+        const m = month.getMonth()
+        const firstDay = new Date(year, m, 1).toISOString()
+        const firstDayNext = new Date(year, m + 1, 1).toISOString()
+        const { count } = await supabase
+            .from('shifts')
+            .select('id', { count: 'exact', head: true })
+            .gte('start_time', firstDay)
+            .lt('start_time', firstDayNext)
+        setMonthShiftCount(count ?? 0)
+    }, [])
+
+    useEffect(() => {
+        loadMonthShiftCount(selectedMonth)
+    }, [selectedMonth, loadMonthShiftCount])
 
     // Dienst zu Wochentag hinzufügen
     const handleAdd = useCallback(async (weekday, shiftType) => {
@@ -271,8 +452,10 @@ export default function AdminRosterPlanner() {
             const weekdayDef = WEEKDAYS.find(w => w.iso === isoWeekday)
             const holidayInfo = isHoliday(date, holidays)
 
+            // An Feiertagen das Feiertag-Template (weekday=0) verwenden statt des Wochentags
+            const effectiveWeekday = holidayInfo ? 0 : isoWeekday
             const dayEntries = rosterEntries
-                .filter(e => e.weekday === isoWeekday)
+                .filter(e => e.weekday === effectiveWeekday)
                 .sort((a, b) => a.sort_order - b.sort_order)
 
             const shifts = dayEntries.map(entry => {
@@ -333,7 +516,10 @@ export default function AdminRosterPlanner() {
             const dateStr = format(date, 'yyyy-MM-dd')
             const isoWeekday = getISODay(date)
 
-            const dayEntries = rosterEntries.filter(e => e.weekday === isoWeekday)
+            // An Feiertagen das Feiertag-Template (weekday=0) verwenden statt des Wochentags
+            const dayIsHoliday = isHoliday(date, holidays)
+            const effectiveWeekday = dayIsHoliday ? 0 : isoWeekday
+            const dayEntries = rosterEntries.filter(e => e.weekday === effectiveWeekday)
 
             for (const entry of dayEntries) {
                 const key = `${dateStr}_${entry.shift_type}`
@@ -370,10 +556,70 @@ export default function AdminRosterPlanner() {
             }
         }
 
-        setLastResult({ created, skipped: (existing?.length || 0) })
+        setLastResult({ created, skipped: existing?.length || 0, deleted: 0 })
         setPreviewData(null)
         setGenerating(false)
-    }, [previewData, selectedMonth, rosterEntries, getDefaultTimes])
+        loadMonthShiftCount(selectedMonth)
+    }, [previewData, selectedMonth, rosterEntries, getDefaultTimes, loadMonthShiftCount])
+
+    // Monat leeren + neu generieren
+    const handleReplace = useCallback(async () => {
+        setGenerating(true)
+        setConfirmReplaceOpen(false)
+
+        const year = selectedMonth.getFullYear()
+        const month = selectedMonth.getMonth()
+        const holidays = getHolidays(year)
+        const firstDay = new Date(year, month, 1).toISOString()
+        const firstDayNext = new Date(year, month + 1, 1).toISOString()
+
+        // 1. Alle bestehenden Shifts des Monats löschen (CASCADE löscht shift_interests)
+        const { count: deleted } = await supabase
+            .from('shifts')
+            .delete({ count: 'exact' })
+            .gte('start_time', firstDay)
+            .lt('start_time', firstDayNext)
+
+        // 2. Neu generieren aus Template
+        const toInsert = []
+        const daysCount = getDaysInMonth(selectedMonth)
+
+        for (let day = 1; day <= daysCount; day++) {
+            const date = new Date(year, month, day)
+            const dateStr = format(date, 'yyyy-MM-dd')
+            const isoWeekday = getISODay(date)
+            const dayIsHoliday = isHoliday(date, holidays)
+            const effectiveWeekday = dayIsHoliday ? 0 : isoWeekday
+            const dayEntries = rosterEntries.filter(e => e.weekday === effectiveWeekday)
+
+            for (const entry of dayEntries) {
+                const { start, end } = getDefaultTimes(dateStr, entry.shift_type, holidays)
+                if (!start || !end) continue
+                toInsert.push({
+                    start_time: start.toISOString(),
+                    end_time: end.toISOString(),
+                    type: entry.shift_type,
+                })
+            }
+        }
+
+        let created = 0
+        if (toInsert.length > 0) {
+            const { error } = await supabase.from('shifts').insert(toInsert)
+            if (!error) created = toInsert.length
+        }
+
+        await logAdminAction('replace_roster', null, 'shifts', null, null, {
+            month: format(selectedMonth, 'yyyy-MM'),
+            deleted: deleted || 0,
+            created,
+        })
+
+        setLastResult({ created, skipped: 0, deleted: deleted || 0 })
+        setPreviewData(null)
+        setGenerating(false)
+        loadMonthShiftCount(selectedMonth)
+    }, [selectedMonth, rosterEntries, getDefaultTimes, loadMonthShiftCount])
 
     // Statistiken für die Vorschau
     const previewStats = previewData ? {
@@ -384,30 +630,51 @@ export default function AdminRosterPlanner() {
     return (
         <div className="space-y-6">
 
+            {/* ── Sektion 0: Dienstzeiten ── */}
+            <DienstzeitenSection
+                templates={templates}
+                dbConfigs={dbConfigs}
+                updateShiftTimeConfig={updateShiftTimeConfig}
+            />
+
             {/* ── Sektion 1: Wochenplan ── */}
             <div>
-                <div className="flex items-center gap-2 mb-4 px-1">
-                    <h2 className="text-lg font-black text-gray-900">Wochenplan</h2>
-                    {saving && (
-                        <span className="text-xs text-gray-400 animate-pulse">Wird gespeichert…</span>
-                    )}
-                </div>
+                <button
+                    onClick={() => setWochenplanOpen(o => !o)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:bg-gray-50 active:scale-[0.99] transition-all"
+                >
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-black text-gray-900">Wochenplan</h2>
+                        {saving && <span className="text-xs text-gray-400 animate-pulse">Wird gespeichert…</span>}
+                        {!saving && !loading && (
+                            <span className="text-xs text-gray-400">{rosterEntries.length} Einträge</span>
+                        )}
+                    </div>
+                    <ChevronRight
+                        size={18}
+                        className={`text-gray-400 transition-transform duration-200 ${wochenplanOpen ? 'rotate-90' : ''}`}
+                    />
+                </button>
 
-                {loading ? (
-                    <div className="text-center py-8 text-gray-400 text-sm">Wird geladen…</div>
-                ) : (
-                    <div className="space-y-3">
-                        {WEEKDAYS.map(weekday => (
-                            <WeekdayCard
-                                key={weekday.iso}
-                                weekday={weekday}
-                                entries={rosterEntries.filter(e => e.weekday === weekday.iso)}
-                                allTemplates={templates}
-                                getDefaultTimes={getDefaultTimes}
-                                onAdd={handleAdd}
-                                onRemove={handleRemove}
-                            />
-                        ))}
+                {wochenplanOpen && (
+                    <div className="mt-3">
+                        {loading ? (
+                            <div className="text-center py-8 text-gray-400 text-sm">Wird geladen…</div>
+                        ) : (
+                            <div className="space-y-3">
+                                {WEEKDAYS.map(weekday => (
+                                    <WeekdayCard
+                                        key={weekday.iso}
+                                        weekday={weekday}
+                                        entries={rosterEntries.filter(e => e.weekday === weekday.iso)}
+                                        allTemplates={templates}
+                                        getDefaultTimes={getDefaultTimes}
+                                        onAdd={handleAdd}
+                                        onRemove={handleRemove}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -441,7 +708,7 @@ export default function AdminRosterPlanner() {
                         </button>
                     </div>
 
-                    {/* Hinweis wenn kein Wochenplan definiert */}
+                    {/* Kein Wochenplan definiert */}
                     {!loading && rosterEntries.length === 0 && (
                         <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl text-sm text-amber-700">
                             <AlertCircle size={16} className="shrink-0" />
@@ -449,72 +716,134 @@ export default function AdminRosterPlanner() {
                         </div>
                     )}
 
-                    {/* Letztes Ergebnis */}
-                    {lastResult && (
-                        <div className="p-3 bg-green-50 rounded-xl text-sm text-green-700 font-medium">
-                            ✓ {lastResult.created} Dienste erstellt
-                            {lastResult.skipped > 0 && `, ${lastResult.skipped} bereits vorhanden (übersprungen)`}
-                        </div>
-                    )}
+                    {rosterEntries.length > 0 && (<>
 
-                    {/* Vorschau-Button */}
-                    {rosterEntries.length > 0 && (
-                        <button
-                            onClick={handlePreview}
-                            disabled={previewLoading}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50"
-                        >
-                            <Eye size={16} />
-                            {previewLoading ? 'Wird geladen…' : 'Vorschau anzeigen'}
-                        </button>
-                    )}
-
-                    {/* Vorschau-Tabelle */}
-                    {previewData && (
-                        <>
-                            {/* Statistiken */}
-                            <div className="flex gap-3 text-sm">
-                                <div className="flex-1 p-3 bg-teal-50 rounded-xl text-center">
-                                    <div className="text-2xl font-black text-teal-600">{previewStats.newCount}</div>
-                                    <div className="text-xs text-teal-600 font-medium">Neue Dienste</div>
-                                </div>
-                                <div className="flex-1 p-3 bg-gray-50 rounded-xl text-center">
-                                    <div className="text-2xl font-black text-gray-400">{previewStats.skipCount}</div>
-                                    <div className="text-xs text-gray-400 font-medium">Bereits vorhanden</div>
-                                </div>
+                        {/* Status-Indikator */}
+                        {monthShiftCount === null && (
+                            <div className="text-center text-sm text-gray-400 animate-pulse py-1">Wird geprüft…</div>
+                        )}
+                        {monthShiftCount !== null && monthShiftCount > 0 && !lastResult && (
+                            <div className="flex items-center gap-2 p-3 bg-teal-50 rounded-xl text-sm text-teal-700 font-medium">
+                                <CalendarDays size={16} className="shrink-0" />
+                                <span>{monthShiftCount} Dienste bereits generiert</span>
                             </div>
+                        )}
+                        {monthShiftCount !== null && monthShiftCount === 0 && !lastResult && (
+                            <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl text-sm text-gray-500">
+                                <AlertCircle size={16} className="shrink-0" />
+                                <span>Noch keine Dienste für diesen Monat</span>
+                            </div>
+                        )}
 
-                            <PreviewTable previewData={previewData} />
+                        {/* Letztes Ergebnis */}
+                        {lastResult && (
+                            <div className="p-3 bg-green-50 rounded-xl text-sm text-green-700 font-medium">
+                                ✓ {lastResult.created} Dienste erstellt
+                                {lastResult.deleted > 0 && ` (${lastResult.deleted} vorher gelöscht)`}
+                                {lastResult.skipped > 0 && `, ${lastResult.skipped} bereits vorhanden (übersprungen)`}
+                            </div>
+                        )}
 
-                            {/* Generieren-Button */}
-                            {previewStats.newCount > 0 ? (
+                        {/* Monat noch leer → Vorschau + Generieren als Hauptaktion */}
+                        {monthShiftCount === 0 && !previewData && (
+                            <button
+                                onClick={handlePreview}
+                                disabled={previewLoading}
+                                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-teal-500 text-white font-bold rounded-xl hover:bg-teal-600 active:scale-95 transition-all disabled:opacity-50 shadow-md"
+                            >
+                                <Eye size={16} />
+                                {previewLoading ? 'Wird geladen…' : 'Vorschau + Generieren'}
+                            </button>
+                        )}
+
+                        {/* Monat hat bereits Dienste → Leeren + Neu als Hauptaktion, Vorschau sekundär */}
+                        {monthShiftCount !== null && monthShiftCount > 0 && !previewData && (
+                            <div className="space-y-2">
                                 <button
-                                    onClick={() => setConfirmOpen(true)}
+                                    onClick={() => setConfirmReplaceOpen(true)}
                                     disabled={generating}
-                                    className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-teal-500 text-white font-bold rounded-xl hover:bg-teal-600 active:scale-95 transition-all disabled:opacity-50 shadow-md"
+                                    className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 active:scale-95 transition-all disabled:opacity-50 border border-red-200"
                                 >
-                                    <Zap size={16} />
-                                    {generating ? 'Wird generiert…' : `${previewStats.newCount} Dienste generieren`}
+                                    <X size={16} />
+                                    {generating ? 'Wird verarbeitet…' : 'Monat leeren + neu generieren'}
                                 </button>
-                            ) : (
-                                <div className="text-center text-sm text-gray-400 py-2">
-                                    Alle Dienste für diesen Monat sind bereits vorhanden.
+                                <button
+                                    onClick={handlePreview}
+                                    disabled={previewLoading}
+                                    className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-gray-100 text-gray-500 text-sm font-bold rounded-xl hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50"
+                                >
+                                    <Eye size={14} />
+                                    {previewLoading ? 'Wird geladen…' : 'Vorschau anzeigen'}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Vorschau-Tabelle */}
+                        {previewData && (
+                            <>
+                                <div className="flex gap-3 text-sm">
+                                    <div className="flex-1 p-3 bg-teal-50 rounded-xl text-center">
+                                        <div className="text-2xl font-black text-teal-600">{previewStats.newCount}</div>
+                                        <div className="text-xs text-teal-600 font-medium">Neue Dienste</div>
+                                    </div>
+                                    <div className="flex-1 p-3 bg-gray-50 rounded-xl text-center">
+                                        <div className="text-2xl font-black text-gray-400">{previewStats.skipCount}</div>
+                                        <div className="text-xs text-gray-400 font-medium">Bereits vorhanden</div>
+                                    </div>
                                 </div>
-                            )}
-                        </>
-                    )}
+
+                                <PreviewTable previewData={previewData} />
+
+                                {previewStats.newCount > 0 ? (
+                                    <button
+                                        onClick={() => setConfirmOpen(true)}
+                                        disabled={generating}
+                                        className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-teal-500 text-white font-bold rounded-xl hover:bg-teal-600 active:scale-95 transition-all disabled:opacity-50 shadow-md"
+                                    >
+                                        <Zap size={16} />
+                                        {generating ? 'Wird generiert…' : `${previewStats.newCount} fehlende Dienste ergänzen`}
+                                    </button>
+                                ) : (
+                                    <div className="text-center text-sm text-gray-400 py-2">
+                                        Alle Dienste für diesen Monat sind bereits vorhanden.
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={() => setConfirmReplaceOpen(true)}
+                                    disabled={generating}
+                                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 active:scale-95 transition-all disabled:opacity-50 border border-red-200"
+                                >
+                                    <X size={16} />
+                                    {generating ? 'Wird verarbeitet…' : 'Monat leeren + neu generieren'}
+                                </button>
+                            </>
+                        )}
+
+                    </>)}
                 </div>
             </div>
 
-            {/* Bestätigungs-Modal */}
+            {/* Modal: Fehlende ergänzen */}
             <ConfirmModal
                 isOpen={confirmOpen}
                 onClose={() => setConfirmOpen(false)}
                 onConfirm={handleGenerate}
-                title="Dienstplan generieren"
-                message={`${previewStats?.newCount ?? 0} Dienste für ${format(selectedMonth, 'MMMM yyyy', { locale: de })} erstellen? Bereits vorhandene Dienste werden nicht verändert.`}
-                confirmText="Generieren"
+                title="Fehlende Dienste ergänzen"
+                message={`${previewStats?.newCount ?? 0} fehlende Dienste für ${format(selectedMonth, 'MMMM yyyy', { locale: de })} erstellen? Bereits vorhandene Dienste bleiben unverändert.`}
+                confirmText="Ergänzen"
                 icon={CalendarDays}
+            />
+
+            {/* Modal: Leeren + Neu generieren */}
+            <ConfirmModal
+                isOpen={confirmReplaceOpen}
+                onClose={() => setConfirmReplaceOpen(false)}
+                onConfirm={handleReplace}
+                title="Monat leeren + neu generieren"
+                message={`Alle bestehenden Shifts für ${format(selectedMonth, 'MMMM yyyy', { locale: de })} werden gelöscht und neu aus dem Wochenplan generiert. Dienstzuweisungen gehen verloren.`}
+                confirmText="Leeren + Generieren"
+                isDestructive={true}
             />
         </div>
     )

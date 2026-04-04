@@ -3,7 +3,7 @@
  * Verifies default start/end times for all shift types including weekday rules.
  */
 import { describe, it, expect } from 'vitest'
-import { getDefaultTimes } from './shiftDefaults'
+import { getDefaultTimes } from '../contexts/ShiftTemplateContext'
 
 describe('getDefaultTimes', () => {
     // =============================================================================
