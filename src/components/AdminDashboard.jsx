@@ -19,7 +19,7 @@ export default function AdminDashboard(props) {
     }
 
     return (
-        <div className="p-4 pb-24 max-w-xl mx-auto">
+        <div className="p-4 pb-24 max-w-xl md:max-w-3xl lg:max-w-5xl mx-auto">
             <h1 className="text-2xl font-bold mb-6 px-2">Admin Dashboard</h1>
 
             {/* Navigation Tabs */}
