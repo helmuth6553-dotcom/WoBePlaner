@@ -33,7 +33,7 @@ const getUserColor = (name) => {
     return colors[Math.abs(hash) % colors.length]
 }
 
-export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, isViewer, absenceReason, holiday, absences = [], allProfiles = [], coverageRequests = [], coverageVotes = [], fairnessIndices = [], userBalance = null, onCoverageVote, onCoverageResolve, onDirectTakeover }) {
+export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onToggleTraining, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, isViewer, absenceReason, holiday, absences = [], allProfiles = [], coverageRequests = [], coverageVotes = [], fairnessIndices = [], userBalance = null, onCoverageVote, onCoverageResolve, onDirectTakeover }) {
     // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [selectedShift, setSelectedShift] = useState(null)
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
@@ -221,13 +221,16 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
 
         const amIInterested = shift.interests?.some(i => i.user_id === userId)
 
-        // Flex Logic
+        // Flex + Training Logic
         const interestNames = shift.interests?.map(i => {
+            const isTraining = i.is_training || false
+
             // Manual FLEX override takes priority
             if (i.is_flex === true) {
                 return {
                     name: getDisplayName(i.profiles),
                     isFlex: true,
+                    isTraining,
                     interestId: i.id,
                     userId: i.user_id
                 }
@@ -243,6 +246,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
             return {
                 name: getDisplayName(i.profiles),
                 isFlex,
+                isTraining,
                 interestId: i.id,
                 userId: i.user_id,
                 isFlexManual: i.is_flex // Track if manually set
@@ -254,12 +258,16 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
         let rowBg = "bg-white hover:bg-gray-50"
         let iconBg = "bg-gray-100 text-gray-500"
 
-        // Urgency Logic - only show as urgent if no one has shown interest yet
-        const isUrgent = !!shift.urgent_since && interestNames.length === 0
+        // Split into primary and Beidienst participants for display logic
+        const primaryInterests = interestNames.filter(u => !u.isTraining)
+        const trainingInterests = interestNames.filter(u => u.isTraining)
 
-        if (interestNames.length === 1) {
-            // Single User - Special Display
-            const u = interestNames[0]
+        // Urgency Logic - only show as urgent if no primary person has shown interest yet
+        const isUrgent = !!shift.urgent_since && primaryInterests.length === 0
+
+        if (primaryInterests.length === 1) {
+            // Single primary person — show single-user display
+            const u = primaryInterests[0]
             const colorClass = getUserColor(u.name)
 
             rowBg = `${colorClass} shadow-sm`
@@ -270,15 +278,19 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                 <div className="flex flex-col items-end justify-center">
                     <span className="text-2xl font-black leading-none tracking-tight">{u.name}</span>
                     {u.isFlex && <span className="mt-0.5 text-[10px] font-bold bg-white/40 px-1.5 rounded">FLEX</span>}
+                    {trainingInterests.map((t, idx) => (
+                        <span key={idx} className="mt-0.5 text-xs font-bold bg-teal-500/30 px-1.5 rounded">BEID. {t.name}</span>
+                    ))}
                 </div>
             )
         } else if (interestNames.length > 0) {
             statusText = (
-                <span className="flex gap-1 items-center justify-end">
+                <span className="flex gap-1 items-center justify-end flex-wrap">
                     {interestNames.slice(0, 3).map((u, idx) => (
                         <span key={idx} className="flex items-center">
                             {u.name}
                             {u.isFlex && <span className="ml-1 text-[10px] bg-purple-100 text-purple-700 px-1 rounded font-bold">FLEX</span>}
+                            {u.isTraining && <span className="ml-1 text-xs bg-teal-100 text-teal-700 px-1 rounded font-bold">BEID.</span>}
                             {idx < Math.min(interestNames.length, 3) - 1 && ", "}
                         </span>
                     ))}
@@ -377,11 +389,12 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                 isAuto: true
             }))
         } else {
-            // Normal interests - include is_flex for FLEX toggle
+            // Normal interests - include is_flex and is_training for toggles
             participants = shift.interests?.map(i => ({
                 id: i.user_id,
                 name: getDisplayName(i.profiles),
-                isFlex: i.is_flex || false
+                isFlex: i.is_flex || false,
+                isTraining: i.is_training || false
             })) || []
         }
 
@@ -438,6 +451,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                                     <div className="flex items-center gap-2">
                                         <span className="font-medium text-gray-700">{u.name}</span>
                                         {u.isFlex && <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold">FLEX</span>}
+                                        {u.isTraining && <span className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-bold">BEID.</span>}
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {isAdmin && !isTeam && onToggleFlex && (
@@ -465,6 +479,31 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
                                                     className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                                                 />
                                                 <span className="text-xs text-gray-500">FLEX</span>
+                                            </label>
+                                        )}
+                                        {isAdmin && !isTeam && onToggleTraining && (
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={u.isTraining || false}
+                                                    onChange={(e) => {
+                                                        const newValue = e.target.checked
+                                                        setSelectedShift(prev => {
+                                                            if (!prev) return null
+                                                            return {
+                                                                ...prev,
+                                                                interests: prev.interests?.map(interest =>
+                                                                    interest.user_id === u.id
+                                                                        ? { ...interest, is_training: newValue }
+                                                                        : interest
+                                                                )
+                                                            }
+                                                        })
+                                                        onToggleTraining(shift.id, u.id, newValue)
+                                                    }}
+                                                    className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                                                />
+                                                <span className="text-xs text-gray-500">BEID.</span>
                                             </label>
                                         )}
                                         {isAdmin && !isTeam && (

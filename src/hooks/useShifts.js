@@ -63,24 +63,27 @@ export function useShifts(userId, selectedMonth, options = {}) {
             let confirmedShifts = []
 
             if (shiftIds.length > 0) {
-                // Get interest counts
+                // Get interest counts (excluding Beidienst/training participants)
                 const { data: allInterests } = await supabase
                     .from('shift_interests')
-                    .select('shift_id')
+                    .select('shift_id, is_training')
                     .in('shift_id', shiftIds)
 
-                const interestCounts = {}
+                const primaryCounts = {}
                 allInterests?.forEach(i => {
-                    interestCounts[i.shift_id] = (interestCounts[i.shift_id] || 0) + 1
+                    if (!i.is_training) {
+                        primaryCounts[i.shift_id] = (primaryCounts[i.shift_id] || 0) + 1
+                    }
                 })
 
-                // Confirmed if: group shift type (always) OR only interested person
+                // Confirmed if: group shift type (always) OR exactly 1 primary (non-training) person
+                // Beidienst participants are also confirmed when primaryCounts === 1
                 confirmedShifts = monthInterests
                     .filter(i => {
                         const type = i.shifts?.type?.toUpperCase()
                         if (!type) return false
                         if (GROUP_SHIFT_TYPES.has(type)) return true
-                        return interestCounts[i.shift_id] === 1
+                        return primaryCounts[i.shift_id] === 1
                     })
                     .map(i => i.shifts)
                     .filter(Boolean)
