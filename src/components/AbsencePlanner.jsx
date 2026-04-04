@@ -150,6 +150,25 @@ export default function AbsencePlanner({ initialDate }) {
         const start = selectionStart
         const end = selectionEnd || selectionStart
 
+        // Check if user already has vacation overlapping this range
+        const startStr = format(start, 'yyyy-MM-dd')
+        const endStr = format(end, 'yyyy-MM-dd')
+        const hasOverlap = absences.some(a =>
+            a.user_id === user.id &&
+            a.type === 'Urlaub' &&
+            (a.status === 'beantragt' || a.status === 'genehmigt') &&
+            a.start_date <= endStr && a.end_date >= startStr
+        )
+        if (hasOverlap) {
+            setAlertConfig({
+                isOpen: true,
+                title: 'Urlaub bereits beantragt',
+                message: 'Du hast für diesen Zeitraum bereits einen Urlaubsantrag eingereicht.',
+                type: 'error'
+            })
+            return
+        }
+
         // Check vacation limit (hard block at 5, warning at 3-4)
         const MAX_VACATION_PER_DAY = 5
         const VACATION_WARNING_THRESHOLD = 3
@@ -186,7 +205,7 @@ export default function AbsencePlanner({ initialDate }) {
                 setConfirmConfig({
                     isOpen: true,
                     title: 'Hohe Urlaubsüberschneidung',
-                    message: `Am ${format(day, 'dd.MM.yyyy')} haben bereits ${count} Mitarbeiter Urlaub beantragt oder genehmigt. Laut interner Vereinbarung sollten maximal 3 Mitarbeiter gleichzeitig abwesend sein. Du kannst den Antrag trotzdem einreichen — die Genehmigung liegt im Ermessen der Teamleitung.`,
+                    message: `Am ${format(day, 'dd.MM.yyyy')} haben bereits ${count} Mitarbeiter Urlaub beantragt oder genehmigt. Laut interner Vereinbarung sollten maximal 3 Mitarbeiter gleichzeitig abwesend sein. Du kannst den Antrag trotzdem einreichen — die Genehmigung liegt im Ermessen der Team-Koordination.`,
                     confirmText: 'Trotzdem beantragen',
                     isDestructive: false,
                     onConfirm: () => setSignatureConfig({ isOpen: true, payload })
