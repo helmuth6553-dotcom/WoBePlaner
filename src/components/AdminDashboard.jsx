@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Users, FileText, Thermometer, ShieldCheck, BarChart3, Palmtree, Calendar } from 'lucide-react'
+import { Users, FileText, Thermometer, ShieldCheck, BarChart3, Palmtree, Calendar, CalendarDays } from 'lucide-react'
 
 import AdminOverview from './admin/AdminOverview'
 import AdminAuditLog from './admin/AdminAuditLog'
@@ -8,6 +8,7 @@ import AdminEmployees from './admin/AdminEmployees'
 import AdminAbsences from './admin/AdminAbsences'
 import AdminVacationStats from './admin/AdminVacationStats'
 import AdminVacationCalendar from './admin/AdminVacationCalendar'
+import AdminRosterPlanner from './admin/AdminRosterPlanner'
 
 export default function AdminDashboard(props) {
     const [activeTab, setActiveTab] = useState('overview')
@@ -18,6 +19,9 @@ export default function AdminDashboard(props) {
 
             {/* Navigation Tabs */}
             <div className="flex flex-wrap gap-2 mb-6 px-2">
+                <button onClick={() => setActiveTab('planner')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'planner' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+                    <CalendarDays size={16} /> Dienstplan
+                </button>
                 <button onClick={() => setActiveTab('audit')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'audit' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
                     <ShieldCheck size={16} /> Audit
                 </button>
@@ -49,6 +53,7 @@ export default function AdminDashboard(props) {
                 {activeTab === 'sick' && <AdminSickLeaves />}
                 {activeTab === 'vacation' && <AdminVacationStats />}
                 {activeTab === 'calendar' && <AdminVacationCalendar />}
+                {activeTab === 'planner' && <AdminRosterPlanner />}
                 {activeTab === 'audit' && <AdminAuditLog />}
             </div>
         </div>
