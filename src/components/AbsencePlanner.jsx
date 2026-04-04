@@ -715,6 +715,11 @@ export default function AbsencePlanner({ initialDate }) {
                                                         </span>
                                                     )}
                                                 </p>
+                                                {req.created_at && (
+                                                    <p className="text-xs text-gray-400 mt-0.5">
+                                                        Eingereicht am {format(new Date(req.created_at), 'dd.MM.yyyy')}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-1">
