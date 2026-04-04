@@ -62,6 +62,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { } })
     const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' })
     const [calendarExportConfirmOpen, setCalendarExportConfirmOpen] = useState(false)
+    const [isStatusInfoOpen, setIsStatusInfoOpen] = useState(false)
 
     const [myProfile, setMyProfile] = useState(null)
     const [allMyShifts, setAllMyShifts] = useState([])
@@ -1048,12 +1049,13 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                     )}
 
                                     {!isAdmin && !isViewer && (
-                                        <div
-                                            className={`p-1.5 rounded-full border transition-colors ${isMonthOpen ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}
+                                        <button
+                                            onClick={() => setIsStatusInfoOpen(true)}
+                                            className={`p-1.5 rounded-full border transition-colors hover:scale-105 active:scale-95 ${isMonthOpen ? 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100' : 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100'}`}
                                             title={isMonthOpen ? "Dienstplan offen" : "Dienstplan geschlossen"}
                                         >
                                             {isMonthOpen ? <Unlock size={18} /> : <Lock size={18} />}
-                                        </div>
+                                        </button>
                                     )}
 
                                     {isAdmin && (
@@ -1350,6 +1352,40 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                     </>
                 )}
             </ActionSheet>
+
+            {isStatusInfoOpen && (
+                <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[1.5rem] p-6 w-full max-w-sm shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Dienstplan-Status</h3>
+                        <div className="space-y-3 mb-6">
+                            <div className="flex items-start gap-3 p-3 bg-green-50 rounded-xl border border-green-100">
+                                <div className="p-1.5 bg-green-100 rounded-full text-green-600 shrink-0">
+                                    <Unlock size={16} />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-green-800 text-sm">Offen</p>
+                                    <p className="text-green-700 text-sm">Du kannst dich frei in Dienste ein- und austragen.</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
+                                <div className="p-1.5 bg-red-100 rounded-full text-red-600 shrink-0">
+                                    <Lock size={16} />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-red-800 text-sm">Gesperrt</p>
+                                    <p className="text-red-700 text-sm">Du kannst dich in Dienste eintragen. Um dich auszutragen, musst du den Dienst mit jemandem tauschen.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setIsStatusInfoOpen(false)}
+                            className="w-full py-3 bg-gray-700 text-white rounded-xl font-bold hover:bg-gray-800 transition-transform active:scale-95"
+                        >
+                            OK
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* TeamPanel (Desktop Only - synchronized with RosterFeed data) */}
             {isAdmin && (
