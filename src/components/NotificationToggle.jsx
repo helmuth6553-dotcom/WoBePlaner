@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { Bell, Clock, Calendar, Thermometer } from 'lucide-react';
+import { Bell, BellOff, Clock, Calendar, Thermometer } from 'lucide-react';
 
 const PUBLIC_VAPID_KEY = 'BPLhlPrMJfoXFoLDvQ06uHLNXkQsofVqafEug1Y8AAZkDpU--i-kVjx1qA3EEgXj79aKfLqhVmpL8XtArMh_gPM';
 
@@ -54,6 +54,46 @@ const NOTIFICATION_TYPES = [
     }
 ];
 
+// Get or register the service worker, with timeout
+async function getServiceWorkerRegistration(timeoutMs = 10000) {
+    // Check if there's already an active registration
+    let registration = await navigator.serviceWorker.getRegistration();
+    if (registration?.active) return registration;
+
+    // No active SW — try to register it ourselves (production only)
+    // In dev mode, VitePWA doesn't serve sw.js, so registration would fail
+    if (!registration) {
+        if (import.meta.env.DEV) {
+            throw new Error('Push-Benachrichtigungen sind nur im Production-Build verfügbar');
+        }
+        registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    }
+
+    // Wait for it to become active
+    if (registration.active) return registration;
+
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+            () => reject(new Error('Service Worker Timeout — bitte Seite neu laden')),
+            timeoutMs
+        );
+
+        const sw = registration.installing || registration.waiting;
+        if (!sw) {
+            clearTimeout(timeout);
+            reject(new Error('Service Worker konnte nicht gestartet werden'));
+            return;
+        }
+
+        sw.addEventListener('statechange', () => {
+            if (sw.state === 'activated') {
+                clearTimeout(timeout);
+                resolve(registration);
+            }
+        });
+    });
+}
+
 export default function NotificationToggle() {
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -78,7 +118,8 @@ export default function NotificationToggle() {
             return;
         }
 
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (!registration?.active) return; // SW not ready yet — skip silently on init
         const subscription = await registration.pushManager.getSubscription();
         setIsSubscribed(!!subscription);
 
@@ -183,15 +224,7 @@ export default function NotificationToggle() {
                 throw new Error('Service Worker not supported');
             }
 
-            // Add timeout to prevent infinite hanging
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Service Worker Timeout - bitte Seite neu laden')), 10000)
-            );
-
-            const registration = await Promise.race([
-                navigator.serviceWorker.ready,
-                timeoutPromise
-            ]);
+            const registration = await getServiceWorkerRegistration();
 
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
@@ -234,6 +267,45 @@ export default function NotificationToggle() {
             console.error('Push subscription error:', err);
             setError(err.message);
             alert('Fehler beim Aktivieren: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const unsubscribeFromPush = async () => {
+        if (!confirm('Push-Benachrichtigungen wirklich deaktivieren?')) return;
+
+        setLoading(true);
+        setError(null);
+        try {
+            const registration = await navigator.serviceWorker.getRegistration();
+            const subscription = registration
+                ? await registration.pushManager.getSubscription()
+                : null;
+
+            if (subscription) {
+                // Remove from DB first
+                await supabase
+                    .from('push_subscriptions')
+                    .delete()
+                    .eq('endpoint', subscription.endpoint);
+
+                // Unsubscribe from browser
+                await subscription.unsubscribe();
+            }
+
+            // Also delete any remaining subscriptions for this user
+            if (userId) {
+                await supabase
+                    .from('push_subscriptions')
+                    .delete()
+                    .eq('user_id', userId);
+            }
+
+            setIsSubscribed(false);
+        } catch (err) {
+            console.error('Push unsubscribe error:', err);
+            setError('Fehler beim Deaktivieren: ' + err.message);
         } finally {
             setLoading(false);
         }
@@ -314,6 +386,15 @@ export default function NotificationToggle() {
                     {savingPrefs && (
                         <p className="text-xs text-gray-400 text-center">Wird gespeichert...</p>
                     )}
+
+                    <button
+                        onClick={unsubscribeFromPush}
+                        disabled={loading}
+                        className="w-full mt-2 py-2.5 text-sm text-red-500 bg-red-50 rounded-xl font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                        <BellOff size={16} />
+                        {loading ? 'Wird deaktiviert...' : 'Benachrichtigungen deaktivieren'}
+                    </button>
                 </div>
             )}
         </div>
