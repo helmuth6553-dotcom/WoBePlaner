@@ -1036,10 +1036,10 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                             {/* Zeile 2: View-Toggle + Status-Icons */}
                             <div className="px-3 pb-2 flex justify-between items-center">
                                 <div className="flex bg-gray-100 rounded-lg p-0.5">
-                                    <button onClick={() => setViewMode('cards')} className={`p-1.5 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={15} /></button>
-                                    <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={15} /></button>
+                                    <button onClick={() => setViewMode('cards')} className={`p-2 rounded-md transition-all ${viewMode === 'cards' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><LayoutList size={18} /></button>
+                                    <button onClick={() => setViewMode('table')} className={`p-2 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow text-black' : 'text-gray-400'}`}><TableIcon size={18} /></button>
                                     {!isAdmin && !isViewer && (
-                                        <button onClick={() => setViewMode('mine')} className={`p-1.5 rounded-md transition-all ${viewMode === 'mine' ? 'bg-white shadow text-black' : 'text-gray-400'}`} title="Meine Dienste"><User size={15} /></button>
+                                        <button onClick={() => setViewMode('mine')} className={`p-2 rounded-md transition-all ${viewMode === 'mine' ? 'bg-white shadow text-black' : 'text-gray-400'}`} title="Meine Dienste"><User size={18} /></button>
                                     )}
                                 </div>
 

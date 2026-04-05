@@ -25,9 +25,6 @@ vi.mock('./admin/AdminAbsences', () => ({
 vi.mock('./admin/AdminVacationStats', () => ({
     default: () => <div data-testid="admin-vacation">AdminVacationStats</div>
 }))
-vi.mock('./admin/AdminVacationCalendar', () => ({
-    default: () => <div data-testid="admin-calendar">AdminVacationCalendar</div>
-}))
 vi.mock('./admin/AdminRosterPlanner', () => ({
     default: () => <div data-testid="admin-planner">AdminRosterPlanner</div>
 }))
@@ -43,7 +40,7 @@ describe('AdminDashboard', () => {
         expect(screen.getByTestId('admin-overview')).toBeInTheDocument()
     })
 
-    it('renders all 8 tab buttons', () => {
+    it('renders all 7 tab buttons', () => {
         render(<AdminDashboard />)
         expect(screen.getByText('Dienstplan')).toBeInTheDocument()
         expect(screen.getByText('Audit')).toBeInTheDocument()
@@ -51,7 +48,6 @@ describe('AdminDashboard', () => {
         expect(screen.getByText('Anträge')).toBeInTheDocument()
         expect(screen.getByText('Krank')).toBeInTheDocument()
         expect(screen.getByText('Urlaub')).toBeInTheDocument()
-        expect(screen.getByText('Kalender')).toBeInTheDocument()
         expect(screen.getByText('Übersicht')).toBeInTheDocument()
     })
 
@@ -86,13 +82,7 @@ describe('AdminDashboard', () => {
         expect(screen.getByTestId('admin-vacation')).toBeInTheDocument()
     })
 
-    it('switches to calendar tab', () => {
-        render(<AdminDashboard />)
-        fireEvent.click(screen.getByText('Kalender'))
-        expect(screen.getByTestId('admin-calendar')).toBeInTheDocument()
-    })
-
-    it('passes onNavigateToCalendar prop to AdminAbsences', () => {
+it('passes onNavigateToCalendar prop to AdminAbsences', () => {
         const onNav = vi.fn()
         render(<AdminDashboard onNavigateToCalendar={onNav} />)
         fireEvent.click(screen.getByText('Anträge'))
@@ -112,7 +102,7 @@ describe('AdminDashboard', () => {
     it('only shows one panel at a time', () => {
         render(<AdminDashboard />)
         // Default is overview
-        const panels = ['admin-overview', 'admin-audit', 'admin-employees', 'admin-absences', 'admin-sick', 'admin-vacation', 'admin-calendar', 'admin-planner']
+        const panels = ['admin-overview', 'admin-audit', 'admin-employees', 'admin-absences', 'admin-sick', 'admin-vacation', 'admin-planner']
         const visible = panels.filter(id => screen.queryByTestId(id))
         expect(visible).toHaveLength(1)
         expect(visible[0]).toBe('admin-overview')

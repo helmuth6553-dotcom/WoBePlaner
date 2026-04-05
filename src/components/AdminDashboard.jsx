@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Users, FileText, Thermometer, ShieldCheck, BarChart3, Palmtree, Calendar, CalendarDays } from 'lucide-react'
+import { Users, FileText, Thermometer, ShieldCheck, BarChart3, Palmtree, CalendarDays } from 'lucide-react'
 
 import AdminOverview from './admin/AdminOverview'
 import AdminAuditLog from './admin/AdminAuditLog'
@@ -7,11 +7,13 @@ import AdminSickLeaves from './admin/AdminSickLeaves'
 import AdminEmployees from './admin/AdminEmployees'
 import AdminAbsences from './admin/AdminAbsences'
 import AdminVacationStats from './admin/AdminVacationStats'
-import AdminVacationCalendar from './admin/AdminVacationCalendar'
 import AdminRosterPlanner from './admin/AdminRosterPlanner'
 
 export default function AdminDashboard(props) {
-    const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('adminDashTab') || 'overview')
+    const [activeTab, setActiveTab] = useState(() => {
+        const saved = sessionStorage.getItem('adminDashTab')
+        return saved === 'calendar' ? 'overview' : (saved || 'overview')
+    })
 
     const handleTabChange = (tab) => {
         sessionStorage.setItem('adminDashTab', tab)
@@ -42,9 +44,6 @@ export default function AdminDashboard(props) {
                 <button onClick={() => handleTabChange('vacation')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'vacation' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
                     <Palmtree size={16} /> Urlaub
                 </button>
-                <button onClick={() => handleTabChange('calendar')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'calendar' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-                    <Calendar size={16} /> Kalender
-                </button>
                 <button onClick={() => handleTabChange('overview')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
                     <BarChart3 size={16} /> Übersicht
                 </button>
@@ -57,7 +56,6 @@ export default function AdminDashboard(props) {
                 {activeTab === 'absences' && <AdminAbsences onNavigateToCalendar={props.onNavigateToCalendar} />}
                 {activeTab === 'sick' && <AdminSickLeaves />}
                 {activeTab === 'vacation' && <AdminVacationStats />}
-                {activeTab === 'calendar' && <AdminVacationCalendar />}
                 {activeTab === 'planner' && <AdminRosterPlanner />}
                 {activeTab === 'audit' && <AdminAuditLog />}
             </div>
