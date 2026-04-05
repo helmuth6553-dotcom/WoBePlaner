@@ -886,9 +886,14 @@ export default function AbsencePlanner({ initialDate }) {
                                 <div className="pt-2 text-center">
                                     <button
                                         onClick={() => {
-                                            if (confirm("Diesen genehmigten Urlaub wirklich stornieren?")) {
-                                                handleAdminAction(selectedAbsence, 'storniert')
-                                            }
+                                            setConfirmConfig({
+                                                isOpen: true,
+                                                title: 'Urlaub stornieren',
+                                                message: 'Diesen genehmigten Urlaub wirklich stornieren?',
+                                                confirmText: 'Stornieren',
+                                                isDestructive: true,
+                                                onConfirm: () => handleAdminAction(selectedAbsence, 'storniert')
+                                            })
                                         }}
                                         className="text-xs text-red-400 hover:text-red-600 underline"
                                     >

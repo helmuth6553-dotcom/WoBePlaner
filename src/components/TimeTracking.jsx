@@ -8,6 +8,7 @@ import { calculateWorkHours, calculateDailyAbsenceHours, MANDATORY_SHIFT_TYPES }
 import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateReportHash } from '../utils/security'
 import { constructIso, constructInterruptionIso, isValidInterruptionTime } from '../utils/timeTrackingHelpers'
+import useModal from '../hooks/useModal'
 import { findSnapshotEntry, calculateCorrection } from '../utils/pdfGenerator'
 
 // Shift types that support multiple participants (group events)
@@ -66,6 +67,7 @@ function getItemDisplayDetails(item, entry, userProfile) {
 
 export default function TimeTracking() {
     const { user, isAdmin } = useAuth()
+    const { showAlert, modalElement } = useModal()
 
     // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [items, setItems] = useState([]) // Combined Shifts + Absence Days
@@ -772,7 +774,7 @@ export default function TimeTracking() {
         const { data, error } = await query.select()
 
         if (error) {
-            alert('Fehler: ' + error.message)
+            showAlert({ title: 'Fehler', message: error.message, type: 'error' })
         } else {
             // OPTIMISTIC UPDATE: Update local state immediately
             const newEntry = data?.[0]
@@ -1456,6 +1458,7 @@ export default function TimeTracking() {
                 )
             })()}
 
+            {modalElement}
         </div>
     )
 }

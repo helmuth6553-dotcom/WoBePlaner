@@ -464,8 +464,8 @@ export const generateTimeReportPDF = (yearMonthStr, user, entries, statusData) =
 
         doc.save(`Arbeitszeit_${userName}_${format(new Date(yearMonthStr), 'yyyy_MM')}.pdf`)
     } catch (e) {
-        console.error(e)
-        alert('PDF Fehler: ' + e.message)
+        console.error('PDF Fehler:', e)
+        throw e
     }
 }
 

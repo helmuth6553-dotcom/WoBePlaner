@@ -7,6 +7,7 @@ import CoverageVotingPanel from './CoverageVotingPanel'
 import { calculateWorkHours } from '../utils/timeCalculations'
 import { PRIVATE_SHIFT_TYPES } from '../contexts/ShiftTemplateContext'
 import { USE_COVERAGE_VOTING } from '../featureFlags'
+import useModal from '../hooks/useModal'
 
 const getUserColor = (name) => {
     const colors = [
@@ -35,6 +36,7 @@ const getUserColor = (name) => {
 
 export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onToggleFlex, onToggleTraining, onUpdateShift, onDeleteShift, onCreateShift, isAdmin, isViewer, absenceReason, holiday, absences = [], allProfiles = [], coverageRequests = [], coverageVotes = [], fairnessIndices = [], userBalance = null, onCoverageVote, onCoverageResolve, onDirectTakeover }) {
     // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+    const { showAlert, modalElement } = useModal()
     const [selectedShift, setSelectedShift] = useState(null)
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
     const [editStart, setEditStart] = useState('')
@@ -123,7 +125,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
             const specialTypes = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
             if (!specialTypes.includes(shift.type)) {
                 const msg = absenceReason.type && absenceReason.type.toLowerCase() === 'krank' ? 'Du bist krank gemeldet.' : 'Du bist im Urlaub.'
-                alert(msg + ' Keine Eintragung möglich.')
+                showAlert({ title: 'Nicht möglich', message: msg + ' Keine Eintragung möglich.', type: 'info' })
                 return
             }
         }
@@ -767,6 +769,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
             >
                 {renderSheetContent()}
             </ActionSheet>
+            {modalElement}
         </>
     )
 }

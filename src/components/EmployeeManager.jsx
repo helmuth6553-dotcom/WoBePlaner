@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { X, Edit2, Check } from 'lucide-react'
+import useModal from '../hooks/useModal'
 
 export default function EmployeeManager({ isOpen, onClose, onUpdate }) {
+    const { showAlert, showConfirm, modalElement } = useModal()
     const [profiles, setProfiles] = useState([])
     const [editingId, setEditingId] = useState(null)
     const [editForm, setEditForm] = useState({})
@@ -29,20 +31,25 @@ export default function EmployeeManager({ isOpen, onClose, onUpdate }) {
         })
     }
 
-    const saveEdit = async () => {
-        if (!confirm('Änderungen speichern? Dies wirkt sich auf alle Berechnungen aus.')) return
+    const saveEdit = () => {
+        showConfirm({
+            title: 'Änderungen speichern',
+            message: 'Änderungen speichern? Dies wirkt sich auf alle Berechnungen aus.',
+            confirmText: 'Speichern',
+            onConfirm: async () => {
+                const { error } = await supabase.from('profiles').update({
+                    weekly_hours: parseFloat(editForm.weekly_hours),
+                    vacation_days_per_year: parseInt(editForm.vacation_days_per_year)
+                }).eq('id', editingId)
 
-        const { error } = await supabase.from('profiles').update({
-            weekly_hours: parseFloat(editForm.weekly_hours),
-            vacation_days_per_year: parseInt(editForm.vacation_days_per_year)
-        }).eq('id', editingId)
-
-        if (error) alert(error.message)
-        else {
-            setEditingId(null)
-            refetchProfiles()
-            if (onUpdate) onUpdate()
-        }
+                if (error) showAlert({ title: 'Fehler', message: error.message, type: 'error' })
+                else {
+                    setEditingId(null)
+                    refetchProfiles()
+                    if (onUpdate) onUpdate()
+                }
+            }
+        })
     }
 
     if (!isOpen) return null
@@ -111,6 +118,7 @@ export default function EmployeeManager({ isOpen, onClose, onUpdate }) {
                     </table>
                 </div>
             </div>
+            {modalElement}
         </div>
     )
 }

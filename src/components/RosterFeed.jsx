@@ -1183,21 +1183,28 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                                                 fetchData()
                                                             }
                                                         }}
-                                                        onDeleteShift={async (shiftId) => {
+                                                        onDeleteShift={(shiftId) => {
                                                             if (!isAdmin) return
-                                                            if (!window.confirm("Möchtest du diesen Dienst wirklich löschen?")) return
-                                                            await supabase.from('shift_interests').delete().eq('shift_id', shiftId)
-                                                            const { data: deletedShift, error } = await supabase.from('shifts').delete().eq('id', shiftId).select()
-                                                            if (error) {
-                                                                setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
-                                                            } else {
-                                                                // Audit Log
-                                                                await logAdminAction('shift_deleted', null, 'shift', shiftId, {
-                                                                    deleted: deletedShift?.[0] || { id: shiftId }
-                                                                })
-                                                                setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst gelöscht', type: 'success' })
-                                                                fetchData()
-                                                            }
+                                                            setConfirmConfig({
+                                                                isOpen: true,
+                                                                title: 'Dienst löschen',
+                                                                message: 'Möchtest du diesen Dienst wirklich löschen?',
+                                                                confirmText: 'Löschen',
+                                                                isDestructive: true,
+                                                                onConfirm: async () => {
+                                                                    await supabase.from('shift_interests').delete().eq('shift_id', shiftId)
+                                                                    const { data: deletedShift, error } = await supabase.from('shifts').delete().eq('id', shiftId).select()
+                                                                    if (error) {
+                                                                        setAlertConfig({ isOpen: true, title: 'Fehler', message: error.message, type: 'error' })
+                                                                    } else {
+                                                                        await logAdminAction('shift_deleted', null, 'shift', shiftId, {
+                                                                            deleted: deletedShift?.[0] || { id: shiftId }
+                                                                        })
+                                                                        setAlertConfig({ isOpen: true, title: 'Erfolg', message: 'Dienst gelöscht', type: 'success' })
+                                                                        fetchData()
+                                                                    }
+                                                                }
+                                                            })
                                                         }}
                                                         onCreateShift={async (dateStr, type) => {
                                                             if (!isAdmin) return

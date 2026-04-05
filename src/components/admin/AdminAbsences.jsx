@@ -4,6 +4,7 @@ import { format, differenceInBusinessDays } from 'date-fns'
 import { supabase } from '../../supabase'
 import { logAdminAction } from '../../utils/adminAudit'
 import { generateVacationRequestPDF } from '../../utils/vacationPdfGenerator'
+import useModal from '../../hooks/useModal'
 
 /**
  * =========================================================================
@@ -16,6 +17,7 @@ import { generateVacationRequestPDF } from '../../utils/vacationPdfGenerator'
  * =========================================================================
  */
 export default function AdminAbsences({ onNavigateToCalendar }) {
+    const { showAlert, showConfirm, modalElement } = useModal()
     const [requests, setRequests] = useState([])
     const [archive, setArchive] = useState([])
     const [_downloadedIds, setDownloadedIds] = useState(new Set())
@@ -68,42 +70,42 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
         fetchRequests()
     }
 
-    const handleCancel = async (id) => {
-        if (!confirm('Wirklich stornieren?')) return
+    const handleCancel = (id) => {
+        showConfirm({
+            title: 'Stornieren',
+            message: 'Diesen Antrag wirklich stornieren?',
+            confirmText: 'Stornieren',
+            isDestructive: true,
+            onConfirm: async () => {
+                const { data: { user } } = await supabase.auth.getUser()
+                const request = requests.find(r => r.id === id) || archive.find(r => r.id === id)
 
-        const { data: { user } } = await supabase.auth.getUser()
+                const { error } = await supabase.from('absences').update({ status: 'storniert' }).eq('id', id)
 
-        // Logging Context
-        const request = requests.find(r => r.id === id) || archive.find(r => r.id === id)
+                if (error) console.error('Cancel Error:', error)
 
-
-
-        const { error } = await supabase.from('absences').update({ status: 'storniert' }).eq('id', id)
-
-        if (error) console.error('Cancel Error:', error)
-
-        // Audit Logging
-        // Audit Logging
-        if (!error && user && request) {
-            await logAdminAction(
-                'absence_storniert',
-                request.user_id,
-                'absence_request',
-                id,
-                {
-                    before: { status: request.status },
-                    after: { status: 'storniert' },
-                    context: {
-                        type: request.type,
-                        start_date: request.start_date,
-                        end_date: request.end_date,
-                        employee_name: request.profiles?.full_name
-                    }
+                if (!error && user && request) {
+                    await logAdminAction(
+                        'absence_storniert',
+                        request.user_id,
+                        'absence_request',
+                        id,
+                        {
+                            before: { status: request.status },
+                            after: { status: 'storniert' },
+                            context: {
+                                type: request.type,
+                                start_date: request.start_date,
+                                end_date: request.end_date,
+                                employee_name: request.profiles?.full_name
+                            }
+                        }
+                    )
                 }
-            )
-        }
 
-        fetchRequests()
+                fetchRequests()
+            }
+        })
     }
 
     const generatePDF = async (req) => {
@@ -187,7 +189,7 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
             setDownloadedIds(prev => new Set(prev).add(req.id))
         } catch (e) {
             console.error(e)
-            alert("Fehler beim Erstellen des PDFs: " + e.message)
+            showAlert({ title: 'PDF-Fehler', message: e.message, type: 'error' })
         }
     }
 
@@ -251,6 +253,7 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
                     </div>
                 </div>
             ))}</div>
+            {modalElement}
         </div>
     )
 }
