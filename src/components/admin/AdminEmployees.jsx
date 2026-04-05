@@ -3,6 +3,7 @@ import { Users, CheckCircle, XCircle, Plus, Mail, Trash2, Link as LinkIcon, Shie
 import { format } from 'date-fns'
 import { supabase } from '../../supabase'
 import { logAdminAction, fetchBeforeState } from '../../utils/adminAudit'
+import useModal from '../../hooks/useModal'
 
 /**
  * =========================================================================
@@ -14,6 +15,7 @@ import { logAdminAction, fetchBeforeState } from '../../utils/adminAudit'
  * =========================================================================
  */
 export default function AdminEmployees() {
+    const { showAlert, showConfirm, modalElement } = useModal()
     const [users, setUsers] = useState([])
     const [inactiveUsers, setInactiveUsers] = useState([])
     const [showInactive, setShowInactive] = useState(false)
@@ -159,9 +161,9 @@ export default function AdminEmployees() {
                     throw new Error(inviteError.message)
                 }
 
-                alert('⚠️ Einladung erstellt (Legacy-Modus).\n\nHinweis: Der Mitarbeiter muss sich manuell registrieren. Für automatische Kontoerstellung bitte Edge Function deployen.')
+                showAlert({ title: 'Einladung erstellt', message: 'Legacy-Modus: Der Mitarbeiter muss sich manuell registrieren. Für automatische Kontoerstellung bitte Edge Function deployen.', type: 'info' })
             } else if (response.data?.success) {
-                alert(`✅ Benutzer "${formData.full_name || formData.email}" erfolgreich erstellt!\n\nDer Mitarbeiter erhält eine E-Mail zum Setzen des Passworts.`)
+                showAlert({ title: 'Benutzer erstellt', message: `"${formData.full_name || formData.email}" erfolgreich erstellt! Der Mitarbeiter erhält eine E-Mail zum Setzen des Passworts.`, type: 'success' })
             } else {
                 throw new Error(response.data?.error || 'Unbekannter Fehler')
             }
@@ -221,7 +223,7 @@ export default function AdminEmployees() {
         const { error } = await supabase.from('profiles').update(updatePayload).eq('id', editingUser.id)
 
         if (error) {
-            alert(error.message)
+            showAlert({ title: 'Fehler', message: error.message, type: 'error' })
         } else {
             await logAdminAction(
                 'employee_updated',
@@ -235,56 +237,66 @@ export default function AdminEmployees() {
         }
     }
 
-    const handleDeactivate = async () => {
+    const handleDeactivate = () => {
         if (!editingUser) return
-        if (!confirm(`${editingUser.full_name || editingUser.email} wirklich deaktivieren?\n\nDer Mitarbeiter kann sich nicht mehr einloggen und erscheint nicht mehr in Listen.\n\nDie Daten bleiben erhalten und können später wiederhergestellt werden.`)) return
+        showConfirm({
+            title: 'Mitarbeiter deaktivieren',
+            message: `${editingUser.full_name || editingUser.email} wirklich deaktivieren? Der Mitarbeiter kann sich nicht mehr einloggen und erscheint nicht mehr in Listen. Die Daten bleiben erhalten und können später wiederhergestellt werden.`,
+            confirmText: 'Deaktivieren',
+            isDestructive: true,
+            onConfirm: async () => {
+                const { data: { user } } = await supabase.auth.getUser()
 
-        const { data: { user } } = await supabase.auth.getUser()
+                const { error } = await supabase.from('profiles').update({
+                    is_active: false,
+                    deactivated_at: new Date().toISOString(),
+                    deactivated_by: user?.id
+                }).eq('id', editingUser.id)
 
-        const { error } = await supabase.from('profiles').update({
-            is_active: false,
-            deactivated_at: new Date().toISOString(),
-            deactivated_by: user?.id
-        }).eq('id', editingUser.id)
-
-        if (error) {
-            alert('Fehler: ' + error.message)
-        } else {
-            // Audit Log
-            await logAdminAction(
-                'deactivate_user',
-                editingUser.id,
-                'profile',
-                editingUser.id,
-                { before: { is_active: true }, after: { is_active: false } }
-            )
-            setEditingUser(null)
-            fetchData()
-        }
+                if (error) {
+                    showAlert({ title: 'Fehler', message: error.message, type: 'error' })
+                } else {
+                    await logAdminAction(
+                        'deactivate_user',
+                        editingUser.id,
+                        'profile',
+                        editingUser.id,
+                        { before: { is_active: true }, after: { is_active: false } }
+                    )
+                    setEditingUser(null)
+                    fetchData()
+                }
+            }
+        })
     }
 
-    const handleReactivate = async (userId) => {
-        if (!confirm('Mitarbeiter wieder aktivieren?')) return
+    const handleReactivate = (userId) => {
+        showConfirm({
+            title: 'Mitarbeiter aktivieren',
+            message: 'Mitarbeiter wieder aktivieren?',
+            confirmText: 'Aktivieren',
+            onConfirm: async () => {
+                const { error } = await supabase.from('profiles').update({
+                    is_active: true,
+                    deactivated_at: null,
+                    deactivated_by: null
+                }).eq('id', userId)
 
-        const { error } = await supabase.from('profiles').update({
-            is_active: true,
-            deactivated_at: null,
-            deactivated_by: null
-        }).eq('id', userId)
-
-        if (error) {
-            alert('Fehler: ' + error.message)
-        } else {
-            const { data: { user: _user } } = await supabase.auth.getUser()
-            await logAdminAction(
-                'reactivate_user',
-                userId,
-                'profile',
-                userId,
-                { before: { is_active: false }, after: { is_active: true } }
-            )
-            fetchData()
-        }
+                if (error) {
+                    showAlert({ title: 'Fehler', message: error.message, type: 'error' })
+                } else {
+                    const { data: { user: _user } } = await supabase.auth.getUser()
+                    await logAdminAction(
+                        'reactivate_user',
+                        userId,
+                        'profile',
+                        userId,
+                        { before: { is_active: false }, after: { is_active: true } }
+                    )
+                    fetchData()
+                }
+            }
+        })
     }
 
     const openEdit = (user) => {
@@ -415,7 +427,7 @@ export default function AdminEmployees() {
                                 <button
                                     onClick={() => {
                                         navigator.clipboard.writeText(`${window.location.origin}?login=true`)
-                                        alert('Link in die Zwischenablage kopiert!')
+                                        showAlert({ title: 'Kopiert', message: 'Link in die Zwischenablage kopiert!', type: 'success' })
                                     }}
                                     className="w-full mt-2 text-yellow-800 hover:text-yellow-900 font-bold text-[10px] bg-white border border-yellow-200 hover:bg-yellow-100 px-2 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
                                 >
@@ -644,6 +656,7 @@ export default function AdminEmployees() {
                     </div>
                 </div>
             )}
+            {modalElement}
         </div>
     )
 }

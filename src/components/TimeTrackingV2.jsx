@@ -15,6 +15,7 @@ import { supabase } from '../supabase'
 import { format, parseISO, areIntervalsOverlapping } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { CheckCircle, Save, Sun, Thermometer, ChevronRight, ChevronLeft, Users } from 'lucide-react'
+import useModal from '../hooks/useModal'
 
 // Custom Hooks
 import { useShifts } from '../hooks/useShifts'
@@ -30,6 +31,7 @@ import { calculateWorkHours } from '../utils/timeCalculations'
 
 export default function TimeTrackingV2() {
     const { user, isAdmin } = useAuth()
+    const { showAlert, modalElement } = useModal()
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'))
     const [userProfile, setUserProfile] = useState(null)
     const [editingItem, setEditingItem] = useState(null)
@@ -180,7 +182,7 @@ export default function TimeTrackingV2() {
             refetchEntries()
         } catch (error) {
             console.error('Save error:', error)
-            alert('Fehler beim Speichern: ' + error.message)
+            showAlert({ title: 'Fehler', message: 'Fehler beim Speichern: ' + error.message, type: 'error' })
         }
     }, [editingItem, user, entriesMap, refetchEntries])
 
@@ -484,6 +486,7 @@ export default function TimeTrackingV2() {
                     </div>
                 </div>
             )}
+            {modalElement}
         </div>
     )
 }

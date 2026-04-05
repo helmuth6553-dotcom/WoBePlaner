@@ -8,8 +8,10 @@ import { calculateGenericBalance } from '../utils/balanceHelpers'
 import { generateReportHash } from '../utils/security'
 import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
 import { constructIso, constructInterruptionIso, safeFormatTime, safeFormatDate, isValidInterruptionTime } from '../utils/timeTrackingHelpers'
+import useModal from '../hooks/useModal'
 
 export default function AdminTimeTracking() {
+    const { showAlert, showConfirm, modalElement } = useModal()
     const [users, setUsers] = useState([])
     const [selectedUserId, setSelectedUserId] = useState('')
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'))
@@ -481,7 +483,7 @@ export default function AdminTimeTracking() {
 
         const selectedProfile = users.find(u => u.id === selectedUserId)
         if (!selectedProfile) {
-            alert('Benutzer nicht gefunden')
+            showAlert({ title: 'Fehler', message: 'Benutzer nicht gefunden', type: 'error' })
             return
         }
 
@@ -564,15 +566,15 @@ export default function AdminTimeTracking() {
     const handleSaveCorrection = async () => {
         const targetTotal = parseFloat(correctionData.targetTotal)
         if (isNaN(targetTotal)) {
-            alert('Bitte gültigen Ziel-Übertrag eingeben')
+            showAlert({ title: 'Eingabefehler', message: 'Bitte gültigen Ziel-Übertrag eingeben', type: 'error' })
             return
         }
         if (!correctionData.reason.trim()) {
-            alert('Bitte Begründung angeben')
+            showAlert({ title: 'Eingabefehler', message: 'Bitte Begründung angeben', type: 'error' })
             return
         }
         if (!currentBalance) {
-            alert('Balance konnte nicht berechnet werden')
+            showAlert({ title: 'Fehler', message: 'Balance konnte nicht berechnet werden', type: 'error' })
             return
         }
 
@@ -581,7 +583,7 @@ export default function AdminTimeTracking() {
         const correctionHours = targetTotal - currentTotal
 
         if (Math.abs(correctionHours) < 0.01) {
-            alert('Der Ziel-Übertrag entspricht dem aktuellen Wert. Keine Korrektur nötig.')
+            showAlert({ title: 'Hinweis', message: 'Der Ziel-Übertrag entspricht dem aktuellen Wert. Keine Korrektur nötig.' })
             return
         }
 
@@ -597,7 +599,7 @@ export default function AdminTimeTracking() {
         })
 
         if (error) {
-            alert('Fehler: ' + error.message)
+            showAlert({ title: 'Fehler', message: error.message, type: 'error' })
         } else {
             // Log admin action
             await logAdminAction(
@@ -622,103 +624,118 @@ export default function AdminTimeTracking() {
     }
 
     // Delete Correction
-    const handleDeleteCorrection = async (correctionId) => {
-        if (!confirm('Korrektur wirklich löschen?')) return
+    const handleDeleteCorrection = (correctionId) => {
+        showConfirm({
+            title: 'Korrektur löschen',
+            message: 'Korrektur wirklich löschen?',
+            confirmText: 'Löschen',
+            isDestructive: true,
+            onConfirm: async () => {
+                const before = await fetchBeforeState('balance_corrections', correctionId,
+                    'id, user_id, correction_hours, effective_month, reason, created_by')
 
-        const before = await fetchBeforeState('balance_corrections', correctionId,
-            'id, user_id, correction_hours, effective_month, reason, created_by')
+                const { error } = await supabase
+                    .from('balance_corrections')
+                    .delete()
+                    .eq('id', correctionId)
 
-        const { error } = await supabase
-            .from('balance_corrections')
-            .delete()
-            .eq('id', correctionId)
-
-        if (error) {
-            alert('Fehler: ' + error.message)
-        } else {
-            await logAdminAction(
-                'balance_correction_deleted',
-                before?.user_id || selectedUserId,
-                'balance_correction',
-                correctionId,
-                { before }
-            )
-            fetchData()
-        }
+                if (error) {
+                    showAlert({ title: 'Fehler', message: error.message, type: 'error' })
+                } else {
+                    await logAdminAction(
+                        'balance_correction_deleted',
+                        before?.user_id || selectedUserId,
+                        'balance_correction',
+                        correctionId,
+                        { before }
+                    )
+                    fetchData()
+                }
+            }
+        })
     }
 
     // --- Actions ---
-    const handleFinalizeMonth = async () => {
+    const handleFinalizeMonth = () => {
         if (!userMonthStatus) return
-        if (!confirm(`Abschließen?`)) return
+        showConfirm({
+            title: 'Monat abschließen',
+            message: 'Monat wirklich abschließen?',
+            confirmText: 'Abschließen',
+            onConfirm: async () => {
+                // Get admin name for signature
+                const { data: { user: adminUser } } = await supabase.auth.getUser()
+                const { data: adminProfile } = await supabase
+                    .from('profiles')
+                    .select('full_name')
+                    .eq('id', adminUser.id)
+                    .single()
+                const approverName = adminProfile?.full_name || 'Administrator'
 
-        // Get admin name for signature
-        const { data: { user: adminUser } } = await supabase.auth.getUser()
-        const { data: adminProfile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', adminUser.id)
-            .single()
-        const approverName = adminProfile?.full_name || 'Administrator'
+                const { error } = await supabase
+                    .from('monthly_reports')
+                    .update({
+                        status: 'genehmigt',
+                        approved_at: new Date().toISOString(),
+                        approver_name: approverName
+                    })
+                    .eq('id', userMonthStatus.id)
 
-        const { error } = await supabase
-            .from('monthly_reports')
-            .update({
-                status: 'genehmigt',
-                approved_at: new Date().toISOString(),
-                approver_name: approverName
-            })
-            .eq('id', userMonthStatus.id)
+                if (error) {
+                    showAlert({ title: 'Fehler', message: error.message, type: 'error' })
+                } else {
+                    await logAdminAction(
+                        'approve_report',
+                        selectedUserId,
+                        'monthly_report',
+                        userMonthStatus.id,
+                        {
+                            before: { status: userMonthStatus.status },
+                            after: { status: 'genehmigt' }
+                        },
+                        { year: userMonthStatus.year, month: userMonthStatus.month }
+                    )
 
-        if (error) {
-            alert(error.message)
-        } else {
-            // Log admin action
-            await logAdminAction(
-                'approve_report',
-                selectedUserId,
-                'monthly_report',
-                userMonthStatus.id,
-                {
-                    before: { status: userMonthStatus.status },
-                    after: { status: 'genehmigt' }
-                },
-                { year: userMonthStatus.year, month: userMonthStatus.month }
-            )
-
-            generatePDF(true, approverName)
-            fetchData()
-            fetchUsers()
-        }
+                    generatePDF(true, approverName)
+                    fetchData()
+                    fetchUsers()
+                }
+            }
+        })
     }
 
-    const handleReopenMonth = async () => {
-        if (!confirm(`Widerrufen?`)) return
+    const handleReopenMonth = () => {
+        showConfirm({
+            title: 'Genehmigung widerrufen',
+            message: 'Genehmigung wirklich widerrufen?',
+            confirmText: 'Widerrufen',
+            isDestructive: true,
+            onConfirm: async () => {
+                const { error } = await supabase
+                    .from('monthly_reports')
+                    .update({ status: 'abgelehnt', rejected_at: new Date().toISOString() })
+                    .eq('id', userMonthStatus.id)
 
-        const { error } = await supabase
-            .from('monthly_reports')
-            .update({ status: 'abgelehnt', rejected_at: new Date().toISOString() })
-            .eq('id', userMonthStatus.id)
+                if (error) {
+                    showAlert({ title: 'Fehler', message: error.message, type: 'error' })
+                } else {
+                    await logAdminAction(
+                        'reject_report',
+                        selectedUserId,
+                        'monthly_report',
+                        userMonthStatus.id,
+                        {
+                            before: { status: userMonthStatus.status },
+                            after: { status: 'abgelehnt' }
+                        },
+                        { year: userMonthStatus.year, month: userMonthStatus.month }
+                    )
 
-        if (error) {
-            alert(error.message)
-        } else {
-            // Log admin action
-            await logAdminAction(
-                'reject_report',
-                selectedUserId,
-                'monthly_report',
-                userMonthStatus.id,
-                {
-                    before: { status: userMonthStatus.status },
-                    after: { status: 'abgelehnt' }
-                },
-                { year: userMonthStatus.year, month: userMonthStatus.month }
-            )
-
-            fetchData()
-            fetchUsers()
-        }
+                    fetchData()
+                    fetchUsers()
+                }
+            }
+        })
     }
 
     const generatePDF = async (official = false, approverNameOverride = null) => {
@@ -827,7 +844,7 @@ export default function AdminTimeTracking() {
         const { error, data } = await supabase.from('time_entries').update(updatePayload).eq('id', editingEntry.id).select()
 
         if (error) {
-            alert(error.message)
+            showAlert({ title: 'Fehler', message: error.message, type: 'error' })
         } else {
             await logAdminAction(
                 'time_entry_approved',
@@ -1528,6 +1545,7 @@ export default function AdminTimeTracking() {
                     </div>
                 </div>
             )}
+            {modalElement}
         </div>
     )
 }

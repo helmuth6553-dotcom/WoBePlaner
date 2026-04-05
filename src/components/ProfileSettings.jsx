@@ -4,8 +4,10 @@ import { User, Save, Shield, LogOut, Lock, FileCheck, Download, Briefcase, Calen
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
 import NotificationToggle from './NotificationToggle'
+import useModal from '../hooks/useModal'
 
 export default function ProfileSettings({ user, profile, onProfileUpdate }) {
+    const { showAlert, modalElement } = useModal()
     const [fullName, setFullName] = useState(profile?.full_name || '')
     const [displayName, setDisplayName] = useState(profile?.display_name || '')
     const [password, setPassword] = useState('')
@@ -19,9 +21,9 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
             display_name: displayName || null
         }).eq('id', user.id)
         setLoading(false)
-        if (error) alert('Fehler beim Speichern')
+        if (error) showAlert({ title: 'Fehler', message: 'Fehler beim Speichern', type: 'error' })
         else {
-            alert('Profil aktualisiert!')
+            showAlert({ title: 'Gespeichert', message: 'Profil aktualisiert!', type: 'success' })
             onProfileUpdate?.()
         }
     }
@@ -30,9 +32,9 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
         setLoading(true)
         const { error } = await supabase.auth.updateUser({ password })
         setLoading(false)
-        if (error) alert('Fehler: ' + error.message)
+        if (error) showAlert({ title: 'Fehler', message: error.message, type: 'error' })
         else {
-            alert('Passwort erfolgreich gesetzt!')
+            showAlert({ title: 'Erfolg', message: 'Passwort erfolgreich gesetzt!', type: 'success' })
             setPassword('')
         }
     }
@@ -213,6 +215,7 @@ export default function ProfileSettings({ user, profile, onProfileUpdate }) {
             >
                 <LogOut size={20} /> Abmelden
             </button>
+            {modalElement}
         </div>
     )
 }

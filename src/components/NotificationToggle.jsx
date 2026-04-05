@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { Bell, BellOff, Clock, Calendar, Thermometer } from 'lucide-react';
+import useModal from '../hooks/useModal';
 
 const PUBLIC_VAPID_KEY = 'BPLhlPrMJfoXFoLDvQ06uHLNXkQsofVqafEug1Y8AAZkDpU--i-kVjx1qA3EEgXj79aKfLqhVmpL8XtArMh_gPM';
 
@@ -95,6 +96,7 @@ async function getServiceWorkerRegistration(timeoutMs = 10000) {
 }
 
 export default function NotificationToggle() {
+    const { showAlert, showConfirm, modalElement } = useModal();
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [loading, setLoading] = useState(false);
     const [savingPrefs, setSavingPrefs] = useState(false);
@@ -262,53 +264,56 @@ export default function NotificationToggle() {
 
             setIsSubscribed(true);
             setUserId(user.id);
-            alert('Benachrichtigungen aktiviert!');
+            showAlert({ title: 'Aktiviert', message: 'Benachrichtigungen aktiviert!', type: 'success' });
         } catch (err) {
             console.error('Push subscription error:', err);
             setError(err.message);
-            alert('Fehler beim Aktivieren: ' + err.message);
+            showAlert({ title: 'Fehler', message: 'Fehler beim Aktivieren: ' + err.message, type: 'error' });
         } finally {
             setLoading(false);
         }
     };
 
-    const unsubscribeFromPush = async () => {
-        if (!confirm('Push-Benachrichtigungen wirklich deaktivieren?')) return;
+    const unsubscribeFromPush = () => {
+        showConfirm({
+            title: 'Benachrichtigungen deaktivieren',
+            message: 'Push-Benachrichtigungen wirklich deaktivieren?',
+            confirmText: 'Deaktivieren',
+            isDestructive: true,
+            onConfirm: async () => {
+                setLoading(true);
+                setError(null);
+                try {
+                    const registration = await navigator.serviceWorker.getRegistration();
+                    const subscription = registration
+                        ? await registration.pushManager.getSubscription()
+                        : null;
 
-        setLoading(true);
-        setError(null);
-        try {
-            const registration = await navigator.serviceWorker.getRegistration();
-            const subscription = registration
-                ? await registration.pushManager.getSubscription()
-                : null;
+                    if (subscription) {
+                        await supabase
+                            .from('push_subscriptions')
+                            .delete()
+                            .eq('endpoint', subscription.endpoint);
 
-            if (subscription) {
-                // Remove from DB first
-                await supabase
-                    .from('push_subscriptions')
-                    .delete()
-                    .eq('endpoint', subscription.endpoint);
+                        await subscription.unsubscribe();
+                    }
 
-                // Unsubscribe from browser
-                await subscription.unsubscribe();
+                    if (userId) {
+                        await supabase
+                            .from('push_subscriptions')
+                            .delete()
+                            .eq('user_id', userId);
+                    }
+
+                    setIsSubscribed(false);
+                } catch (err) {
+                    console.error('Push unsubscribe error:', err);
+                    setError('Fehler beim Deaktivieren: ' + err.message);
+                } finally {
+                    setLoading(false);
+                }
             }
-
-            // Also delete any remaining subscriptions for this user
-            if (userId) {
-                await supabase
-                    .from('push_subscriptions')
-                    .delete()
-                    .eq('user_id', userId);
-            }
-
-            setIsSubscribed(false);
-        } catch (err) {
-            console.error('Push unsubscribe error:', err);
-            setError('Fehler beim Deaktivieren: ' + err.message);
-        } finally {
-            setLoading(false);
-        }
+        });
     };
 
     if (!('serviceWorker' in navigator)) {
@@ -397,6 +402,7 @@ export default function NotificationToggle() {
                     </button>
                 </div>
             )}
+            {modalElement}
         </div>
     );
 }
