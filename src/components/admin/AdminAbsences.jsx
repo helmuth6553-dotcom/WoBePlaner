@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Calendar, CheckCircle, XCircle, Download, Trash2 } from 'lucide-react'
-import { format, differenceInBusinessDays } from 'date-fns'
+import { format, eachDayOfInterval, isWeekend } from 'date-fns'
+import { getHolidays, isHoliday } from '../../utils/holidays'
 import { supabase } from '../../supabase'
 import { logAdminAction } from '../../utils/adminAudit'
 import { generateVacationRequestPDF } from '../../utils/vacationPdfGenerator'
@@ -23,9 +24,9 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
     const [_downloadedIds, setDownloadedIds] = useState(new Set())
 
     const fetchRequests = async () => {
-        const { data: pending } = await supabase.from('absences').select('*, profiles!user_id(full_name, email)').eq('status', 'beantragt').neq('type', 'Krank').order('start_date')
+        const { data: pending } = await supabase.from('absences').select('*, profiles!user_id(full_name, email, vacation_days_per_year)').eq('status', 'beantragt').neq('type', 'Krank').order('start_date')
         setRequests(pending || [])
-        const { data: processed } = await supabase.from('absences').select('*, profiles!user_id(full_name, email)').in('status', ['genehmigt', 'abgelehnt', 'storniert']).neq('type', 'Krank').order('start_date', { ascending: false }).limit(50)
+        const { data: processed } = await supabase.from('absences').select('*, profiles!user_id(full_name, email, vacation_days_per_year)').in('status', ['genehmigt', 'abgelehnt', 'storniert']).neq('type', 'Krank').order('start_date', { ascending: false }).limit(50)
         setArchive(processed || [])
     }
 
@@ -156,8 +157,11 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
 
             let daysUsedTotal = 0
             if (allVacations) {
+                const holidays = getHolidays(year)
                 allVacations.forEach(v => {
-                    daysUsedTotal += differenceInBusinessDays(new Date(v.end_date), new Date(v.start_date)) + 1
+                    daysUsedTotal += eachDayOfInterval({ start: new Date(v.start_date), end: new Date(v.end_date) })
+                        .filter(d => !isWeekend(d) && !isHoliday(d, holidays))
+                        .length
                 })
             }
             const remaining = yearlyEntitlement - daysUsedTotal

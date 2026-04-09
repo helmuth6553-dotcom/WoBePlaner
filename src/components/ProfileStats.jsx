@@ -566,25 +566,12 @@ export default function ProfileStats() {
     }
 
     // Chart calculations
-    const maxAbsDiff = useMemo(() => {
+    const maxAbsTotal = useMemo(() => {
         if (monthlyData.length === 0) return 1
-        return Math.max(...monthlyData.map(m => Math.abs(m.diff)), 1)
+        return Math.max(...monthlyData.map(m => Math.abs(m.total)), 1)
     }, [monthlyData])
 
-    const cumulativeData = useMemo(() => {
-        let cumulative = 0
-        return monthlyData.map(m => {
-            cumulative += m.diff
-            return { ...m, cumulative: Math.round(cumulative * 100) / 100 }
-        })
-    }, [monthlyData])
-
-    const maxAbsCumulative = useMemo(() => {
-        if (cumulativeData.length === 0) return 1
-        return Math.max(...cumulativeData.map(m => Math.abs(m.cumulative)), 1)
-    }, [cumulativeData])
-
-    const currentCumulative = cumulativeData.at(-1)?.cumulative ?? 0
+    const currentCumulative = monthlyData.at(-1)?.total ?? 0
 
     const flexMonths = useMemo(() => {
         return monthlyData.map(m => ({
@@ -966,7 +953,7 @@ export default function ProfileStats() {
                             {currentCumulative > 0 ? '+' : ''}{currentCumulative}h
                         </span>
                     </div>
-                    <p className="text-xs text-gray-400 mb-4">Monatlicher Saldo der letzten 12 Monate</p>
+                    <p className="text-xs text-gray-400 mb-4">Gesamtsaldo der letzten 12 Monate</p>
 
                     {/* Balkendiagramm */}
                     <div className="flex items-stretch gap-1 h-24 relative">
@@ -974,8 +961,8 @@ export default function ProfileStats() {
                         <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-gray-200 pointer-events-none" />
 
                         {monthlyData.map((m) => {
-                            const heightPct = Math.abs(m.diff) / maxAbsDiff * 45
-                            const isPositive = m.diff >= 0
+                            const heightPct = Math.abs(m.total) / maxAbsTotal * 45
+                            const isPositive = m.total >= 0
                             return (
                                 <div key={m.month} className="flex-1 flex flex-col h-full">
                                     {/* obere Hälfte */}
@@ -986,7 +973,7 @@ export default function ProfileStats() {
                                                 style={{ height: `${heightPct}%` }}
                                             >
                                                 <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-teal-700 whitespace-nowrap">
-                                                    +{m.diff}
+                                                    +{m.total}
                                                 </span>
                                             </div>
                                         )}
@@ -999,7 +986,7 @@ export default function ProfileStats() {
                                                 style={{ height: `${heightPct}%` }}
                                             >
                                                 <span className="absolute top-full mt-0.5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-red-600 whitespace-nowrap">
-                                                    {m.diff}
+                                                    {m.total}
                                                 </span>
                                             </div>
                                         )}
