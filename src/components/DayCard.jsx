@@ -3,6 +3,7 @@ import { format, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { Moon, Sun, CalendarOff, Users, Clock, Coffee, Compass, Thermometer, Plus, BookOpen, GraduationCap, MessageCircle, MoreHorizontal, EyeOff } from 'lucide-react'
 import ActionSheet from './ActionSheet'
+import AlertModal from './AlertModal'
 import CoverageVotingPanel from './CoverageVotingPanel'
 import { calculateWorkHours } from '../utils/timeCalculations'
 import { PRIVATE_SHIFT_TYPES } from '../contexts/ShiftTemplateContext'
@@ -40,6 +41,7 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
     const [editStart, setEditStart] = useState('')
     const [editEnd, setEditEnd] = useState('')
     const [editTitle, setEditTitle] = useState('')
+    const [absenceAlert, setAbsenceAlert] = useState(null)
 
     useEffect(() => {
         if (selectedShift) {
@@ -122,8 +124,12 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
             // Allow viewing Team/Training details even if absent?
             const specialTypes = ['TEAM', 'FORTBILDUNG', 'EINSCHULUNG', 'MITARBEITERGESPRAECH', 'SONSTIGES', 'SUPERVISION']
             if (!specialTypes.includes(shift.type)) {
-                const msg = absenceReason.type && absenceReason.type.toLowerCase() === 'krank' ? 'Du bist krank gemeldet.' : 'Du bist im Urlaub.'
-                alert(msg + ' Keine Eintragung möglich.')
+                const isSickAbsence = absenceReason.type && absenceReason.type.toLowerCase() === 'krank'
+                setAbsenceAlert({
+                    title: isSickAbsence ? 'Krank gemeldet' : 'Im Urlaub',
+                    message: (isSickAbsence ? 'Du bist krank gemeldet.' : 'Du bist im Urlaub.') + ' Keine Eintragung möglich.',
+                    type: 'error'
+                })
                 return
             }
         }
@@ -767,6 +773,13 @@ export default function DayCard({ dateStr, shifts, userId, onToggleInterest, onT
             >
                 {renderSheetContent()}
             </ActionSheet>
+            <AlertModal
+                isOpen={!!absenceAlert}
+                onClose={() => setAbsenceAlert(null)}
+                title={absenceAlert?.title}
+                message={absenceAlert?.message}
+                type={absenceAlert?.type}
+            />
         </>
     )
 }
