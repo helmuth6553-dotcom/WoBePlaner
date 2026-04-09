@@ -14,8 +14,28 @@
  */
 
 import { jsPDF } from 'jspdf'
-import { format, differenceInBusinessDays, isSameDay } from 'date-fns'
+import { format, isSameDay } from 'date-fns'
 import { getHolidays } from './holidays'
+
+/**
+ * Count workdays (Mon-Fri, excluding Austrian holidays) in a date range, inclusive.
+ */
+const countWorkdays = (start, end) => {
+    const holidays = [
+        ...getHolidays(start.getFullYear()),
+        ...getHolidays(end.getFullYear()),
+    ]
+    let count = 0
+    let current = new Date(start)
+    while (current <= end) {
+        const day = current.getDay()
+        if (day !== 0 && day !== 6 && !holidays.some(h => isSameDay(h.date, current))) {
+            count++
+        }
+        current.setDate(current.getDate() + 1)
+    }
+    return count
+}
 
 /**
  * Calculate the first working day after a given date
@@ -64,7 +84,7 @@ export const generateVacationRequestPDF = ({
     const startDate = new Date(request.start_date)
     const endDate = new Date(request.end_date)
     const returnDate = getFirstWorkingDayAfter(endDate)
-    const durationDays = differenceInBusinessDays(endDate, startDate) + 1
+    const durationDays = countWorkdays(startDate, endDate)
 
     const margin = 20
     const pageWidth = doc.internal.pageSize.getWidth()
@@ -103,7 +123,7 @@ export const generateVacationRequestPDF = ({
     doc.setFontSize(18)
     doc.setFont(undefined, 'bold')
     doc.setTextColor(15, 23, 42)
-    doc.text('URLAUBSANSUCHEN / MELDUNG', pageWidth / 2, yPos, { align: 'center' })
+    doc.text('URLAUBSANSUCHEN', pageWidth / 2, yPos, { align: 'center' })
 
     // =========================================================================
     // STATUS BADGE (centered)
@@ -195,8 +215,9 @@ export const generateVacationRequestPDF = ({
     const rightColX = margin + contentWidth - 35
     doc.setFontSize(12)
 
-    // Balance before
-    const balanceOld = (vacationAccount?.remaining || 0) + durationDays
+    // Balance before this vacation
+    const remaining = vacationAccount?.remaining ?? 0
+    const balanceOld = remaining + durationDays
     doc.setTextColor(100, 116, 139)
     doc.setFont(undefined, 'normal')
     doc.text('offener Urlaubsanspruch:', margin + 5, calcY)
@@ -222,7 +243,7 @@ export const generateVacationRequestPDF = ({
     doc.setFont(undefined, 'bold')
     doc.text('verbleibender Rest:', margin + 5, calcY)
     doc.setTextColor(21, 128, 61) // green-700
-    doc.text(`${vacationAccount?.remaining || 0} Arbeitstage`, rightColX, calcY, { align: 'right' })
+    doc.text(`${remaining} Arbeitstage`, rightColX, calcY, { align: 'right' })
 
     // =========================================================================
     // SIGNATURE BOX (same style as Arbeitszeitaufzeichnung)

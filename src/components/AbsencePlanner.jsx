@@ -337,8 +337,6 @@ export default function AbsencePlanner({ initialDate }) {
     const handleDownloadVacationPDF = async (request, _days) => {
         try {
             const { generateVacationRequestPDF } = await import('../utils/vacationPdfGenerator')
-            const { differenceInBusinessDays } = await import('date-fns')
-
             // Fetch signature
             const { data: signature } = await supabase
                 .from('signatures')
@@ -358,35 +356,19 @@ export default function AbsencePlanner({ initialDate }) {
                 if (approver) approverName = approver.full_name || approver.email
             }
 
-            // Fetch full profile for name and vacation entitlement
+            // Fetch profile for name and facility
             const { data: profile } = await supabase
                 .from('profiles')
-                .select('full_name, email, vacation_days_per_year, facility, department')
+                .select('full_name, email, facility, department')
                 .eq('id', user.id)
                 .single()
 
             const employeeName = profile?.full_name || request.profiles?.full_name || user?.email || 'Mitarbeiter'
-            const yearlyEntitlement = profile?.vacation_days_per_year || 25
             const facilityName = profile?.facility || profile?.department || 'Chill Out'
 
-            // Calculate vacation balance
-            const year = new Date(request.start_date).getFullYear()
-            const { data: allVacations } = await supabase
-                .from('absences')
-                .select('start_date, end_date')
-                .eq('user_id', user.id)
-                .eq('status', 'genehmigt')
-                .eq('type', 'Urlaub')
-                .gte('start_date', `${year}-01-01`)
-                .lte('start_date', `${year}-12-31`)
-
-            let daysUsedTotal = 0
-            if (allVacations) {
-                allVacations.forEach(v => {
-                    daysUsedTotal += differenceInBusinessDays(new Date(v.end_date), new Date(v.start_date)) + 1
-                })
-            }
-            const remaining = yearlyEntitlement - daysUsedTotal
+            // Use already-loaded myStats for vacation account (avoids re-query issues)
+            const yearlyEntitlement = myStats?.entitlement || 25
+            const remaining = myStats?.remaining ?? 0
 
             generateVacationRequestPDF({
                 request,
