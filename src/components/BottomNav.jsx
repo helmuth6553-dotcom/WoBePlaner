@@ -1,21 +1,5 @@
 import { Calendar, List, User, Plane, Shield } from 'lucide-react'
-
-// Badge component for notification dots
-function Badge({ count, dot = false }) {
-    if (!count && !dot) return null
-
-    if (dot) {
-        return (
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
-        )
-    }
-
-    return (
-        <span className="absolute -top-1 -right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-            {count > 99 ? '99+' : count}
-        </span>
-    )
-}
+import Badge from './Badge'
 
 // NavItem component for cleaner code
 function NavItem({ id, icon: Icon, label, isActive, onClick, badge }) {
@@ -26,7 +10,7 @@ function NavItem({ id, icon: Icon, label, isActive, onClick, badge }) {
         >
             <div className="relative">
                 <Icon size={24} />
-                <Badge count={badge?.count} dot={badge?.dot} />
+                <Badge count={badge?.count} dot={badge?.dot} floating />
             </div>
             <span className="text-[10px] font-medium mt-1">{label}</span>
         </button>

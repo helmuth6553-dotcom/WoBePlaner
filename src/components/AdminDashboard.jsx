@@ -8,17 +8,34 @@ import AdminEmployees from './admin/AdminEmployees'
 import AdminAbsences from './admin/AdminAbsences'
 import AdminVacationStats from './admin/AdminVacationStats'
 import AdminRosterPlanner from './admin/AdminRosterPlanner'
+import Badge from './Badge'
+import { useAuth } from '../AuthContext'
+import { useAdminBadgeCounts } from '../utils/useAdminBadgeCounts'
 
 export default function AdminDashboard(props) {
+    const { user, isAdmin } = useAuth()
     const [activeTab, setActiveTab] = useState(() => {
         const saved = sessionStorage.getItem('adminDashTab')
         return saved === 'calendar' ? 'overview' : (saved || 'overview')
     })
 
+    const { antraege, krank, markKrankSeen } = useAdminBadgeCounts(user?.id, isAdmin)
+
     const handleTabChange = (tab) => {
         sessionStorage.setItem('adminDashTab', tab)
         setActiveTab(tab)
+        if (tab === 'sick') markKrankSeen()
     }
+
+    const tabs = [
+        { id: 'planner', icon: CalendarDays, label: 'Dienstplan' },
+        { id: 'audit', icon: ShieldCheck, label: 'Audit' },
+        { id: 'employees', icon: Users, label: 'Mitarbeiter' },
+        { id: 'absences', icon: FileText, label: 'Anträge', badgeCount: antraege },
+        { id: 'sick', icon: Thermometer, label: 'Krank', badgeCount: krank },
+        { id: 'vacation', icon: Palmtree, label: 'Urlaub' },
+        { id: 'overview', icon: BarChart3, label: 'Übersicht' },
+    ]
 
     return (
         <div className="p-4 pb-24 max-w-xl md:max-w-3xl lg:max-w-5xl mx-auto">
@@ -26,27 +43,16 @@ export default function AdminDashboard(props) {
 
             {/* Navigation Tabs */}
             <div className="flex flex-wrap gap-2 mb-6 px-2">
-                <button onClick={() => handleTabChange('planner')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'planner' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-                    <CalendarDays size={16} /> Dienstplan
-                </button>
-                <button onClick={() => handleTabChange('audit')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'audit' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-                    <ShieldCheck size={16} /> Audit
-                </button>
-                <button onClick={() => handleTabChange('employees')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'employees' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-                    <Users size={16} /> Mitarbeiter
-                </button>
-                <button onClick={() => handleTabChange('absences')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'absences' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-                    <FileText size={16} /> Anträge
-                </button>
-                <button onClick={() => handleTabChange('sick')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'sick' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-                    <Thermometer size={16} /> Krank
-                </button>
-                <button onClick={() => handleTabChange('vacation')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'vacation' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-                    <Palmtree size={16} /> Urlaub
-                </button>
-                <button onClick={() => handleTabChange('overview')} className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-                    <BarChart3 size={16} /> Übersicht
-                </button>
+                {tabs.map(({ id, icon: Icon, label, badgeCount }) => (
+                    <button
+                        key={id}
+                        onClick={() => handleTabChange(id)}
+                        className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === id ? 'bg-teal-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                    >
+                        <Icon size={16} /> {label}
+                        <Badge count={badgeCount} />
+                    </button>
+                ))}
             </div>
 
             {/* Content Container */}

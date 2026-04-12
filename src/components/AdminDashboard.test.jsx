@@ -6,6 +6,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import AdminDashboard from './AdminDashboard'
 
+// Mock auth + badge hook so the component renders without a real AuthProvider
+vi.mock('../AuthContext', () => ({
+    useAuth: () => ({ user: { id: 'test-admin' }, isAdmin: true })
+}))
+vi.mock('../utils/useAdminBadgeCounts', () => ({
+    useAdminBadgeCounts: () => ({ antraege: 0, krank: 0, total: 0, markKrankSeen: vi.fn() })
+}))
+
 // Mock all admin sub-panels to isolate tab navigation logic
 vi.mock('./admin/AdminOverview', () => ({
     default: () => <div data-testid="admin-overview">AdminOverview</div>

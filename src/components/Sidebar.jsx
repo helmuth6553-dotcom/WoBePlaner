@@ -1,21 +1,5 @@
 import { Calendar, List, User, Plane, Shield } from 'lucide-react'
-
-// Badge component matching BottomNav
-function Badge({ count, dot = false }) {
-    if (!count && !dot) return null
-
-    if (dot) {
-        return (
-            <span className="w-2 h-2 bg-red-500 rounded-full" />
-        )
-    }
-
-    return (
-        <span className="min-w-[20px] h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1">
-            {count > 99 ? '99+' : count}
-        </span>
-    )
-}
+import Badge from './Badge'
 
 export default function Sidebar({ activeTab, onTabChange, isAdmin, isViewer, badges = {} }) {
     const navItems = [
