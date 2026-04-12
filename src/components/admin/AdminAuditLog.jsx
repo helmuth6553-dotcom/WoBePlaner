@@ -1,102 +1,80 @@
-import { useState, useEffect, useMemo } from 'react'
-import { format, subDays } from 'date-fns'
+import { useState, useEffect, useMemo, Fragment } from 'react'
+import { format, subDays, parseISO, isValid, isToday, isYesterday } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { supabase } from '../../supabase'
-import { Download, Filter, Calendar, User, Activity } from 'lucide-react'
+import {
+    Download, Filter, Calendar, User, Search, Activity,
+    Plus, Edit, Trash2, UserCheck, UserX, UserPlus, UserMinus,
+    FileCheck, FileX, Clock, Thermometer, ChevronDown, ChevronRight,
+} from 'lucide-react'
+import {
+    ACTION_CATALOG,
+    CATEGORY_LABELS,
+    COLOR_CLASSES,
+    formatAuditEntry,
+    getCatalogEntry,
+} from '../../utils/auditFormatting'
 
-/**
- * =========================================================================
- * AdminAuditLog
- * Displays the immutable log of administrative actions (approvals, edits).
- * Fetches from `admin_actions` table joined with `profiles`.
- * 
- * Priority 1 Improvements:
- * - Filter by time period (7/30/90 days or all)
- * - Filter by action type (shifts, absences, etc.)
- * - Filter by admin
- * - Complete German translations
- * =========================================================================
- */
+const ICON_MAP = {
+    Plus, Edit, Trash2, Calendar, UserCheck, UserX, UserPlus, UserMinus,
+    FileCheck, FileX, Clock, Thermometer, Activity,
+}
+
+const CATEGORY_OPTIONS = [
+    { value: 'all', label: 'Alle Aktionen' },
+    { value: 'shifts', label: CATEGORY_LABELS.shifts },
+    { value: 'absences', label: CATEGORY_LABELS.absences },
+    { value: 'reports', label: CATEGORY_LABELS.reports },
+    { value: 'corrections', label: CATEGORY_LABELS.corrections },
+    { value: 'employees', label: CATEGORY_LABELS.employees },
+]
+
+function getDayLabel(dateStr) {
+    const d = parseISO(dateStr)
+    if (!isValid(d)) return dateStr
+    if (isToday(d)) return 'Heute'
+    if (isYesterday(d)) return 'Gestern'
+    return format(d, 'EEEE, dd.MM.yyyy', { locale: de })
+}
+
+function groupByDay(logs) {
+    const groups = new Map()
+    for (const log of logs) {
+        const d = parseISO(log.created_at)
+        if (!isValid(d)) continue
+        const dayKey = format(d, 'yyyy-MM-dd')
+        if (!groups.has(dayKey)) groups.set(dayKey, [])
+        groups.get(dayKey).push(log)
+    }
+    return Array.from(groups.entries()).map(([day, items]) => ({ day, items }))
+}
+
 export default function AdminAuditLog() {
     const [logs, setLogs] = useState([])
     const [loading, setLoading] = useState(true)
     const [errorMsg, setErrorMsg] = useState(null)
+    const [expanded, setExpanded] = useState(new Set())
 
-    // Filter state
-    const [timePeriod, setTimePeriod] = useState('30') // days: '7', '30', '90', 'all'
-    const [actionFilter, setActionFilter] = useState('all') // 'all', 'shifts', 'absences', 'reports', 'other'
-    const [adminFilter, setAdminFilter] = useState('all') // 'all' or admin_id
+    const [timePeriod, setTimePeriod] = useState('30')
+    const [categoryFilter, setCategoryFilter] = useState('all')
+    const [actionFilter, setActionFilter] = useState('all')
+    const [adminFilter, setAdminFilter] = useState('all')
+    const [employeeFilter, setEmployeeFilter] = useState('all')
+    const [searchTerm, setSearchTerm] = useState('')
     const [showFilters, setShowFilters] = useState(false)
-
-    // All action types with German translations
-    const actionBadges = {
-        // Shift actions
-        'shift_created': { bg: 'bg-green-50', text: 'text-green-700', label: 'Schicht erstellt', category: 'shifts' },
-        'shift_updated': { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Schicht bearbeitet', category: 'shifts' },
-        'shift_deleted': { bg: 'bg-red-50', text: 'text-red-700', label: 'Schicht gelöscht', category: 'shifts' },
-
-        // Absence actions (English)
-        'absence_approved': { bg: 'bg-green-50', text: 'text-green-700', label: 'Urlaub genehmigt', category: 'absences' },
-        'absence_rejected': { bg: 'bg-red-50', text: 'text-red-700', label: 'Urlaub abgelehnt', category: 'absences' },
-
-        // Absence actions (German from DB)
-        'absence_genehmigt': { bg: 'bg-green-50', text: 'text-green-700', label: 'Urlaub genehmigt', category: 'absences' },
-        'absence_abgelehnt': { bg: 'bg-red-50', text: 'text-red-700', label: 'Urlaub abgelehnt', category: 'absences' },
-        'absence_storniert': { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Urlaub storniert', category: 'absences' },
-        'urlaub_genehmigt': { bg: 'bg-green-50', text: 'text-green-700', label: 'Urlaub genehmigt', category: 'absences' },
-        'urlaub_abgelehnt': { bg: 'bg-red-50', text: 'text-red-700', label: 'Urlaub abgelehnt', category: 'absences' },
-        'krankmeldung': { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Krankmeldung', category: 'absences' },
-
-        // Report actions
-        'report_approved': { bg: 'bg-green-50', text: 'text-green-700', label: 'Bericht genehmigt', category: 'reports' },
-        'bericht_genehmigt': { bg: 'bg-green-50', text: 'text-green-700', label: 'Bericht genehmigt', category: 'reports' },
-
-        // Correction actions
-        'correction_added': { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Korrektur hinzugefügt', category: 'other' },
-        'korrektur': { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Korrektur', category: 'other' },
-
-        // Employee actions
-        'employee_created': { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Mitarbeiter erstellt', category: 'other' },
-        'employee_updated': { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Mitarbeiter aktualisiert', category: 'other' },
-        'employee_invited': { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Mitarbeiter eingeladen', category: 'other' },
-        'employee_deactivated': { bg: 'bg-red-50', text: 'text-red-700', label: 'Mitarbeiter deaktiviert', category: 'other' },
-        'employee_reactivated': { bg: 'bg-green-50', text: 'text-green-700', label: 'Mitarbeiter reaktiviert', category: 'other' },
-        'deactivate_user': { bg: 'bg-red-50', text: 'text-red-700', label: 'Mitarbeiter deaktiviert', category: 'other' },
-        'reactivate_user': { bg: 'bg-green-50', text: 'text-green-700', label: 'Mitarbeiter reaktiviert', category: 'other' },
-
-        // Time entry actions
-        'time_entry_approved': { bg: 'bg-teal-50', text: 'text-teal-700', label: 'Zeiteintrag genehmigt', category: 'reports' },
-
-        // Balance correction actions
-        'create_correction': { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Korrektur erstellt', category: 'other' },
-        'balance_correction_deleted': { bg: 'bg-red-50', text: 'text-red-700', label: 'Korrektur gelöscht', category: 'other' },
-
-        // Report actions
-        'approve_report': { bg: 'bg-green-50', text: 'text-green-700', label: 'Bericht genehmigt', category: 'reports' },
-        'reject_report': { bg: 'bg-red-50', text: 'text-red-700', label: 'Bericht abgelehnt', category: 'reports' },
-
-        // Sick report
-        'sick_report_created': { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Krankmeldung erfasst', category: 'absences' },
-    }
-
-    const getActionBadge = (action) => {
-        return actionBadges[action] || { bg: 'bg-gray-50', text: 'text-gray-700', label: action, category: 'other' }
-    }
 
     const fetchLogs = async () => {
         setLoading(true)
         setErrorMsg(null)
 
-        // Build query with time filter
         let query = supabase
             .from('admin_actions')
             .select('*')
             .order('created_at', { ascending: false })
             .limit(500)
 
-        // Apply time period filter
         if (timePeriod !== 'all') {
-            const cutoffDate = subDays(new Date(), parseInt(timePeriod)).toISOString()
+            const cutoffDate = subDays(new Date(), Number.parseInt(timePeriod, 10)).toISOString()
             query = query.gte('created_at', cutoffDate)
         }
 
@@ -106,276 +84,169 @@ export default function AdminAuditLog() {
             console.error(error)
             setErrorMsg(error.message)
             setLogs([])
-        } else if (logsData) {
-            // Collect IDs
-            const userIds = new Set()
-            logsData.forEach(l => {
-                if (l.admin_id) userIds.add(l.admin_id)
-                if (l.target_user_id) userIds.add(l.target_user_id)
-            })
-
-            // Fetch profiles
-            const { data: profiles } = await supabase
-                .from('profiles')
-                .select('id, full_name')
-                .in('id', Array.from(userIds))
-
-            const nameMap = {}
-            profiles?.forEach(p => nameMap[p.id] = p.full_name)
-
-            // Enrich logs
-            const enriched = logsData.map(l => ({
-                ...l,
-                admin: { full_name: nameMap[l.admin_id] || 'Unbekannt', id: l.admin_id },
-                target: { full_name: nameMap[l.target_user_id] || null }
-            }))
-
-            setLogs(enriched)
+            setLoading(false)
+            return
         }
+
+        const userIds = new Set()
+        logsData?.forEach(l => {
+            if (l.admin_id) userIds.add(l.admin_id)
+            if (l.target_user_id) userIds.add(l.target_user_id)
+        })
+
+        const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', Array.from(userIds))
+
+        const nameMap = {}
+        profiles?.forEach(p => { nameMap[p.id] = p.full_name })
+
+        const enriched = (logsData || []).map(l => ({
+            ...l,
+            admin: { full_name: nameMap[l.admin_id] || 'Unbekannt', id: l.admin_id },
+            target: { full_name: nameMap[l.target_user_id] || null, id: l.target_user_id },
+        }))
+
+        setLogs(enriched)
         setLoading(false)
     }
 
     useEffect(() => { fetchLogs() }, [timePeriod])
 
-    // Get unique admins for filter dropdown
-    const uniqueAdmins = useMemo(() => {
-        const admins = new Map()
-        logs.forEach(l => {
-            if (l.admin?.id && l.admin?.full_name) {
-                admins.set(l.admin.id, l.admin.full_name)
-            }
-        })
-        return Array.from(admins, ([id, name]) => ({ id, name }))
+    const formattedLogs = useMemo(() => {
+        return logs.map(log => ({ log, formatted: formatAuditEntry(log) }))
     }, [logs])
 
-    // Filtered logs based on action type and admin
+    const uniqueAdmins = useMemo(() => {
+        const m = new Map()
+        logs.forEach(l => { if (l.admin?.id && l.admin?.full_name) m.set(l.admin.id, l.admin.full_name) })
+        return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+    }, [logs])
+
+    const uniqueEmployees = useMemo(() => {
+        const m = new Map()
+        logs.forEach(l => { if (l.target?.id && l.target?.full_name) m.set(l.target.id, l.target.full_name) })
+        return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+    }, [logs])
+
+    const actionOptionsForCategory = useMemo(() => {
+        const entries = Object.entries(ACTION_CATALOG)
+        const filtered = categoryFilter === 'all'
+            ? entries
+            : entries.filter(([, v]) => v.category === categoryFilter)
+        return filtered.map(([key, v]) => ({ value: key, label: v.label }))
+            .sort((a, b) => a.label.localeCompare(b.label))
+    }, [categoryFilter])
+
     const filteredLogs = useMemo(() => {
-        return logs.filter(log => {
-            // Action type filter
-            if (actionFilter !== 'all') {
-                const badge = getActionBadge(log.action)
-                if (badge.category !== actionFilter) return false
+        const search = searchTerm.trim().toLowerCase()
+        return formattedLogs.filter(({ log, formatted }) => {
+            if (categoryFilter !== 'all' && formatted.category !== categoryFilter) return false
+            if (actionFilter !== 'all' && formatted.actionKey !== actionFilter) return false
+            if (adminFilter !== 'all' && log.admin?.id !== adminFilter) return false
+            if (employeeFilter !== 'all' && log.target?.id !== employeeFilter) return false
+            if (search) {
+                const haystack = [
+                    formatted.adminName, formatted.targetName,
+                    formatted.label, formatted.headline, formatted.summary,
+                ].filter(Boolean).join(' ').toLowerCase()
+                if (!haystack.includes(search)) return false
             }
-
-            // Admin filter
-            if (adminFilter !== 'all' && log.admin?.id !== adminFilter) {
-                return false
-            }
-
             return true
         })
-    }, [logs, actionFilter, adminFilter])
+    }, [formattedLogs, categoryFilter, actionFilter, adminFilter, employeeFilter, searchTerm])
 
-    // Get display label for target
-    const getTargetLabel = (log) => {
-        if (log.target?.full_name) {
-            return log.target.full_name
-        }
+    const grouped = useMemo(() => groupByDay(filteredLogs.map(x => x.log)), [filteredLogs])
+    const formattedMap = useMemo(() => {
+        const m = new Map()
+        filteredLogs.forEach(({ log, formatted }) => m.set(log.id, formatted))
+        return m
+    }, [filteredLogs])
 
-        if (log.action?.includes('shift') && log.changes) {
-            const changes = log.changes.changes || log.changes
-            const startTime = changes?.start_time || changes?.after?.start_time
-            if (startTime) {
-                try {
-                    return `Schicht ${format(new Date(startTime), 'dd.MM.yyyy', { locale: de })}`
-                } catch {
-                    // Ignore
-                }
-            }
-        }
-
-        if (log.entity_id) {
-            return `ID: ${String(log.entity_id).slice(0, 8)}...`
-        }
-
-        return '-'
-    }
-
-    const renderChanges = (changes) => {
-        if (!changes) return null
-
-        // Status change with context (enriched absence logs)
-        if (changes.before?.status && changes.after?.status) {
-            return (
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-xs">
-                        <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 line-through">{changes.before.status}</span>
-                        <span>➜</span>
-                        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">{changes.after.status}</span>
-                    </div>
-                    {changes.context && (
-                        <div className="text-[10px] text-gray-400">
-                            {changes.context.type && <span>{changes.context.type}</span>}
-                            {changes.context.start_date && changes.context.end_date && (
-                                <span> ({changes.context.start_date} bis {changes.context.end_date})</span>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )
-        }
-
-        // Before/After diff (employee_updated, shift_updated with before/after, time_entry_approved)
-        if (changes.before && changes.after && !changes.before.status) {
-            const allKeys = [...new Set([...Object.keys(changes.before || {}), ...Object.keys(changes.after || {})])]
-            const changedKeys = allKeys.filter(k => JSON.stringify(changes.before?.[k]) !== JSON.stringify(changes.after?.[k]))
-            if (changedKeys.length > 0) {
-                return (
-                    <div className="space-y-0.5">
-                        {changedKeys.slice(0, 4).map(key => (
-                            <div key={key} className="text-[10px]">
-                                <span className="text-gray-400">{key}: </span>
-                                <span className="text-red-400 line-through">{String(changes.before?.[key] ?? '-')}</span>
-                                <span className="text-gray-300"> ➜ </span>
-                                <span className="text-green-600 font-medium">{String(changes.after?.[key] ?? '-')}</span>
-                            </div>
-                        ))}
-                        {changedKeys.length > 4 && <div className="text-[10px] text-gray-300">+{changedKeys.length - 4} weitere</div>}
-                    </div>
-                )
-            }
-        }
-
-        // Sick report
-        if (changes.after?.type === 'Krank' && changes.after?.start_date) {
-            return (
-                <div className="text-xs text-gray-600">
-                    {changes.after.start_date} bis {changes.after.end_date}
-                    {changes.after.planned_hours > 0 && <span className="ml-1">({changes.after.planned_hours}h)</span>}
-                    {changes.after.affected_shifts?.length > 0 && (
-                        <span className="ml-1 text-gray-400">({changes.after.affected_shifts.length} Schichten betroffen)</span>
-                    )}
-                </div>
-            )
-        }
-
-        // Balance correction deleted
-        if (changes.before?.correction_hours !== undefined && !changes.after) {
-            return (
-                <div className="text-xs text-gray-600">
-                    {changes.before.correction_hours > 0 ? '+' : ''}{changes.before.correction_hours}h
-                    {changes.before.reason && <span className="text-gray-400 ml-1">({changes.before.reason})</span>}
-                </div>
-            )
-        }
-
-        // Shift changes (legacy format)
-        const shiftChanges = changes.changes || changes
-        if (shiftChanges?.start_time || shiftChanges?.end_time) {
-            try {
-                const start = shiftChanges.start_time ? format(new Date(shiftChanges.start_time), 'dd.MM. HH:mm', { locale: de }) : null
-                const end = shiftChanges.end_time ? format(new Date(shiftChanges.end_time), 'HH:mm', { locale: de }) : null
-                if (start && end) {
-                    return <span className="text-xs text-gray-600">{start} - {end}</span>
-                }
-            } catch {
-                // Fall through
-            }
-        }
-
-        const display = typeof changes === 'object' ? JSON.stringify(changes) : changes
-        return <pre className="text-[10px] text-gray-400 overflow-hidden whitespace-nowrap text-ellipsis max-w-xs">{display}</pre>
-    }
-
-    // Format changes for CSV export
-    const formatChangesText = (log) => {
-        const changes = log.changes
-        if (!changes) return '-'
-
-        if (changes.before?.status && changes.after?.status) {
-            return `Status: ${changes.before.status} → ${changes.after.status}`
-        }
-
-        const shiftChanges = changes.changes || changes
-        if (shiftChanges?.start_time || shiftChanges?.end_time) {
-            try {
-                const start = shiftChanges.start_time ? format(new Date(shiftChanges.start_time), 'HH:mm', { locale: de }) : null
-                const end = shiftChanges.end_time ? format(new Date(shiftChanges.end_time), 'HH:mm', { locale: de }) : null
-                if (start && end) return `Neue Zeit: ${start} - ${end}`
-                if (start) return `Neue Startzeit: ${start}`
-                if (end) return `Neue Endzeit: ${end}`
-            } catch {
-                // Fall through
-            }
-        }
-
-        if (shiftChanges?.title !== undefined) {
-            return shiftChanges.title ? `Neuer Titel: ${shiftChanges.title}` : 'Titel entfernt'
-        }
-
-        return typeof changes === 'object' ? JSON.stringify(changes) : String(changes)
-    }
-
-    // Export filtered logs as CSV
-    const exportCSV = () => {
-        const headers = ['Datum', 'Admin', 'Aktion', 'Ziel', 'Details']
-        const rows = filteredLogs.map(log => {
-            const badge = getActionBadge(log.action)
-            return [
-                format(new Date(log.created_at), 'dd.MM.yyyy HH:mm'),
-                log.admin?.full_name || 'System',
-                badge.label,
-                getTargetLabel(log),
-                formatChangesText(log)
-            ]
+    const toggleExpand = (id) => {
+        setExpanded(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id); else next.add(id)
+            return next
         })
+    }
 
+    const exportCSV = () => {
+        const headers = ['Datum', 'Admin', 'Aktion', 'Mitarbeiter', 'Zusammenfassung']
+        const rows = filteredLogs.map(({ log, formatted }) => ([
+            format(parseISO(log.created_at), 'dd.MM.yyyy HH:mm'),
+            formatted.adminName || 'System',
+            formatted.label,
+            formatted.targetName || '—',
+            formatted.summary || formatted.headline,
+        ]))
         const csvContent = [
             headers.join(';'),
-            ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+            ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')),
         ].join('\n')
-
         const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
-        link.download = `audit-log-${format(new Date(), 'yyyy-MM-dd')}.csv`
+        link.download = `audit-protokoll-${format(new Date(), 'yyyy-MM-dd')}.csv`
         link.click()
         URL.revokeObjectURL(url)
     }
 
     return (
         <div>
-            {/* Header */}
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold">Audit Log</h2>
-                <div className="flex gap-2">
+            <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold">Audit-Protokoll</h2>
+                    <span className="text-xs text-gray-400">{filteredLogs.length} {filteredLogs.length === 1 ? 'Eintrag' : 'Einträge'}</span>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                    <div className="relative flex-1 min-w-[180px]">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="search"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Suche nach Mitarbeiter, Aktion…"
+                            className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-teal-400 focus:outline-none"
+                        />
+                    </div>
                     <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        className={`text-sm px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors border ${showFilters ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 hover:bg-gray-100 border-gray-200'
-                            }`}
+                        onClick={() => setShowFilters(v => !v)}
+                        className={`text-sm px-3 py-1.5 rounded-lg flex items-center gap-2 border transition-colors ${showFilters ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 hover:bg-gray-100 border-gray-200'}`}
                     >
                         <Filter size={14} />
                         Filter
                     </button>
                     <button
                         onClick={exportCSV}
-                        className="text-sm bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors"
                         disabled={filteredLogs.length === 0}
+                        className="text-sm bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
                     >
                         <Download size={14} />
-                        Export CSV
+                        CSV
                     </button>
-                    <button onClick={fetchLogs} className="text-sm bg-gray-50 hover:bg-gray-100 border px-3 py-1.5 rounded-lg transition-colors">
+                    <button
+                        onClick={fetchLogs}
+                        className="text-sm bg-gray-50 hover:bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+                    >
                         Aktualisieren
                     </button>
                 </div>
             </div>
 
-            {/* Filters */}
             {showFilters && (
                 <div className="bg-gray-50/50 rounded-xl p-4 mb-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)]">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {/* Time Period Filter */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
                             <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-1">
-                                <Calendar size={12} />
-                                Zeitraum
+                                <Calendar size={12} /> Zeitraum
                             </label>
                             <select
                                 value={timePeriod}
                                 onChange={(e) => setTimePeriod(e.target.value)}
-                                className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
                             >
                                 <option value="7">Letzte 7 Tage</option>
                                 <option value="30">Letzte 30 Tage</option>
@@ -383,46 +254,58 @@ export default function AdminAuditLog() {
                                 <option value="all">Alle</option>
                             </select>
                         </div>
-
-                        {/* Action Type Filter */}
                         <div>
                             <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-1">
-                                <Activity size={12} />
-                                Aktionstyp
+                                <Activity size={12} /> Kategorie
+                            </label>
+                            <select
+                                value={categoryFilter}
+                                onChange={(e) => { setCategoryFilter(e.target.value); setActionFilter('all') }}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                            >
+                                {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-1">
+                                <Activity size={12} /> Spezifische Aktion
                             </label>
                             <select
                                 value={actionFilter}
                                 onChange={(e) => setActionFilter(e.target.value)}
-                                className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
                             >
-                                <option value="all">Alle Aktionen</option>
-                                <option value="shifts">Schichten</option>
-                                <option value="absences">Urlaub/Krankmeldung</option>
-                                <option value="reports">Berichte</option>
-                                <option value="other">Sonstiges</option>
+                                <option value="all">Alle</option>
+                                {actionOptionsForCategory.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                             </select>
                         </div>
-
-                        {/* Admin Filter */}
                         <div>
                             <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-1">
-                                <User size={12} />
-                                Admin
+                                <User size={12} /> Admin
                             </label>
                             <select
                                 value={adminFilter}
                                 onChange={(e) => setAdminFilter(e.target.value)}
-                                className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
                             >
                                 <option value="all">Alle Admins</option>
-                                {uniqueAdmins.map(admin => (
-                                    <option key={admin.id} value={admin.id}>{admin.name}</option>
-                                ))}
+                                {uniqueAdmins.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-1">
+                                <User size={12} /> Betroffener Mitarbeiter
+                            </label>
+                            <select
+                                value={employeeFilter}
+                                onChange={(e) => setEmployeeFilter(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                            >
+                                <option value="all">Alle Mitarbeiter</option>
+                                {uniqueEmployees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                             </select>
                         </div>
                     </div>
-
-                    {/* Filter summary */}
                     <div className="mt-3 text-xs text-gray-500">
                         Zeige {filteredLogs.length} von {logs.length} Einträgen
                     </div>
@@ -431,42 +314,135 @@ export default function AdminAuditLog() {
 
             {errorMsg && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm mb-4">{errorMsg}</div>}
 
-            {/* Log entries */}
-            <div className="space-y-3">
-                {filteredLogs.map(log => {
-                    const badge = getActionBadge(log.action)
-                    return (
-                        <div key={log.id} className="bg-white rounded-xl p-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
-                            <div className="flex justify-between items-start mb-1">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-bold text-sm text-gray-900">{log.admin?.full_name || 'System'}</span>
-                                    <span className="text-gray-400 text-xs">•</span>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${badge.bg} ${badge.text}`}>
-                                        {badge.label}
-                                    </span>
-                                </div>
-                                <span className="text-xs text-gray-400 tabular-nums">
-                                    {format(new Date(log.created_at), 'dd.MM. HH:mm')}
-                                </span>
-                            </div>
-
-                            <div className="flex items-center gap-2 text-sm mb-2">
-                                <span className="text-gray-500">Ziel:</span>
-                                <span className="font-medium text-gray-800">{getTargetLabel(log)}</span>
-                                {log.entity_type === 'monthly_report' && <span className="text-xs bg-gray-100 px-1 rounded text-gray-500">Monatsbericht</span>}
-                                {log.entity_type === 'absence_request' && <span className="text-xs bg-yellow-100 px-1 rounded text-yellow-800">Antrag</span>}
-                            </div>
-
-                            <div className="bg-gray-50 rounded p-2">
-                                {renderChanges(log.changes)}
-                            </div>
+            <div className="space-y-4">
+                {grouped.map(({ day, items }) => (
+                    <div key={day}>
+                        <div className="flex items-center gap-3 mb-2 px-1">
+                            <span className="text-xs font-bold uppercase text-gray-500 tracking-wide">{getDayLabel(day)}</span>
+                            <div className="flex-1 h-px bg-gray-200" />
+                            <span className="text-xs text-gray-400">{items.length}</span>
                         </div>
-                    )
-                })}
+                        <div className="space-y-2">
+                            {items.map(log => (
+                                <AuditCard
+                                    key={log.id}
+                                    log={log}
+                                    formatted={formattedMap.get(log.id)}
+                                    expanded={expanded.has(log.id)}
+                                    onToggle={() => toggleExpand(log.id)}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            {loading && <div className="text-center text-gray-400 text-sm py-4">Lade...</div>}
-            {!loading && filteredLogs.length === 0 && <div className="text-center text-gray-400 text-sm py-4">Keine Einträge.</div>}
+            {loading && <div className="text-center text-gray-400 text-sm py-4">Lade…</div>}
+            {!loading && filteredLogs.length === 0 && (
+                <div className="text-center text-gray-400 text-sm py-8">
+                    Keine Admin-Aktionen im gewählten Zeitraum.
+                </div>
+            )}
+        </div>
+    )
+}
+
+function AuditCard({ log, formatted, expanded, onToggle }) {
+    if (!formatted) return null
+    const Icon = ICON_MAP[formatted.icon] || Activity
+    const colors = COLOR_CLASSES[formatted.color] || COLOR_CLASSES.gray
+    const catalogEntry = getCatalogEntry(log.action)
+    const isKnownAction = Boolean(catalogEntry)
+
+    const timeStr = format(parseISO(log.created_at), 'HH:mm', { locale: de })
+    const adminName = formatted.adminName || 'System'
+    const targetName = formatted.targetName
+
+    return (
+        <div className="bg-white rounded-xl p-4 shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all">
+            <div className="flex items-start gap-3">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${colors.ring}`}>
+                    <Icon size={18} className={colors.text} />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${colors.bg} ${colors.text}`}>
+                                    {formatted.label}
+                                </span>
+                                {!isKnownAction && (
+                                    <span className="text-[10px] text-gray-400 italic">unbekannter Typ</span>
+                                )}
+                            </div>
+                            <div className="font-semibold text-gray-900 mt-0.5 text-sm">
+                                {formatted.headline}
+                            </div>
+                        </div>
+                        <span className="text-xs text-gray-400 tabular-nums flex-shrink-0">{timeStr}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs text-gray-600 mt-1.5 flex-wrap">
+                        <span className="font-medium">{adminName}</span>
+                        {targetName && (
+                            <>
+                                <span className="text-gray-300">→</span>
+                                <span className="font-medium text-gray-800">{targetName}</span>
+                            </>
+                        )}
+                        {!targetName && formatted.category === 'shifts' && (
+                            <span className="text-gray-400 italic">Dienstplan-weit</span>
+                        )}
+                    </div>
+
+                    {formatted.chips.length > 0 && (
+                        <div className="flex gap-1.5 mt-2 flex-wrap">
+                            {formatted.chips.map((chip, i) => {
+                                const c = COLOR_CLASSES[chip.color] || COLOR_CLASSES.gray
+                                return (
+                                    <span key={i} className={`text-[11px] px-2 py-0.5 rounded-full ${c.bg} ${c.text}`}>
+                                        {chip.label}
+                                    </span>
+                                )
+                            })}
+                        </div>
+                    )}
+
+                    {formatted.diffs.length > 0 && (
+                        <div className="mt-2 bg-gray-50 rounded-lg p-2.5 space-y-1">
+                            {formatted.diffs.map((d, i) => (
+                                <div key={i} className="text-xs grid grid-cols-[minmax(90px,auto)_1fr] gap-2 items-center">
+                                    <span className="text-gray-500">{d.fieldLabel}:</span>
+                                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                        <span className="text-gray-400 line-through truncate">{d.before}</span>
+                                        <span className="text-gray-300">→</span>
+                                        <span className="text-gray-900 font-medium truncate">{d.after}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={onToggle}
+                        className="mt-2 text-[11px] text-gray-400 hover:text-gray-600 flex items-center gap-1"
+                    >
+                        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        Rohdaten {expanded ? 'ausblenden' : 'anzeigen'}
+                    </button>
+
+                    {expanded && (
+                        <div className="mt-2 bg-gray-900 text-gray-100 rounded-lg p-3 text-[10px] font-mono overflow-auto max-h-96">
+                            <div className="text-gray-400 mb-1">action: <span className="text-gray-200">{log.action}</span></div>
+                            <div className="text-gray-400 mb-1">resource: <span className="text-gray-200">{log.target_resource_type || '—'} / {log.target_resource_id || '—'}</span></div>
+                            <div className="text-gray-400 mb-1">changes:</div>
+                            <pre className="whitespace-pre-wrap break-all">{JSON.stringify(log.changes, null, 2)}</pre>
+                            <div className="text-gray-400 mb-1 mt-2">metadata:</div>
+                            <pre className="whitespace-pre-wrap break-all">{JSON.stringify(log.metadata, null, 2)}</pre>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     )
 }
