@@ -13,7 +13,7 @@ import SickReportModal from './SickReportModal'
 import ActionSheet from './ActionSheet'
 import MonthSettingsModal from './MonthSettingsModal'
 import MyShiftsView from './MyShiftsView'
-import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Settings, Calendar, User } from 'lucide-react'
+import { LayoutList, Table as TableIcon, ChevronLeft, ChevronRight, Lock, Unlock, ChevronDown, ChevronUp, Thermometer, FileText, Settings, Calendar, User, Download } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, getYear, getMonth, subDays, isSameMonth, isValid } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { useHolidays } from '../hooks/useHolidays'
@@ -23,6 +23,7 @@ import { calculateWorkHours } from '../utils/timeCalculations'
 import { useShiftTemplates } from '../contexts/ShiftTemplateContext'
 import { getHolidays } from '../utils/holidays'
 import PullToRefresh from './PullToRefresh'
+import CalendarSync from './CalendarSync'
 import { downloadICalFile } from '../utils/calendarExport'
 import { calculateAllFairnessIndices } from '../utils/fairnessIndex'
 import { logAdminAction, fetchBeforeState } from '../utils/adminAudit'
@@ -62,7 +63,7 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     const [isLogModalOpen, setIsLogModalOpen] = useState(false)
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { } })
     const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' })
-    const [calendarExportConfirmOpen, setCalendarExportConfirmOpen] = useState(false)
+    const [calendarMenuOpen, setCalendarMenuOpen] = useState(false)
     const [isStatusInfoOpen, setIsStatusInfoOpen] = useState(false)
 
     const [myProfile, setMyProfile] = useState(null)
@@ -905,8 +906,6 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     }
 
     // Handler for calendar export
-    const handleCalendarExportClick = () => setCalendarExportConfirmOpen(true)
-
     const handleCalendarExport = () => {
         // Get all shifts where user is assigned or has interest (for current month view)
         const myShiftsForMonth = shifts.filter(shift => {
@@ -1046,9 +1045,9 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                                 <div className="flex gap-1.5 items-center">
                                     {!isAdmin && !isViewer && (
                                         <button
-                                            onClick={handleCalendarExportClick}
+                                            onClick={() => setCalendarMenuOpen(true)}
                                             className="p-1.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-100"
-                                            title="Dienste in Kalender exportieren"
+                                            title="Kalender"
                                         >
                                             <Calendar size={18} />
                                         </button>
@@ -1309,16 +1308,30 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                 confirmText={confirmConfig.confirmText}
             />
 
-            <ConfirmModal
-                isOpen={calendarExportConfirmOpen}
-                onClose={() => setCalendarExportConfirmOpen(false)}
-                onConfirm={() => { setCalendarExportConfirmOpen(false); handleCalendarExport() }}
-                title="Dienste exportieren"
-                message="Deine Dienste für diesen Monat werden als Kalenderdatei (.ics) heruntergeladen. Diese Datei kannst du in Google Calendar, Apple Kalender oder Outlook importieren."
-                confirmText="Exportieren"
-                cancelText="Abbrechen"
-                icon={Calendar}
-            />
+            <ActionSheet isOpen={calendarMenuOpen} onClose={() => setCalendarMenuOpen(false)} title="Kalender">
+                {/* Monats-Export */}
+                <div className="mb-5">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Monat exportieren</h4>
+                    <button
+                        onClick={() => { setCalendarMenuOpen(false); handleCalendarExport() }}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors text-left"
+                    >
+                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600 shrink-0">
+                            <Download size={16} />
+                        </div>
+                        <div>
+                            <div className="text-sm font-medium text-gray-900">{format(currentDate, 'MMMM yyyy', { locale: de })} als .ics</div>
+                            <div className="text-xs text-gray-400">Einmaliger Download für diesen Monat</div>
+                        </div>
+                    </button>
+                </div>
+
+                {/* Kalender-Abo */}
+                <div>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Kalender abonnieren</h4>
+                    <CalendarSync userId={user.id} />
+                </div>
+            </ActionSheet>
 
             <AlertModal
                 isOpen={alertConfig.isOpen}
