@@ -233,11 +233,9 @@ serve(async (req) => {
         const totalFlex = Object.values(flexCounts).reduce((sum: number, c: number) => sum + c, 0)
         const teamAvgFlex = coverageEligibleUserIds.length > 0 ? (totalFlex / coverageEligibleUserIds.length).toFixed(1) : '0'
 
-        // Determine shift type text for push — use snapshot (deterministic), not urgent_since query (race with frontend RPC).
-        const SHIFT_NAMES: Record<string, string> = { TD1: 'TD1', TD2: 'TD2', ND: 'Nachtdienst', DBD: 'DBD' }
-        const shiftTypeText = snapshotShifts.length === 1
-            ? (SHIFT_NAMES[snapshotShifts[0].type] || snapshotShifts[0].type)
-            : `${snapshotShifts.length} Dienste`
+        // Determine shift type text for push — list unique types (e.g. "TD1 + ND"), short form.
+        const uniqueTypes = [...new Set(snapshotShifts.map((s: any) => s.type))]
+        const shiftTypeText = uniqueTypes.join(' + ')
 
         if (!subscriptions?.length) {
             console.log("No subscriptions found to notify.")
