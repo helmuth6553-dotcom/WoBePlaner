@@ -68,8 +68,9 @@ export function useAdminBadgeCounts(userId, isAdmin) {
 
         const debouncedFetch = debounce(fetchCounts, 1000)
         let wasConnected = false
+        const channelName = `admin-badge-counts-${Math.random().toString(36).slice(2, 10)}`
         const channel = supabase
-            .channel('admin-badge-counts')
+            .channel(channelName)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedFetch)
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
