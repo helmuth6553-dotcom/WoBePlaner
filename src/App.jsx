@@ -16,6 +16,7 @@ import OfflineIndicator from './components/OfflineIndicator'
 import ReloadPrompt from './components/ReloadPrompt'
 import { supabase } from './supabase'
 import { debounce } from './utils/debounce'
+import { useAdminBadgeCounts } from './utils/useAdminBadgeCounts'
 
 // Lazy load heavy components for better initial load time
 const AbsencePlanner = lazy(() => import('./components/AbsencePlanner'))
@@ -40,54 +41,46 @@ function AppContent() {
   const { user, isAdmin, isViewer, passwordSet, refreshPasswordSet } = useAuth()
   const [activeTab, setActiveTab] = useState('roster')
   const [calendarDate, setCalendarDate] = useState(null)
-  const [badges, setBadges] = useState({})
+  const [urgentShiftsDot, setUrgentShiftsDot] = useState(false)
   const [openCoverageCount, setOpenCoverageCount] = useState(0)
 
-  // Fetch badge counts for navigation
+  const { total: adminBadgeCount } = useAdminBadgeCounts(user?.id, isAdmin)
+
+  const badges = {
+    admin: adminBadgeCount > 0 ? { count: adminBadgeCount } : null,
+    roster: urgentShiftsDot ? { dot: true } : null,
+  }
+
+  // Track urgent shifts as a dot on the roster tab (separate from admin badge)
   useEffect(() => {
     if (!user || !isAdmin) {
-      setBadges({})
+      setUrgentShiftsDot(false)
       return
     }
 
-    const fetchBadgeCounts = async () => {
+    const fetchUrgent = async () => {
       try {
-        // Count pending absence requests
-        const { count: pendingAbsences } = await supabase
-          .from('absences')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'beantragt')
-
-        // Count urgent shifts (shifts with urgent_since set)
-        const { count: urgentShifts } = await supabase
+        const { count } = await supabase
           .from('shifts')
           .select('*', { count: 'exact', head: true })
           .not('urgent_since', 'is', null)
-
-        const adminCount = (pendingAbsences || 0) + (urgentShifts || 0)
-
-        setBadges({
-          admin: adminCount > 0 ? { count: adminCount } : null,
-          roster: urgentShifts > 0 ? { dot: true } : null
-        })
+        setUrgentShiftsDot((count || 0) > 0)
       } catch (err) {
-        console.error('Failed to fetch badge counts:', err)
+        console.error('Failed to fetch urgent shifts count:', err)
       }
     }
 
-    fetchBadgeCounts()
+    fetchUrgent()
 
-    // Subscribe to realtime updates (debounced to avoid cascade fetches)
-    const debouncedBadgeFetch = debounce(fetchBadgeCounts, 1000)
-    let badgeWasConnected = false
+    const debouncedFetch = debounce(fetchUrgent, 1000)
+    let wasConnected = false
     const channel = supabase
-      .channel('badge-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, debouncedBadgeFetch)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, debouncedBadgeFetch)
+      .channel('roster-urgent-dot')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, debouncedFetch)
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          if (badgeWasConnected) fetchBadgeCounts()
-          badgeWasConnected = true
+          if (wasConnected) fetchUrgent()
+          wasConnected = true
         }
       })
 
