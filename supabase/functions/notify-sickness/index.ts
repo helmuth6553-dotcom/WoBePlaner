@@ -95,12 +95,6 @@ serve(async (req) => {
         // Check if we are crashing before even starting
         console.log("Function invoked - v2.0")
 
-        // NEW: Sleep for 2000ms to avoid a race condition.
-        // The frontend inserts the absence (triggering this webhook) and THEN executes
-        // the mark_shifts_urgent RPC. We must wait for the RPC to commit so we can find the urgent shifts.
-        console.log("Waiting 2s for frontend RPCs to commit...")
-        await new Promise(r => setTimeout(r, 2000))
-
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -121,6 +115,16 @@ serve(async (req) => {
         if (record.type !== 'Krank' && record.type !== 'Krankenstand') {
             console.log("Ignored: Type is not Sick")
             return new Response(JSON.stringify({ message: 'Ignored: Type' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+
+        // Read shifts to cover directly from the absence snapshot — deterministic, no race with mark_shifts_urgent.
+        // Filter matches RosterFeed.jsx: TEAM/FORTBILDUNG need no coverage.
+        const snapshotShifts = (record.planned_shifts_snapshot || [])
+            .filter((s: any) => s && s.type !== 'TEAM' && s.type !== 'FORTBILDUNG')
+
+        if (snapshotShifts.length === 0) {
+            console.log("No shifts to cover — skipping push.")
+            return new Response(JSON.stringify({ message: 'No shifts to cover' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
         }
 
         const sickUserId = record.user_id
@@ -229,11 +233,11 @@ serve(async (req) => {
         const totalFlex = Object.values(flexCounts).reduce((sum: number, c: number) => sum + c, 0)
         const teamAvgFlex = coverageEligibleUserIds.length > 0 ? (totalFlex / coverageEligibleUserIds.length).toFixed(1) : '0'
 
-        // Determine shift type text for push
-        const SHIFT_NAMES = { TD1: 'TD1', TD2: 'TD2', ND: 'Nachtdienst', DBD: 'DBD' }
-        const shiftTypeText = urgentShifts?.length === 1
-            ? (SHIFT_NAMES[urgentShifts[0].type] || urgentShifts[0].type)
-            : `${urgentShifts?.length || 0} Dienste`
+        // Determine shift type text for push — use snapshot (deterministic), not urgent_since query (race with frontend RPC).
+        const SHIFT_NAMES: Record<string, string> = { TD1: 'TD1', TD2: 'TD2', ND: 'Nachtdienst', DBD: 'DBD' }
+        const shiftTypeText = snapshotShifts.length === 1
+            ? (SHIFT_NAMES[snapshotShifts[0].type] || snapshotShifts[0].type)
+            : `${snapshotShifts.length} Dienste`
 
         if (!subscriptions?.length) {
             console.log("No subscriptions found to notify.")
