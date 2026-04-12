@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, CheckCircle, XCircle, Download, Trash2 } from 'lucide-react'
+import { Calendar, CheckCircle, XCircle, Download, Trash2, Shield } from 'lucide-react'
 import { format, eachDayOfInterval, isWeekend } from 'date-fns'
 import { getHolidays, isHoliday } from '../../utils/holidays'
 import { supabase } from '../../supabase'
@@ -31,6 +31,16 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
     }
 
     useEffect(() => { fetchRequests() }, [])
+
+    const calcWorkDays = (startDate, endDate) => {
+        const start = new Date(startDate)
+        const end = new Date(endDate)
+        const years = new Set([start.getFullYear(), end.getFullYear()])
+        const holidays = Array.from(years).flatMap(y => getHolidays(y))
+        return eachDayOfInterval({ start, end })
+            .filter(d => !isWeekend(d) && !isHoliday(d, holidays))
+            .length
+    }
 
     const handleAction = async (id, status) => {
         const { data: { user } } = await supabase.auth.getUser()
@@ -201,7 +211,10 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
         <div>
             <h2 className="text-xl font-bold mb-6">Offene Urlaubsanträge</h2>
             {requests.length === 0 && (<div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200 mb-8"><CheckCircle className="mx-auto text-green-500 mb-2" size={32} /><p className="text-gray-500">Alles erledigt!</p></div>)}
-            <div className="space-y-3 mb-12">{requests.map(req => (
+            <div className="space-y-3 mb-12">{requests.map(req => {
+                const days = calcWorkDays(req.start_date, req.end_date)
+                const isSigned = !!req.data_hash
+                return (
                 <div key={req.id} className="bg-white p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center shadow-[0_2px_10px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)] transition-all gap-4">
                     <div className="w-full md:w-auto">
                         <div className="flex items-center gap-2 mb-1">
@@ -210,6 +223,14 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
                         </div>
                         <p className="text-gray-600 flex items-center gap-2 mb-1">
                             <Calendar size={14} />{format(new Date(req.start_date), 'dd.MM.yyyy')} - {format(new Date(req.end_date), 'dd.MM.yyyy')}
+                        </p>
+                        <p className="text-sm text-gray-500 flex items-center gap-2 mb-1">
+                            <span className="font-bold text-gray-700">{days} {days === 1 ? 'Tag' : 'Tage'}</span>
+                            {isSigned && (
+                                <span className="text-green-600 flex items-center gap-1 text-xs">
+                                    <Shield size={12} /> Signiert
+                                </span>
+                            )}
                         </p>
                         {req.created_at && (
                             <p className="text-xs text-gray-400 mb-2">Eingereicht am {format(new Date(req.created_at), 'dd.MM.yyyy')}</p>
@@ -227,10 +248,14 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
                         <button onClick={() => handleAction(req.id, 'abgelehnt')} className="bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-200 flex items-center gap-2"><XCircle size={18} /> Ablehnen</button>
                     </div>
                 </div>
-            ))}</div>
+                )
+            })}</div>
 
             <h2 className="text-xl font-bold mb-6 pt-8 border-t border-gray-200">Archiv</h2>
-            <div className="space-y-3">{archive.map(req => (
+            <div className="space-y-3">{archive.map(req => {
+                const days = calcWorkDays(req.start_date, req.end_date)
+                const isSigned = !!req.data_hash
+                return (
                 <div key={req.id} className="bg-gray-50 p-4 rounded-xl flex flex-col sm:flex-row flex-wrap justify-between items-start sm:items-center shadow-[0_2px_10px_rgb(0,0,0,0.04)] gap-3">
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -239,6 +264,14 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
                         </div>
                         <p className="text-gray-500 flex items-center gap-2 text-xs sm:text-sm">
                             <Calendar size={12} />{format(new Date(req.start_date), 'dd.MM.yyyy')} - {format(new Date(req.end_date), 'dd.MM.yyyy')}
+                        </p>
+                        <p className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                            <span className="font-bold text-gray-700">{days} {days === 1 ? 'Tag' : 'Tage'}</span>
+                            {isSigned && (
+                                <span className="text-green-600 flex items-center gap-1 text-[10px]">
+                                    <Shield size={10} /> Signiert
+                                </span>
+                            )}
                         </p>
                         {req.created_at && (
                             <p className="text-[10px] text-gray-400 mt-0.5">Eingereicht am {format(new Date(req.created_at), 'dd.MM.yyyy')}</p>
@@ -256,7 +289,8 @@ export default function AdminAbsences({ onNavigateToCalendar }) {
                         </button>
                     </div>
                 </div>
-            ))}</div>
+                )
+            })}</div>
             {modalElement}
         </div>
     )

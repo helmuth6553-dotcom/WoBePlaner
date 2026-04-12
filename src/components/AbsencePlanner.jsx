@@ -823,6 +823,27 @@ export default function AbsencePlanner({ initialDate }) {
                                 </div>
                             </div>
 
+                            {(() => {
+                                const days = eachDayOfInterval({
+                                    start: parseISO(selectedAbsence.start_date),
+                                    end: parseISO(selectedAbsence.end_date)
+                                }).filter(d => !isWeekend(d) && !getHoliday(d)).length
+                                const isSigned = !!selectedAbsence.data_hash
+                                return (
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Tage</label>
+                                        <div className="font-medium flex items-center gap-2">
+                                            <span>{days} {days === 1 ? 'Tag' : 'Tage'}</span>
+                                            {isSigned && (
+                                                <span className="text-green-600 flex items-center gap-1 text-xs font-bold">
+                                                    <Shield size={12} /> Signiert
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })()}
+
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
                                 <div className={`inline-block px-2 py-1 rounded text-sm font-bold mt-1
@@ -833,6 +854,13 @@ export default function AbsencePlanner({ initialDate }) {
                                     {selectedAbsence.status.toUpperCase()}
                                 </div>
                             </div>
+
+                            {selectedAbsence.created_at && (
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase">Eingereicht am</label>
+                                    <div className="font-medium">{format(new Date(selectedAbsence.created_at), 'dd.MM.yyyy')}</div>
+                                </div>
+                            )}
 
                             <hr className="border-gray-100 my-4" />
 
