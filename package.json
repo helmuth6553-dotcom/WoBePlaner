@@ -13,7 +13,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "@sentry/react": "^10.48.0",
+    "@sentry/react": "^10.49.0",
     "@supabase/supabase-js": "^2.103.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
