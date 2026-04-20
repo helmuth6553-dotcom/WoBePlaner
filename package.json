@@ -14,14 +14,14 @@
   },
   "dependencies": {
     "@sentry/react": "^10.48.0",
-    "@supabase/supabase-js": "^2.103.0",
+    "@supabase/supabase-js": "^2.103.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "jspdf": "^4.2.0",
     "lucide-react": "^0.577.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-router-dom": "^7.14.0",
+    "react-router-dom": "^7.14.1",
     "tailwind-merge": "^3.5.0"
   },
   "overrides": {
