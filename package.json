@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@sentry/react": "^10.48.0",
-    "@supabase/supabase-js": "^2.104.1",
+    "@supabase/supabase-js": "^2.105.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "jspdf": "^4.2.0",
