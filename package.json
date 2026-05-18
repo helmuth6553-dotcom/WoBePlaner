@@ -29,12 +29,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.3.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
-    "@types/node": "^25.6.2",
+    "@types/node": "^25.8.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
@@ -49,8 +49,8 @@
     "tailwindcss": "^4.1.17",
     "vite": "^7.3.3",
     "vite-plugin-pwa": "^1.3.0",
-    "vitest": "^4.1.5",
+    "vitest": "^4.1.6",
     "web-push": "^3.6.7",
-    "wrangler": "^4.90.0"
+    "wrangler": "^4.92.0"
   }
 }
