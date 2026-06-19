@@ -39,5 +39,6 @@ public/*.crdownload
 .playwright-mcp/
 *.png
 !public/logo-email.png
+!public/chilli-badge.png
 
 .claude/
