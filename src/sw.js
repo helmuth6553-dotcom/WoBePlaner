@@ -32,7 +32,7 @@ self.addEventListener('push', (event) => {
     const options = {
         body: data.body,
         icon: '/logo2.png',
-        badge: '/logo2.png',
+        badge: '/chilli-badge.png',
         data: data.data, // Contains URL for deep linking
         vibrate: [100, 50, 100],
         actions: [
