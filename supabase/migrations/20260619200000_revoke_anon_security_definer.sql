@@ -7,52 +7,60 @@
 --        Alle werden nur im authentifizierten Kontext genutzt.
 --        Fix: EXECUTE von PUBLIC revoken, nur authenticated erlauben.
 --        Zusätzlich: search_path auf handle_new_user fixieren.
+--
+-- Hinweis: Funktionen wurden teilweise out-of-band erstellt
+--          (nicht alle haben eigene Migrations-Dateien).
+--          DO-Block prüft Existenz vor REVOKE/GRANT.
 -- =====================================================
 
--- 1. REVOKE von PUBLIC + GRANT nur an authenticated
+DO $$
+DECLARE
+  fn record;
+BEGIN
+  -- Funktionen die nur authenticated brauchen
+  FOR fn IN
+    SELECT unnest(ARRAY[
+      'assign_coverage(integer, uuid, uuid)',
+      'check_time_entry_lock(uuid, bigint, date)',
+      'create_signed_absence(jsonb, jsonb)',
+      'is_admin()',
+      'is_viewer()',
+      'is_month_locked(uuid, date)',
+      'mark_shifts_urgent(bigint[], uuid)',
+      'perform_shift_swap(bigint, uuid)',
+      'sync_absence_to_time_entries()'
+    ]) AS signature
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM pg_proc p
+      JOIN pg_namespace n ON p.pronamespace = n.oid
+      WHERE n.nspname = 'public'
+        AND p.oid = format('public.%s', fn.signature)::regprocedure
+    ) THEN
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION public.%s FROM PUBLIC', fn.signature);
+      EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO authenticated', fn.signature);
+      RAISE NOTICE 'Secured: %', fn.signature;
+    ELSE
+      RAISE NOTICE 'Skipped (not found): %', fn.signature;
+    END IF;
+  END LOOP;
 
--- assign_coverage: Dienstzuweisung (nur Admin, authenticated)
-REVOKE EXECUTE ON FUNCTION public.assign_coverage(integer, uuid, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.assign_coverage(integer, uuid, uuid) TO authenticated;
+  -- handle_new_user: Trigger-Funktion, kein GRANT nötig
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public' AND p.proname = 'handle_new_user'
+  ) THEN
+    REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC;
+    -- Leerer search_path ist sicherer für SECURITY DEFINER
+    ALTER FUNCTION public.handle_new_user() SET search_path = '';
+    RAISE NOTICE 'Secured + search_path fixed: handle_new_user()';
+  ELSE
+    RAISE NOTICE 'Skipped (not found): handle_new_user()';
+  END IF;
+END $$;
 
--- check_time_entry_lock: Monats-Lock prüfen (authenticated)
-REVOKE EXECUTE ON FUNCTION public.check_time_entry_lock(uuid, bigint, date) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.check_time_entry_lock(uuid, bigint, date) TO authenticated;
-
--- create_signed_absence: Abwesenheit mit Signatur erstellen (authenticated)
-REVOKE EXECUTE ON FUNCTION public.create_signed_absence(jsonb, jsonb) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.create_signed_absence(jsonb, jsonb) TO authenticated;
-
--- handle_new_user: Trigger-Funktion, wird nur intern von Supabase Auth aufgerufen
-REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC;
-
--- is_admin / is_viewer: Rollen-Check (authenticated, in RLS-Policies genutzt)
-REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
-
-REVOKE EXECUTE ON FUNCTION public.is_viewer() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_viewer() TO authenticated;
-
--- is_month_locked: Monatsstatus prüfen (authenticated)
-REVOKE EXECUTE ON FUNCTION public.is_month_locked(uuid, date) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_month_locked(uuid, date) TO authenticated;
-
--- mark_shifts_urgent: Schichten als dringend markieren (authenticated)
-REVOKE EXECUTE ON FUNCTION public.mark_shifts_urgent(bigint[], uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.mark_shifts_urgent(bigint[], uuid) TO authenticated;
-
--- perform_shift_swap: Schichttausch (authenticated)
-REVOKE EXECUTE ON FUNCTION public.perform_shift_swap(bigint, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.perform_shift_swap(bigint, uuid) TO authenticated;
-
--- sync_absence_to_time_entries: Zeiteinträge synchronisieren (authenticated)
-REVOKE EXECUTE ON FUNCTION public.sync_absence_to_time_entries() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.sync_absence_to_time_entries() TO authenticated;
-
--- 2. search_path fixieren auf handle_new_user (Linter-Warning)
-ALTER FUNCTION public.handle_new_user() SET search_path = public;
-
--- 3. Verification
+-- Verification: Keine anon-executable SECURITY DEFINER Funktionen mehr
 SELECT p.proname, pg_get_function_arguments(p.oid) as args
 FROM pg_proc p
 JOIN pg_namespace n ON p.pronamespace = n.oid
