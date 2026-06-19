@@ -17,7 +17,7 @@ DO $$
 DECLARE
   fn record;
 BEGIN
-  -- Funktionen die nur authenticated brauchen
+  -- Funktionen die nur authenticated brauchen (via RPC aufrufbar)
   FOR fn IN
     SELECT unnest(ARRAY[
       'assign_coverage(integer, uuid, uuid)',
@@ -27,8 +27,7 @@ BEGIN
       'is_viewer()',
       'is_month_locked(uuid, date)',
       'mark_shifts_urgent(bigint[], uuid)',
-      'perform_shift_swap(bigint, uuid)',
-      'sync_absence_to_time_entries()'
+      'perform_shift_swap(bigint, uuid)'
     ]) AS signature
   LOOP
     IF EXISTS (
@@ -45,18 +44,35 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- handle_new_user: Trigger-Funktion, kein GRANT nötig
+  -- Trigger-Funktionen: weder anon noch authenticated brauchen EXECUTE
+  -- Sie werden nur intern von der DB aufgerufen (INSERT-Trigger auf auth.users / absences)
+  FOR fn IN
+    SELECT unnest(ARRAY[
+      'handle_new_user()',
+      'sync_absence_to_time_entries()'
+    ]) AS signature
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM pg_proc p
+      JOIN pg_namespace n ON p.pronamespace = n.oid
+      WHERE n.nspname = 'public'
+        AND p.oid = format('public.%s', fn.signature)::regprocedure
+    ) THEN
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION public.%s FROM PUBLIC', fn.signature);
+      RAISE NOTICE 'Secured (trigger, no GRANT): %', fn.signature;
+    ELSE
+      RAISE NOTICE 'Skipped (not found): %', fn.signature;
+    END IF;
+  END LOOP;
+
+  -- Leerer search_path ist sicherer für SECURITY DEFINER
   IF EXISTS (
     SELECT 1 FROM pg_proc p
     JOIN pg_namespace n ON p.pronamespace = n.oid
     WHERE n.nspname = 'public' AND p.proname = 'handle_new_user'
   ) THEN
-    REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC;
-    -- Leerer search_path ist sicherer für SECURITY DEFINER
     ALTER FUNCTION public.handle_new_user() SET search_path = '';
-    RAISE NOTICE 'Secured + search_path fixed: handle_new_user()';
-  ELSE
-    RAISE NOTICE 'Skipped (not found): handle_new_user()';
+    RAISE NOTICE 'search_path fixed: handle_new_user()';
   END IF;
 END $$;
 
