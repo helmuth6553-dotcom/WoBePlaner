@@ -1,5 +1,19 @@
 # Datensichtbarkeits-Landkarte (Stand 2026-06-20)
 
+> ## ✅ STATUS: AUDIT ABGESCHLOSSEN (2026-06-20)
+> Alle 3 🔴-Tabellen dichtgemacht und **live verifiziert** (REST-API als Test-Mitarbeiter:
+> `profiles` 17→1, E-Mails 17→1, `absences` nur eigene, `time_entries` nur eigene; Namen
+> via Views erhalten). Umgesetzt in 4 Stages (#223/#224/#225 + #222 RPC-BOLA).
+>
+> **Abweichung vom unten skizzierten Plan:** Statt der **Edge Function `team-balances`**
+> wurde die **„schlanke" Variante** gewählt — die Kollegen-Salden-Anzeige ist jetzt
+> **Admin-only** (Mitarbeiter sehen nur den eigenen Saldo). Dadurch entfiel der Bedarf,
+> Salden cross-user zu berechnen → **keine Edge Function nötig**, nur die 2 Views
+> `team_members` + `team_absences`.
+>
+> Offen nur noch (manuell, kein Code): **Leaked Password Protection** im Supabase-Dashboard
+> aktivieren (Auth → Password security).
+
 Vollständige Bestandsaufnahme: wer kann welche Tabelle **lesen** (SELECT), wie
 sensibel sind die Daten, und was bricht, wenn man auf `eigene + Admin`
 einschränkt. Erstellt als Entscheidungsgrundlage „fixen vs. neu bauen".
