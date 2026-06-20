@@ -75,6 +75,7 @@ function createMockChain(data = []) {
     return {
         select: vi.fn(() => ({
             neq: vi.fn(() => Promise.resolve({ data, error: null })),
+            not: vi.fn(() => Promise.resolve({ data, error: null })),
             eq: vi.fn(() => ({
                 single: vi.fn(() => Promise.resolve({ data: { vacation_days_per_year: 25 }, error: null })),
                 eq: vi.fn(() => Promise.resolve({ data, error: null })),
@@ -171,10 +172,10 @@ describe('AbsencePlanner', () => {
         })
     })
 
-    it('fetches absences from supabase on mount', async () => {
+    it('fetches absences from the redacted team_absences view on mount', async () => {
         renderPlanner()
         await waitFor(() => {
-            expect(mockFrom).toHaveBeenCalledWith('absences')
+            expect(mockFrom).toHaveBeenCalledWith('team_absences')
         })
     })
 
