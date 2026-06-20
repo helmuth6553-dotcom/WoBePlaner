@@ -142,7 +142,16 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         const { data: profile } = await supabase.from('profiles').select('weekly_hours, start_date, initial_balance').eq('id', user?.id).single()
         if (profile) setMyProfile(profile)
 
-        const { data: allProfs } = await supabase.from('profiles').select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year, initial_balance').or('is_active.eq.true,is_active.is.null').order('full_name')
+        // allProfiles: Admins lesen volle Profile (Saldo-Berechnung/Kollegen-
+        // Uebersicht), Mitarbeiter nur Name+Rolle aus der team_members-View
+        // (DSGVO: keine fremden E-Mails/Salden). Beide auf aktive Mitglieder.
+        const allProfsRes = isAdmin
+            ? await supabase.from('profiles').select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year, initial_balance').or('is_active.eq.true,is_active.is.null').order('full_name')
+            : await supabase.from('team_members').select('id, full_name, display_name, role').or('is_active.eq.true,is_active.is.null').order('full_name')
+        // Namens-Aufloesung ist jetzt Single Point — Fehler diagnostizierbar machen,
+        // damit nicht stillschweigend alle Roster-Namen auf '?' fallen.
+        if (allProfsRes.error) console.error('[RosterFeed] team_members/profiles read failed:', allProfsRes.error)
+        const allProfs = allProfsRes.data
         if (allProfs) { setAllProfiles(allProfs); allProfilesRef.current = allProfs }
 
         const { data: myInterests } = await supabase
@@ -167,17 +176,29 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         const { data: myCorrs } = await supabase.from('balance_corrections').select('correction_hours, effective_month').eq('user_id', user?.id)
         if (myCorrs) setAllMyCorrections(myCorrs)
 
+        // Kein profiles-Embed mehr (DSGVO: rohe profiles-Tabelle wird dichtgemacht).
+        // Teilnehmer-Namen werden unten client-seitig aus allProfiles (team_members)
+        // aufgeloest — gleiche Logik wie im Realtime-Handler.
         const { data: shiftData } = await supabase
             .from('shifts')
             .select(`
                 *,
-                interests:shift_interests(*, profiles(email, full_name, display_name))
+                interests:shift_interests(*)
             `)
             .gte('start_time', queryStart)
             .lte('start_time', queryEnd)
             .order('start_time', { ascending: true })
 
-        if (shiftData) { setShifts(shiftData); shiftsRef.current = shiftData }
+        if (shiftData) {
+            const shiftsWithNames = shiftData.map(s => ({
+                ...s,
+                interests: (s.interests || []).map(i => ({
+                    ...i,
+                    profiles: allProfilesRef.current.find(p => p.id === i.user_id) || null
+                }))
+            }))
+            setShifts(shiftsWithNames); shiftsRef.current = shiftsWithNames
+        }
 
         // Fetch coverage data (only when voting system is active)
         if (USE_COVERAGE_VOTING) {
