@@ -38,6 +38,11 @@ AS $$
   SELECT role FROM public.profiles WHERE id = (SELECT auth.uid())
 $$;
 
+-- SECURITY-DEFINER-Haertungs-Baseline (Migration 20260619200000): SECURITY-DEFINER-
+-- Funktionen duerfen NICHT von anon aufrufbar sein (Security Advisor + /rest/v1/rpc).
+REVOKE EXECUTE ON FUNCTION public.current_profile_role() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.current_profile_role() TO authenticated;
+
 -- UPDATE: eigene Zeile (role eingefroren) ODER Admin
 DROP POLICY IF EXISTS "profiles_update" ON public.profiles;
 CREATE POLICY "profiles_update" ON public.profiles
@@ -54,17 +59,16 @@ CREATE POLICY "profiles_update" ON public.profiles
     )
   );
 
--- INSERT: eigene Zeile ODER Admin (gleicher Rekursionsgrund, praeventiv mitgefixt).
--- Hinweis: Profile werden regulaer per handle_new_user() (SECURITY DEFINER,
--- umgeht Policies) angelegt; dieser Policy-Pfad wird vom Client praktisch nie
--- benutzt, war aber latent ebenfalls rekursiv.
+-- INSERT: NUR Admin (gleicher Rekursionsgrund wie UPDATE, hier mitgefixt).
+-- Profile werden regulaer per handle_new_user() (SECURITY DEFINER, umgeht Policies)
+-- angelegt; es gibt KEINEN client-seitigen profiles-INSERT im Code. Die fruehere
+-- Self-Insert-Erlaubnis (id = auth.uid()) war ungenutzt UND eroeffnete eine schmale
+-- Eskalation: nach Admin-DELETE der eigenen Zeile koennte der noch eingeloggte User
+-- sich per INSERT role='admin' neu anlegen. Daher Client-INSERT auf Admin beschraenkt.
 DROP POLICY IF EXISTS "profiles_insert" ON public.profiles;
 CREATE POLICY "profiles_insert" ON public.profiles
   FOR INSERT TO authenticated
-  WITH CHECK (
-    id = (SELECT auth.uid())
-    OR public.is_admin()
-  );
+  WITH CHECK ( public.is_admin() );
 
 -- DELETE: nur Admin
 DROP POLICY IF EXISTS "profiles_delete" ON public.profiles;
