@@ -169,10 +169,20 @@ export default function ProfileStats() {
             .select('start_date, end_date, user_id, status, type, planned_hours, planned_shifts_snapshot')
             .eq('user_id', user.id).eq('status', 'genehmigt')
 
-        const { data: myCorrs } = await supabase
+        const { data: myCorrsRaw } = await supabase
             .from('balance_corrections')
-            .select('correction_hours, effective_month, reason, created_at, created_by_profile:profiles!balance_corrections_created_by_fkey(full_name)')
+            .select('correction_hours, effective_month, reason, created_at, created_by')
             .eq('user_id', user.id)
+
+        // Namen der korrigierenden Admins aus team_members aufloesen (rohe profiles
+        // ist gesperrt; der created_by_profile-Embed wuerde sonst null liefern).
+        let myCorrs = myCorrsRaw || []
+        const corrCreatorIds = [...new Set(myCorrs.map(c => c.created_by).filter(Boolean))]
+        if (corrCreatorIds.length > 0) {
+            const { data: creators } = await supabase.from('team_members').select('id, full_name').in('id', corrCreatorIds)
+            const nameMap = new Map((creators || []).map(c => [c.id, c.full_name]))
+            myCorrs = myCorrs.map(c => ({ ...c, created_by_profile: c.created_by ? { full_name: nameMap.get(c.created_by) || null } : null }))
+        }
 
         try {
             const history = calculateMonthlyHistory(

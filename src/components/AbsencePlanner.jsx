@@ -352,11 +352,11 @@ export default function AbsencePlanner({ initialDate }) {
             let approverName = 'Administrator'
             if (request.approved_by) {
                 const { data: approver } = await supabase
-                    .from('profiles')
-                    .select('full_name, email')
+                    .from('team_members')
+                    .select('full_name')
                     .eq('id', request.approved_by)
                     .single()
-                if (approver) approverName = approver.full_name || approver.email
+                if (approver) approverName = approver.full_name || approverName
             }
 
             // Fetch profile for name and facility
