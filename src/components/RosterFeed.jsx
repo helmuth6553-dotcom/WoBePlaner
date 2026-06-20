@@ -901,7 +901,9 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
     }
 
     const toggleBalanceExpand = async () => {
-        if (!isBalanceExpanded) await loadBalanceHistory()
+        // Kollegen-Salden (cross-user History) nur fuer Admins laden. Mitarbeiter
+        // sehen nur ihren eigenen Saldo (DSGVO: keine fremden Personaldaten).
+        if (!isBalanceExpanded && isAdmin) await loadBalanceHistory()
         setIsBalanceExpanded(!isBalanceExpanded)
     }
 
@@ -1369,24 +1371,28 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
                             </div>
                         </div>
 
-                        <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">Kollegen Übersicht</h4>
-                        <div className="space-y-2">
-                            {allProfiles.filter(p => p.id !== user.id && p.role !== 'admin').map(profile => {
-                                const b = calcProfileBalance(profile)
-                                if (!b) return null
-                                return (
-                                    <div key={profile.id} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded-lg">
-                                        <span className="font-medium text-gray-700">{profile.display_name || profile.full_name || profile.email}</span>
-                                        <div className="flex gap-3">
-                                            <span className="text-gray-500">Soll: {b.target}h</span>
-                                            <span className={`font-bold ${b.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {b.total > 0 ? '+' : ''}{b.total}h
-                                            </span>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
+                        {isAdmin && (
+                            <>
+                                <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase">Kollegen Übersicht</h4>
+                                <div className="space-y-2">
+                                    {allProfiles.filter(p => p.id !== user.id && p.role !== 'admin').map(profile => {
+                                        const b = calcProfileBalance(profile)
+                                        if (!b) return null
+                                        return (
+                                            <div key={profile.id} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded-lg">
+                                                <span className="font-medium text-gray-700">{profile.display_name || profile.full_name || profile.email}</span>
+                                                <div className="flex gap-3">
+                                                    <span className="text-gray-500">Soll: {b.target}h</span>
+                                                    <span className={`font-bold ${b.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {b.total > 0 ? '+' : ''}{b.total}h
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </>
+                        )}
                     </>
                 )}
             </ActionSheet>
