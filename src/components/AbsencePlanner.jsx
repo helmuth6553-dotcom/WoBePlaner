@@ -57,10 +57,13 @@ export default function AbsencePlanner({ initialDate }) {
 
     // Daten laden
     const fetchAbsences = async () => {
+        // Redigierte View statt roher absences-Tabelle (DSGVO). Krankmeldungen
+        // ausschliessen: eigene als echtes 'Krank'/'Krankenstand', fremde als
+        // redigiertes 'Abwesend'. Uebrig bleiben Urlaub & sonstige Nicht-Krank.
         const { data, error } = await supabase
-            .from('absences')
-            .select('*, profiles!user_id(email, full_name)')
-            .neq('type', 'Krank') // Exclude Sick Leave
+            .from('team_absences')
+            .select('id, user_id, start_date, end_date, status, type, full_name')
+            .not('type', 'in', '("Krank","Krankenstand","Abwesend")')
 
         if (error) {
             // Use new error handler with toast
@@ -69,7 +72,7 @@ export default function AbsencePlanner({ initialDate }) {
             return
         }
 
-        if (data) setAbsences(data)
+        if (data) setAbsences(data.map(a => ({ ...a, profiles: { full_name: a.full_name } })))
     }
 
     useEffect(() => {

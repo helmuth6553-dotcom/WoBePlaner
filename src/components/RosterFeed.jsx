@@ -209,14 +209,20 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         const monthStartStr = format(monthStart, 'yyyy-MM-dd')
         const monthEndStr = format(monthEnd, 'yyyy-MM-dd')
 
+        // Cross-User-Abwesenheiten aus der redigierten View: fremde Krankmeldungen
+        // erscheinen nur als "Abwesend" (kein Grund, keine E-Mail). Eigene/Admin
+        // sehen den echten Typ. DSGVO: rohe absences-Tabelle wird separat dicht.
         const { data: absData } = await supabase
-            .from('absences')
-            .select('*, profiles!user_id(email, full_name, display_name)')
+            .from('team_absences')
+            .select('id, user_id, start_date, end_date, status, type, full_name, display_name')
             .eq('status', 'genehmigt')
             .lte('start_date', monthEndStr)
             .gte('end_date', monthStartStr)
 
-        if (absData) setAllAbsences(absData)
+        if (absData) setAllAbsences(absData.map(a => ({
+            ...a,
+            profiles: { full_name: a.full_name, display_name: a.display_name }
+        })))
 
         const year = getYear(currentDate)
         const month = getMonth(currentDate) + 1
