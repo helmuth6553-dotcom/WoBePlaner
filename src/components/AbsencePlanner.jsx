@@ -62,7 +62,7 @@ export default function AbsencePlanner({ initialDate }) {
         // redigiertes 'Abwesend'. Uebrig bleiben Urlaub & sonstige Nicht-Krank.
         const { data, error } = await supabase
             .from('team_absences')
-            .select('id, user_id, start_date, end_date, status, type, full_name')
+            .select('id, user_id, start_date, end_date, status, type, full_name, created_at, data_hash')
             .not('type', 'in', '("Krank","Krankenstand","Abwesend")')
 
         if (error) {

@@ -24,7 +24,12 @@
 -- Stage 3b (separat) macht danach absences SELECT -> eigene + Admin dicht.
 -- =====================================================
 
-CREATE OR REPLACE VIEW public.team_absences
+-- DROP + CREATE (statt CREATE OR REPLACE), damit Spalten-Aenderungen bei
+-- Re-Apply nicht an "cannot change column order" scheitern. Keine DB-Objekte
+-- haengen von dieser View ab.
+DROP VIEW IF EXISTS public.team_absences;
+
+CREATE VIEW public.team_absences
 WITH (security_invoker = false)
 AS
 SELECT
@@ -40,6 +45,13 @@ SELECT
       THEN 'Abwesend'
     ELSE a.type
   END AS type,
+  -- created_at / data_hash nur fuer eigene Zeilen oder Admin: gebraucht fuer
+  -- "Signiert"-Badge (eigene Antraege) und das Admin-Detail-Modal
+  -- ("Eingereicht am"). Fuer fremde Zeilen verborgen (Datensparsamkeit).
+  CASE WHEN a.user_id = (SELECT auth.uid()) OR public.is_admin()
+       THEN a.created_at ELSE NULL END AS created_at,
+  CASE WHEN a.user_id = (SELECT auth.uid()) OR public.is_admin()
+       THEN a.data_hash ELSE NULL END AS data_hash,
   p.full_name,
   p.display_name
 FROM public.absences a
