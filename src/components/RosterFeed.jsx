@@ -148,6 +148,9 @@ export default function RosterFeed({ onCoverageVoteChanged }) {
         const allProfsRes = isAdmin
             ? await supabase.from('profiles').select('id, full_name, display_name, email, role, weekly_hours, start_date, vacation_days_per_year, initial_balance').or('is_active.eq.true,is_active.is.null').order('full_name')
             : await supabase.from('team_members').select('id, full_name, display_name, role').or('is_active.eq.true,is_active.is.null').order('full_name')
+        // Namens-Aufloesung ist jetzt Single Point — Fehler diagnostizierbar machen,
+        // damit nicht stillschweigend alle Roster-Namen auf '?' fallen.
+        if (allProfsRes.error) console.error('[RosterFeed] team_members/profiles read failed:', allProfsRes.error)
         const allProfs = allProfsRes.data
         if (allProfs) { setAllProfiles(allProfs); allProfilesRef.current = allProfs }
 
