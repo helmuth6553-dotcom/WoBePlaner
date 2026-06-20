@@ -12,8 +12,10 @@
 --                             nur sich selbst (deckt Self-Takeover ab).
 --   2. create_signed_absence — fremde user_id, freier status (Self-Approval)
 --                             und faelschbare Signatur (signer_id/role).
---                             Fix: Identitaet an auth.uid() binden, Rolle
---                             aus DB, Non-Admin auf status='beantragt'.
+--                             Fix: user_id/signer_id an auth.uid() binden,
+--                             signatures.role server-seitig auf 'applicant'
+--                             (Signaturrolle, nicht System-Rolle), Non-Admin
+--                             auf status='beantragt'.
 --   3. mark_shifts_urgent   — jeder konnte beliebige Dienste "dringend"
 --                             markieren (-> Push-Spam). Fix: Admin -> alle,
 --                             sonst nur eigene (via shift_interests).
@@ -33,8 +35,12 @@ CREATE OR REPLACE FUNCTION public.assign_coverage(p_shift_id integer, p_user_id 
 AS $function$
 BEGIN
     -- Authorization: admins may assign anyone; everyone else only themselves
-    IF NOT public.is_admin() AND p_user_id <> auth.uid() THEN
-        RAISE EXCEPTION 'Not authorized: you may only assign yourself to a shift';
+    IF NOT public.is_admin() THEN
+        IF p_user_id <> auth.uid() THEN
+            RAISE EXCEPTION 'Not authorized: you may only assign yourself to a shift';
+        END IF;
+        -- Non-admins cannot spoof who resolved the request (audit trail)
+        p_resolved_by := auth.uid();
     END IF;
 
     -- 1. Create or update the shift interest (marks the shift as taken)
@@ -90,15 +96,11 @@ AS $function$
 DECLARE
   v_absence_id bigint;
   v_uid uuid := auth.uid();
-  v_role text;
   v_status text;
 BEGIN
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Not authenticated';
   END IF;
-
-  -- Truthful role from the database, never trust the client-supplied role
-  SELECT role INTO v_role FROM profiles WHERE id = v_uid;
 
   -- Non-admins may never self-approve: force status to 'beantragt'
   IF public.is_admin() THEN
@@ -120,13 +122,15 @@ BEGIN
   )
   RETURNING id INTO v_absence_id;
 
-  -- Step 2: insert signature. signer_id and role come from the server,
-  -- not the client, so the signature cannot be forged.
+  -- Step 2: insert signature. signer_id comes from the server (not the client).
+  -- role is the SEMANTIC signing role 'applicant' (this RPC always creates the
+  -- applicant's signature) — NOT the user's system profile role. AdminAbsences
+  -- and AbsencePlanner look up the signature via .eq('role','applicant').
   INSERT INTO signatures (request_id, signer_id, role, payload_snapshot, hash, ip_address)
   VALUES (
     v_absence_id,
     v_uid,
-    COALESCE(v_role, 'employee'),
+    'applicant',
     p_absence_data,
     p_signature_data->>'hash',
     p_signature_data->>'ip_address'
