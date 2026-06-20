@@ -12,8 +12,8 @@ export default function SwapShiftModal({ isOpen, onClose, shift, onSwap, current
 
         const fetchColleagues = async () => {
             const { data } = await supabase
-                .from('profiles')
-                .select('id, full_name, display_name, email')
+                .from('team_members') // DSGVO: nur Namen/Rolle, keine E-Mail (rohe profiles gesperrt)
+                .select('id, full_name, display_name')
                 .neq('id', currentUser.id) // Exclude self
                 .neq('role', 'admin') // Exclude Admins
                 .order('full_name')
