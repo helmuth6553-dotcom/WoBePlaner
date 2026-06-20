@@ -45,5 +45,10 @@ SELECT
 FROM public.absences a
 LEFT JOIN public.profiles p ON p.id = a.user_id;
 
+-- Least-Privilege: Supabase-Default-Privilegien geben 'authenticated' sonst
+-- ALL auf neue Objekte. Erst ALLES entziehen (anon + authenticated), dann
+-- gezielt nur SELECT fuer authenticated. (Schreibzugriff auf die JOIN-View
+-- ist ohnehin nicht moeglich, aber Least-Privilege gehoert sauber gesetzt.)
 REVOKE ALL ON public.team_absences FROM anon;
+REVOKE ALL ON public.team_absences FROM authenticated;
 GRANT SELECT ON public.team_absences TO authenticated;
