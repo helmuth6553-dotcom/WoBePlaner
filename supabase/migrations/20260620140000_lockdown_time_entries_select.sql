@@ -15,9 +15,16 @@
 --
 -- Hinweis: Ein frueherer Versuch (PR #226) wurde zurueckgerollt, WEIL Stage 1
 -- damals noch fehlte. Jetzt ist die Voraussetzung erfuellt.
+--
+-- Idempotenz/Drift: Die permissive SELECT-Policy heisst je nach Umgebung
+-- unterschiedlich -> auf Prod 'ALLOW_SELECT_TIME_ENTRIES_ALL' (aus altem
+-- Archiv-Skript), bei frischem Migrations-Replay 'time_entries_select'
+-- (aus 20260314100000_rls_realtime_select.sql). Daher BEIDE Namen droppen,
+-- bevor die restriktive Policy (Name 'time_entries_select') erstellt wird.
 -- =====================================================
 
 DROP POLICY IF EXISTS "ALLOW_SELECT_TIME_ENTRIES_ALL" ON public.time_entries;
+DROP POLICY IF EXISTS "time_entries_select" ON public.time_entries;
 
 CREATE POLICY "time_entries_select" ON public.time_entries
   FOR SELECT TO authenticated
