@@ -518,7 +518,7 @@ export default function ProfileStats() {
         setFlexHistory(byMonth)
 
         const { data: profiles } = await supabase
-            .from('profiles')
+            .from('team_members') // DSGVO: rohe profiles gesperrt; hier nur ids fuer Team-Schnitt
             .select('id')
             .or('is_active.eq.true,is_active.is.null')
             .neq('role', 'admin')

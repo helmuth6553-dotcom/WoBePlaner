@@ -39,7 +39,7 @@ export default function SoliPunktePanel() {
         try {
             // 1. Get all non-admin profiles
             const { data: profiles } = await supabase
-                .from('profiles')
+                .from('team_members') // DSGVO: rohe profiles gesperrt; hier nur id/role noetig
                 .select('id, role')
                 .or('is_active.eq.true,is_active.is.null')
             const nonAdminIds = (profiles || []).filter(p => p.role !== 'admin').map(p => p.id)
