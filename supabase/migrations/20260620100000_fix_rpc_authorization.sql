@@ -63,16 +63,18 @@ CREATE OR REPLACE FUNCTION public.mark_shifts_urgent(p_shift_ids bigint[], p_use
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO ''
 AS $function$
 BEGIN
+    -- Note: p_user_id is retained only for API backward-compatibility (the
+    -- client still passes it). Authorization relies on auth.uid(), NOT p_user_id.
     -- Authorization: admins may mark any shift; everyone else only shifts
     -- they are actually signed up for (via shift_interests).
     IF NOT public.is_admin() THEN
         IF EXISTS (
             SELECT 1 FROM unnest(p_shift_ids) AS sid
             WHERE NOT EXISTS (
-                SELECT 1 FROM shift_interests si
+                SELECT 1 FROM public.shift_interests si
                 WHERE si.shift_id = sid AND si.user_id = auth.uid()
             )
         ) THEN
@@ -80,8 +82,8 @@ BEGIN
         END IF;
     END IF;
 
-    UPDATE shifts
-    SET urgent_since = NOW()
+    UPDATE public.shifts
+    SET urgent_since = now()
     WHERE id = ANY(p_shift_ids);
 END;
 $function$;
@@ -91,7 +93,7 @@ CREATE OR REPLACE FUNCTION public.create_signed_absence(p_absence_data jsonb, p_
  RETURNS bigint
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO ''
 AS $function$
 DECLARE
   v_absence_id bigint;
@@ -111,7 +113,7 @@ BEGIN
 
   -- Step 1: insert absence. user_id is bound to the authenticated caller,
   -- NOT taken from the client payload (prevents creating absences for others).
-  INSERT INTO absences (user_id, start_date, end_date, type, status, data_hash)
+  INSERT INTO public.absences (user_id, start_date, end_date, type, status, data_hash)
   VALUES (
     v_uid,
     (p_absence_data->>'start_date')::date,
@@ -126,7 +128,7 @@ BEGIN
   -- role is the SEMANTIC signing role 'applicant' (this RPC always creates the
   -- applicant's signature) — NOT the user's system profile role. AdminAbsences
   -- and AbsencePlanner look up the signature via .eq('role','applicant').
-  INSERT INTO signatures (request_id, signer_id, role, payload_snapshot, hash, ip_address)
+  INSERT INTO public.signatures (request_id, signer_id, role, payload_snapshot, hash, ip_address)
   VALUES (
     v_absence_id,
     v_uid,
